@@ -265,6 +265,12 @@ class Overlay(
 
         cardText.typeface = Type.display(ctx)
         cardText.textSize = 20f * scale
+        // Telugu / Devanagari glyphs reach above and below Latin line bounds: without font padding and a taller
+        // line the top and bottom of long Telugu lines were cut off.
+        val indic = text.any { it.code in 0x0900..0x0DFF }
+        cardText.includeFontPadding = indic
+        cardText.setLineSpacing(0f, if (indic) 1.22f else 1.08f)
+        if (android.os.Build.VERSION.SDK_INT >= 28) cardText.isFallbackLineSpacing = true
         cardText.setTextColor(ink)
         if (changed) {
             cardText.text = text
@@ -310,8 +316,13 @@ class Overlay(
         choiceB?.let { if (mode == Mode.CHOICE) secondary.set(it.first, it.second, bg = C.PINE_DEEP, fg = C.WHITE, big = true) }
         val quietBg = if (warn) 0x26FFFFFF else C.PAPER_2
         val quietFg = if (warn) C.WHITE else C.PINE_DEEP
-        if (mode == Mode.ALARM || mode == Mode.CONFIRM || mode == Mode.ASK || mode == Mode.CHOICE) {
+        if (mode == Mode.ALARM || mode == Mode.CONFIRM) {
             btnAgain.visibility = View.GONE; btnMic.visibility = View.GONE
+        } else if (mode == Mode.ASK || mode == Mode.CHOICE) {
+            // A question can be answered out loud too ("yes", "WhatsApp"): the mic stays (field: no way to reply).
+            btnAgain.visibility = View.GONE
+            btnMic.visibility = View.VISIBLE
+            btnMic.round(say("Answer by voice", "बोलकर बताइए", "మాటతో చెప్పండి").pick(l), R.drawable.ic_mic, quietBg, quietFg)
         } else if (mode == Mode.LOST) {
             // Lost: Back · Ask family · Close, all one tap.
             btnAgain.visibility = View.VISIBLE
@@ -335,6 +346,36 @@ class Overlay(
     }
 
     private var lastTargetY: Int? = null
+
+    /** A spoken "yes" answers the card that is asking (ASK / PAUSED / CONFIRM). true = it was waiting for one. */
+    fun acceptPending(): Boolean {
+        if (!cardShown) return false   // a card that already went away answers nothing
+        val go = onContinue
+        return when {
+            mode == Mode.CONFIRM -> { onDoIt(); true }
+            (mode == Mode.ASK || mode == Mode.PAUSED) && go != null -> { onContinue = null; go(); true }
+            else -> false
+        }
+    }
+
+    /** A spoken "no" / "not now" closes the question, the same as the "Not now" button. */
+    fun declinePending(): Boolean = if (!cardShown) false else when (mode) {
+        Mode.ASK, Mode.CHOICE -> { onContinue = null; hideCard(); true }
+        Mode.CONFIRM -> { onDecline(); true }
+        else -> false
+    }
+
+    /** "WhatsApp" / "phone call" / "let me try" said aloud picks that button of a two-choice card. */
+    fun pickChoice(said: String): Boolean {
+        if (mode != Mode.CHOICE || !cardShown) return false
+        val s = said.lowercase().trim()
+        fun hit(label: String?) = label != null && label.lowercase().let { l -> s == l || (s.length >= 4 && (l.contains(s) || s.contains(l))) }
+        return when {
+            hit(choiceA?.first) -> { hideCard(); choiceA?.third?.invoke(); true }
+            hit(choiceB?.first) -> { hideCard(); choiceB?.third?.invoke(); true }
+            else -> false
+        }
+    }
 
     /**
      * Top or bottom: where the person dragged it, else away from the target. Never on top of the target
@@ -523,15 +564,22 @@ class Overlay(
         }
 
         // Drag anywhere on the card (not the buttons) to move it; it snaps to the nearer edge and stays there.
+        // The WINDOW moves, not the card inside it: the window is only as tall as the card, so moving the view
+        // clipped it at the window's edge (field: "it stays inside a container").
         var downY = 0f
+        var startWinY = 0
         var dragging = false
         card.setOnTouchListener { v, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { downY = e.rawY; dragging = false; true }
+                MotionEvent.ACTION_DOWN -> { downY = e.rawY; startWinY = (cardWrap.layoutParams as? WLP)?.y ?: 0; dragging = false; true }
                 MotionEvent.ACTION_MOVE -> {
                     val dy = e.rawY - downY
                     if (!dragging && abs(dy) > ctx.dp(8)) dragging = true
-                    if (dragging) v.translationY = dy
+                    if (dragging) (cardWrap.layoutParams as? WLP)?.let { p ->
+                        val h = ctx.resources.displayMetrics.heightPixels
+                        p.y = (startWinY + dy.toInt()).coerceIn(0, maxOf(0, h - cardWrap.height))
+                        runCatching { wm.updateViewLayout(cardWrap, p) }
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -540,7 +588,8 @@ class Overlay(
                         val toTop = e.rawY < h / 2
                         Prefs.setCardPos(ctx, if (toTop) "top" else "bottom")
                         v.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
-                        v.animate().alpha(0f).setDuration(120).withEndAction { v.translationY = 0f; place(animateIn = false, moved = true) }.start()
+                        cardY = null   // no "stay where it was": go to the side they chose
+                        place(animateIn = false, moved = true)
                     }
                     true
                 }

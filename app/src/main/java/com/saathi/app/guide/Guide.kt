@@ -47,6 +47,13 @@ class Guide(
     )
 
     private companion object {
+        val SPOKEN_YES = Regex("(?i)^\\W*(yes|yes please|yeah|yep|ok|okay|sure|please do|go ahead|haan|haan ji|han|ha|ji|हाँ|हां|हाँ जी|जी|जी हाँ|ठीक है|అవును|సరే|ఓకే|అలాగే)\\W*$")
+        val SPOKEN_NO = Regex("(?i)^\\W*(no|no thanks|not now|nahi|nahin|नहीं|नहीं जी|अभी नहीं|వద్దు|లేదు|ఇప్పుడు వద్దు)\\W*$")
+        /** "my liked videos", "मेरी प्लेलिस्ट", "నా వీడియోలు": the person's own things inside an app, not a search. */
+        val OWN_THINGS = Regex("(?i)\\b(my|mine)\\s+(own\\s+)?(liked|saved|downloaded|downloads|playlists?|library|history|watch later|uploads?|videos|account|profile|orders?|bookings?|trips?|rides?)\\b|" +
+            "\\bi (liked|saved|watched|downloaded|ordered|booked)\\b|(मेरे|मेरी|मेरा)\\s+(लाइक|सेव|डाउनलोड|प्लेलिस्ट|वीडियो|ऑर्डर)|నా\\s+(లైక్|సేవ్|డౌన్‌?లోడ్|ప్లేలిస్ట్|వీడియో|ఆర్డర్)")
+        /** "book a cab to THIS location", "send THIS photo": about what is on the screen right now. */
+        val DEICTIC = Regex("(?i)\\b(this|these|here)\\b|यह|ये|इस|इसे|ఈ |ఇది|ఇక్కడ|దీన్ని")
         const val TAG = "Saathi"
         const val THROTTLE_MS = 200L
         const val SETTLE_MS = 450L
@@ -152,6 +159,11 @@ class Guide(
             if (rest.length > 3) { start(rest, autoMode = true); return }
             if (active) { enableAuto(); return }
         }
+        // A card is waiting for an answer ("Shall I open the Play Store?", "WhatsApp or Phone?"): a spoken reply answers
+        // it (field: "yes" became a brand-new goal called "yes", so the question dead-ended).
+        if (overlay.pickChoice(t)) return
+        if (SPOKEN_YES.matches(t) && overlay.acceptPending()) return
+        if (SPOKEN_NO.matches(t) && overlay.declinePending()) return
         // The coach asked them something: their reply continues the coaching conversation.
         if (coachWaiting && coachGoal != null) {
             if (Regex("(?i)^(stop|cancel|bas|बस|रुको|ఆపు)\\b").containsMatchIn(text.trim())) { endCoach(null); return }
@@ -172,7 +184,24 @@ class Guide(
             any("stop", "cancel", "bas", "बस", "बंद करो", "रुको", "ఆపు", "ఆపండి", "వద్దు") -> { stop(); return }
             any("done", "ho gaya", "हो गया", "అయింది") -> { onFinalDone(); return }
         }
+        // A doubt in the middle of a task ("what is this button?", "why is it asking for my number?") is answered with
+        // the task in mind, and the task waits; it is not a new goal (field: every mid-task question wiped the task).
+        if (active && isAsideQuestion(text)) {
+            com.saathi.app.DebugLog.i("aside", "mid-task question: \"$text\" (task: \"$goal\")")
+            answerQuestion(text, aside = "I am in the middle of: \"$goal\". Saathi's current instruction: \"${current?.text ?: "none yet"}\".")
+            return
+        }
         start(text)
+    }
+
+    /** A question, not a new task: phrased as one, and it names no other app, skill or route. */
+    private fun isAsideQuestion(text: String): Boolean {
+        if (!IntentRouter.phrasedAsQuestion(text)) return false
+        if (IntentRouter.wantsToLearn(text) && AppLauncher.findInGoal(svc, text) != null) return false
+        if (IntentRouter.isExplain(text) || IntentRouter.cameraRead(text) != null || IntentRouter.isFormHelp(text)) return false
+        if (Skills.match(text) != null || mapRouteFor(text) != null || IntentRouter.settingsTask(text) != null) return false
+        val app = AppLauncher.findInGoal(svc, text)
+        return app == null || app.pkg in taskPkgs
     }
 
     fun start(goalText: String, autoMode: Boolean = Prefs.expert(svc), learnMode: Boolean = false) {
@@ -183,6 +212,8 @@ class Guide(
         Log.i(TAG, "goal: $goalText (auto=$autoMode)")
         com.saathi.app.DebugLog.i("goal", "\"$goalText\" lang=$lang auto=$autoMode locked=${svc.isLocked()}")
         if (IntentRouter.isSos(goalText)) { sos(); return }
+        // Teach-once first: "watch me …" used to sit ~20 checks deep, so almost any sentence was grabbed earlier.
+        if (teachOnce(goalText)) return
         Routines.parse(goalText)?.let { (h, m, g) -> addRoutine(h, m, g); return }
         java.util.Calendar.getInstance().let { Reminders.parse(goalText, it.get(java.util.Calendar.HOUR_OF_DAY), it.get(java.util.Calendar.MINUTE)) }
             ?.let { (due, _, what) -> addReminder(due / 60, due % 60, what); return }
@@ -191,6 +222,12 @@ class Guide(
             stop()
             svc.performGlobalAction(action)
             com.saathi.app.DebugLog.i("system", "global action $action for \"$goalText\"")
+            // "Take a screenshot and send it to Akash on WhatsApp": the screenshot is only the first half (field: the
+            // sending half was dropped). The new screenshot is the newest photo, so the rest is a normal photo send.
+            if (action == android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) screenshotThen(goalText)?.let { rest ->
+                com.saathi.app.DebugLog.i("system", "then: \"$rest\"")
+                scope.launch { delay(2200); start(rest, autoMode, learnMode) }
+            }
             return
         }
         if (Coach.wants(goalText, null)) { startCoach(goalText); return }
@@ -202,28 +239,16 @@ class Guide(
         if (IntentRouter.isObjectHelp(goalText)) { begin(goalText, Skills.byId("learn_app")?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
         IntentRouter.cameraRead(goalText)?.let { id -> begin(goalText, Skills.byId(id)?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
         if (IntentRouter.isFormHelp(goalText)) { formHelp(); return }
+        // General first, not app by app: a request about what's on the screen ("book a cab to THIS location" in a
+        // WhatsApp chat) or about the person's own things in an app ("my liked videos") is planned from the live
+        // screen by the model, starting where they are. A scripted route would launch its app and lose "this".
+        hereTask(goalText)?.let { begin(goalText, it, autoMode); return }
+        ownThingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         mapRouteFor(goalText)?.let { r -> beginMap(goalText, r, autoMode); return }
         IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         IntentRouter.phoneHowTo(svc, goalText)?.let { begin(goalText, it, autoMode); return }
         if (IntentRouter.isQuestion(svc, goalText)) { respond(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
-        // Teach-once: "watch me: video call Rahul" … "done teaching".
-        Regex("(?i)^\\s*(watch me|learn this|let me show you|i'?ll show you|देखो मैं|मैं दिखाता|నేను చూపిస్తా)\\W*(.*)$").find(goalText)?.let { m ->
-            val name = m.groupValues[2].trim().ifBlank { "my task" }
-            Recipes.startRecording(name)
-            com.saathi.app.DebugLog.i("teach", "recording \"$name\"")
-            finish(say("I'm watching. Do “$name” now; say “done teaching” when finished.", "मैं देख रहा हूँ। “$name” करके दिखाइए; ख़त्म होने पर “सिखा दिया” कहिए।",
-                "నేను చూస్తున్నాను. “$name” చేసి చూపించండి; అయ్యాక “నేర్పించాను” అనండి.").pick(lang))
-            return
-        }
-        if (Recipes.recording != null && Regex("(?i)done teaching|finished|that's it|सिखा दिया|हो गया|నేర్పించాను|అయింది").containsMatchIn(goalText)) {
-            val r = Recipes.stopRecording(svc)
-            com.saathi.app.DebugLog.i("teach", "saved ${r?.name} taps=${r?.taps?.map { it.label }}")
-            finish(if (r != null) say("Learned “${r.name}” in ${r.taps.size} steps. Anyone can ask me for it now.", "“${r.name}” सीख लिया, ${r.taps.size} क़दम। अब कोई भी मुझसे पूछ सकता है।",
-                "“${r.name}” నేర్చుకున్నాను, ${r.taps.size} అడుగులు. ఇప్పుడు ఎవరైనా అడగవచ్చు.").pick(lang)
-                else say("I didn't see any taps, so nothing was saved.", "कोई टैप नहीं दिखा, कुछ सेव नहीं हुआ।", "ఏ ట్యాప్ కనిపించలేదు, ఏదీ సేవ్ కాలేదు.").pick(lang))
-            return
-        }
         // Something a family member taught me? That path wins: it's known to work on this very phone.
         Recipes.find(svc, goalText)?.let { r -> begin(goalText, Recipes.toFlow(r), autoMode); return }
         IntentRouter.openOnly(svc, goalText)?.let { begin(goalText, it, autoMode); return }
@@ -265,6 +290,11 @@ class Guide(
             "question" -> { respond(goalText); return true }
             "weather", "lookup" -> { lookUp(goalText, if (u.intent == "weather" && !q.contains("weather", true)) "$q weather" else q); return true }
             "watch", "music" -> {
+                // "My liked videos", "my playlist": inside the app, not a search for those words.
+                if (OWN_THINGS.containsMatchIn(goalText)) (AppLauncher.findInGoal(svc, goalText)?.pkg
+                    ?: "com.google.android.youtube".takeIf { AppLauncher.isInstalled(svc, it) })?.let { pkg ->
+                    begin(goalText, plannerTask(goalText, pkg), autoMode); return true
+                }
                 // "Turn the TV volume up" / "TV channel 5": the TV-remote skill, not watching something.
                 if (Regex("(?i)\\b(volume|channel|remote|mute|turn (the )?tv (on|off))\\b|आवाज़|चैनल|వాల్యూమ్|ఛానెల్").containsMatchIn(goalText))
                     Skills.byId("tv")?.let { begin(goalText, skill("tv"), autoMode); return true }
@@ -1390,6 +1420,67 @@ class Guide(
         com.saathi.app.maps.AppMaps.route(g)?.takeIf { r -> AppLauncher.isInstalled(svc, r.pkg) }
     }.getOrNull()
 
+    /** Teach-once: "watch me: video call Rahul" … "done teaching". true = handled. */
+    private fun teachOnce(goalText: String): Boolean {
+        Regex("(?i)^\\s*(watch me|learn this|let me show you|i'?ll show you|देखो मैं|मैं दिखाता|నేను చూపిస్తా)\\W*(.*)$").find(goalText)?.let { m ->
+            val name = m.groupValues[2].trim().ifBlank { "my task" }
+            stop()
+            Recipes.startRecording(name)
+            com.saathi.app.DebugLog.i("teach", "recording \"$name\"")
+            finish(say("I'm watching. Do “$name” now; say “done teaching” when finished.", "मैं देख रहा हूँ। “$name” करके दिखाइए; ख़त्म होने पर “सिखा दिया” कहिए।",
+                "నేను చూస్తున్నాను. “$name” చేసి చూపించండి; అయ్యాక “నేర్పించాను” అనండి.").pick(lang))
+            return true
+        }
+        if (Recipes.recording != null && Regex("(?i)done teaching|finished|that's it|सिखा दिया|हो गया|నేర్పించాను|అయింది").containsMatchIn(goalText)) {
+            val r = Recipes.stopRecording(svc)
+            com.saathi.app.DebugLog.i("teach", "saved ${r?.name} taps=${r?.taps?.map { it.label }}")
+            finish(if (r != null) say("Learned “${r.name}” in ${r.taps.size} steps. Anyone can ask me for it now.", "“${r.name}” सीख लिया, ${r.taps.size} क़दम। अब कोई भी मुझसे पूछ सकता है।",
+                "“${r.name}” నేర్చుకున్నాను, ${r.taps.size} అడుగులు. ఇప్పుడు ఎవరైనా అడగవచ్చు.").pick(lang)
+                else say("I didn't see any taps, so nothing was saved.", "कोई टैप नहीं दिखा, कुछ सेव नहीं हुआ।", "ఏ ట్యాప్ కనిపించలేదు, ఏదీ సేవ్ కాలేదు.").pick(lang))
+            return true
+        }
+        return false
+    }
+
+    /** "take a screenshot and send it to Akash on WhatsApp" → "send this photo to Akash on WhatsApp"; null = nothing after. */
+    private fun screenshotThen(g: String): String? {
+        if (!Regex("(?i)send|share|whatsapp|भेज|शेयर|పంప|షేర్").containsMatchIn(g)) return null
+        return g.replace(Regex("(?i)(take|capture|click)\\s+(a\\s+|the\\s+)?"), "")
+            .replace(Regex("(?i)screenshot|स्क्रीनशॉट|స్క్రీన్‌?షాట్"), "photo")
+            .replace(Regex("(?i)^\\s*(a\\s+)?photo\\s+(and|then|और|తీసి)\\s+"), "")
+            .replace(Regex("(?i)\\bsend it\\b"), "send this photo")
+            .trim().ifBlank { null }
+    }
+
+    /** An open-ended task in [pkg] (or right here when null): no script, the planner reads each screen. */
+    private fun plannerTask(g: String, pkg: String?): Flow = Flow(
+        "here_${pkg ?: "screen"}", pkg?.let { p -> { c: android.content.Context -> AppLauncher.launch(c, p) } }, emptyList(), null,
+        say("Done!", "हो गया!", "అయింది!"),
+        say("Okay, let's do it from here. Watch for the ring.", "ठीक है, यहीं से करते हैं। घेरे को देखिए।", "సరే, ఇక్కడి నుంచే చేద్దాం. రింగ్ చూడండి."),
+        llmGoal = g, appPkg = pkg)
+
+    /** "Book a cab to this location" (in a chat), "send this photo" (in the gallery): start where they are. */
+    private fun hereTask(g: String): Flow? {
+        // Only the request itself, not the words of a message ("…saying I reached here").
+        val ask = SlotExtractor.from(g).text?.let { g.replace(it, " ") } ?: g
+        if (!DEICTIC.containsMatchIn(ask)) return null
+        val here = runCatching { appRoot()?.packageName?.toString() }.getOrNull() ?: return null
+        if (here == launcherPkg() || here == svc.packageName || here == "com.android.settings" || here.contains("systemui")) return null
+        // A precise instant skill ("make this text bigger" → font size) still wins.
+        if (Skills.match(g)?.id in IntentRouter.DIRECT) return null
+        com.saathi.app.DebugLog.i("route", "about this screen ($here): planner from here")
+        return plannerTask(g, null)
+    }
+
+    /** "Show my liked videos on YouTube": the person's own things are never a search query. Planner inside the app. */
+    private fun ownThingsTask(g: String): Flow? {
+        if (!OWN_THINGS.containsMatchIn(g)) return null
+        val r = mapRouteFor(g) ?: return null
+        if ("query" !in r.slots) return null   // "message my son" etc: the map's own route is right
+        com.saathi.app.DebugLog.i("route", "own things, not a search (${r.id} skipped): planner in ${r.pkg}")
+        return plannerTask(g, r.pkg)
+    }
+
     private fun beginMap(g: String, r: com.saathi.app.maps.Route, autoMode: Boolean) {
         val map = com.saathi.app.maps.AppMaps.mapOf(r)
         com.saathi.app.DebugLog.i("map", "route ${r.id} (${map?.name})")
@@ -1445,8 +1536,26 @@ class Guide(
     /** "Help me fill this form": a form on screen → guide it box by box; otherwise the paper-form camera. */
     fun formHelp() {
         lang = Prefs.lang(svc)
+        // Asked by voice, Saathi's own mic sheet can still be the active window for a moment: that screen has no
+        // boxes, so every "fill this form on my screen" went to the camera. Look at the app underneath, after a beat.
+        if (svc.rootInActiveWindow?.packageName?.toString() == svc.packageName) { scope.launch { delay(700); formHelpNow() }; return }
+        formHelpNow()
+    }
+
+    /** The app window under Saathi's own UI (the active one if it isn't ours). */
+    private fun appRoot(): AccessibilityNodeInfo? {
+        val own = svc.packageName
+        svc.rootInActiveWindow?.takeIf { it.packageName?.toString() != own }?.let { return it }
+        return runCatching {
+            svc.windows.filter { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION }
+                .mapNotNull { it.root }.firstOrNull { it.packageName?.toString() != own }
+        }.getOrNull()
+    }
+
+    private fun formHelpNow() {
+        val root = appRoot()
         // The page's own boxes only: never a browser's address / search bar.
-        val fields = com.saathi.app.forms.FormNodes.fields(svc.rootInActiveWindow).filterNot { (f, n) ->
+        val fields = com.saathi.app.forms.FormNodes.fields(root).filterNot { (f, n) ->
             Regex("(?i)url_bar|omnibox|location_bar|search_box|search_src_text").containsMatchIn(n.viewIdResourceName ?: "") ||
                 Regex("(?i)connection is secure|search or type|search google|address bar|type url").containsMatchIn("${f.label} ${f.hint}")
         }
@@ -1455,7 +1564,7 @@ class Guide(
         com.saathi.app.DebugLog.i("form", "online form: ${plan.size} boxes")
         stop()
         goal = "fill this form"; form = plan; formI = 0
-        taskPkgs += (svc.rootInActiveWindow?.packageName?.toString() ?: "")
+        taskPkgs += (root?.packageName?.toString() ?: "")
         speaker.say(say("I'll show you this form one box at a time. I never press Submit.", "मैं यह फ़ॉर्म एक-एक डिब्बा दिखाऊँगा। Submit मैं कभी नहीं दबाता।",
             "ఈ ఫారం ఒక్కో బాక్స్ చూపిస్తాను. Submit నేను ఎప్పుడూ నొక్కను.").pick(lang), lang)
         showFormStep()
@@ -1593,7 +1702,7 @@ class Guide(
         }
     }
 
-    fun answerQuestion(q: String) {
+    fun answerQuestion(q: String, aside: String? = null) {
         // A question in the middle of a task sets the task aside (not lost): answer, then offer to continue it.
         val interrupted = goal
         if (interrupted != null) { setAside = true; autoJob?.cancel(); overlay.highlight(null, false) } else stop()
@@ -1604,7 +1713,7 @@ class Guide(
             overlay.showCard(say("Let me think…", "सोच रहा हूँ…", "ఆలోచిస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
             var waited = 0
             while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && waited < 6000) { delay(200); waited += 200 }
-            val a = Conversation.answer(q, lang, Prefs.name(svc), svc).let { raw ->
+            val a = Conversation.answer(if (aside != null) "$aside\nMy question: $q" else q, lang, Prefs.name(svc), svc).let { raw ->
                 // No source: only safe, general advice passes; facts, medical, legal, money → the kind fallback.
                 val c = com.saathi.app.policy.AnswerCheck.verify(q, raw, null, lang)
                 if (c.ok || IntentRouter.isGreeting(q)) raw else c.fallback?.pick(lang) ?: raw
