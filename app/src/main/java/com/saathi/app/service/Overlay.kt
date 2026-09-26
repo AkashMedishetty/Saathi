@@ -57,7 +57,7 @@ class Overlay(
     private val onFamily: () -> Unit = {},
     private val onDecline: () -> Unit = {},
 ) {
-    enum class Mode { INFO, THINKING, STEP, SCROLL, FINAL, WARN, DONE, PAUSED, LOST, ALARM, CONFIRM, AUTO, ASK }
+    enum class Mode { INFO, THINKING, STEP, SCROLL, FINAL, WARN, DONE, PAUSED, LOST, ALARM, CONFIRM, AUTO, ASK, CHOICE }
 
     private val wm = ctx.getSystemService(WindowManager::class.java)
     /** The pointer: four slim windows around the target, never over it (see Halo). */
@@ -80,6 +80,16 @@ class Overlay(
     private val cardText = TextView(ctx)
     private val tipText = TextView(ctx)
     private val primary = Pill(ctx)
+    /** CHOICE mode: a second equally-big option ("WhatsApp" | "Phone call"). */
+    private val secondary = Pill(ctx)
+    private var choiceA: Triple<String, Int, () -> Unit>? = null
+    private var choiceB: Triple<String, Int, () -> Unit>? = null
+
+    /** Two clear options, both one tap, plus "Not now". */
+    fun showChoice(text: String, a: Triple<String, Int, () -> Unit>, b: Triple<String, Int, () -> Unit>) {
+        choiceA = a; choiceB = b
+        showCard(text, Mode.CHOICE)
+    }
     private val quietRow = LinearLayout(ctx)
     private val btnAgain = Pill(ctx)
     private val btnMic = Pill(ctx)
@@ -275,6 +285,7 @@ class Overlay(
             Mode.CONFIRM -> say("Yes, press it", "हाँ, दबा दो", "అవును, నొక్కండి").pick(l)
             Mode.AUTO -> say("Let me do it myself", "मैं ख़ुद करूँगा", "నేనే చేస్తాను").pick(l)
             Mode.ASK -> say("Yes, please", "हाँ, कीजिए", "అవును, చేయండి").pick(l)
+            Mode.CHOICE -> choiceA?.first
             Mode.FINAL -> say("I'm done", "हो गया", "అయిపోయింది").pick(l)
             Mode.WARN -> if (targetCenterY != null) say("Show me the safe button", "सुरक्षित बटन दिखाओ", "సురక్షిత బటన్ చూపించు").pick(l) else if (onContinue != null) say("Take me back to safety", "मुझे सुरक्षित वापस ले चलो", "నన్ను సురక్షితంగా వెనక్కి తీసుకెళ్ళు").pick(l) else null
             else -> null
@@ -284,6 +295,7 @@ class Overlay(
             Mode.LOST -> R.drawable.ic_home
             Mode.ALARM -> R.drawable.ic_call_end
             Mode.CONFIRM, Mode.ASK -> R.drawable.ic_check
+            Mode.CHOICE -> choiceA?.second ?: R.drawable.ic_check
             Mode.AUTO -> R.drawable.ic_pause_circle
             Mode.FINAL -> R.drawable.ic_check
             Mode.WARN -> R.drawable.ic_shield
@@ -294,9 +306,11 @@ class Overlay(
         primary.set(primaryText ?: "", primaryIcon,
             bg = if (warn) C.WHITE else C.PINE_DEEP, fg = if (warn) C.VERMILION else C.WHITE, big = true)
 
+        secondary.visibility = if (mode == Mode.CHOICE && choiceB != null) View.VISIBLE else View.GONE
+        choiceB?.let { if (mode == Mode.CHOICE) secondary.set(it.first, it.second, bg = C.PINE_DEEP, fg = C.WHITE, big = true) }
         val quietBg = if (warn) 0x26FFFFFF else C.PAPER_2
         val quietFg = if (warn) C.WHITE else C.PINE_DEEP
-        if (mode == Mode.ALARM || mode == Mode.CONFIRM || mode == Mode.ASK) {
+        if (mode == Mode.ALARM || mode == Mode.CONFIRM || mode == Mode.ASK || mode == Mode.CHOICE) {
             btnAgain.visibility = View.GONE; btnMic.visibility = View.GONE
         } else if (mode == Mode.LOST) {
             // Lost: Back · Ask family · Close, all one tap.
@@ -311,7 +325,7 @@ class Overlay(
             btnMic.round(say("Speak to Saathi", "साथी से बोलिए", "సాథీతో మాట్లాడండి").pick(l), R.drawable.ic_mic, quietBg, quietFg)
         }
         btnStop.round(if (mode == Mode.ALARM) say("It's family, continue", "परिवार है, जारी रखें", "కుటుంబమే, కొనసాగించు").pick(l)
-            else if (mode == Mode.ASK) say("Not now", "अभी नहीं", "ఇప్పుడు వద్దు").pick(l)
+            else if (mode == Mode.ASK || mode == Mode.CHOICE) say("Not now", "अभी नहीं", "ఇప్పుడు వద్దు").pick(l)
             else if (mode == Mode.CONFIRM) say("Don't press it", "मत दबाओ", "నొక్కవద్దు").pick(l)
             else if (mode == Mode.DONE || mode == Mode.LOST || mode == Mode.INFO) say("Close", "बंद करें", "మూసివేయి").pick(l) else say("Stop", "रोकें", "ఆపండి").pick(l),
             R.drawable.ic_close, quietBg, quietFg)
@@ -486,6 +500,9 @@ class Overlay(
         // One row: the primary action, then quiet round buttons.
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL or Gravity.END }
         row.addView(primary, LinearLayout.LayoutParams(0, ctx.dp(56), 1f).apply { marginEnd = ctx.dp(8) })
+        row.addView(secondary, LinearLayout.LayoutParams(0, ctx.dp(56), 1f).apply { marginEnd = ctx.dp(8) })
+        secondary.visibility = View.GONE
+        secondary.setOnClickListener { it.performHapticFeedback(HapticFeedbackConstants.CONFIRM); hideCard(); choiceB?.third?.invoke() }
         fun r(p: Pill, last: Boolean = false) = row.addView(p, LinearLayout.LayoutParams(ctx.dp(52), ctx.dp(52)).apply { if (!last) marginEnd = ctx.dp(6) })
         r(btnAgain); r(btnMic); r(btnStop, last = true)
         card.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(12) })
@@ -494,11 +511,11 @@ class Overlay(
         btnAgain.setOnClickListener { if (mode == Mode.LOST) onBack() else onAgain() }
         primary.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-            when (mode) { Mode.PAUSED, Mode.ASK -> onContinue?.invoke(); Mode.FINAL -> onFinalDone(); Mode.LOST, Mode.ALARM -> onHome(); else -> onDoIt() }
+            when (mode) { Mode.CHOICE -> { hideCard(); choiceA?.third?.invoke() }; Mode.PAUSED, Mode.ASK -> onContinue?.invoke(); Mode.FINAL -> onFinalDone(); Mode.LOST, Mode.ALARM -> onHome(); else -> onDoIt() }
         }
         btnStop.setOnClickListener {
             when (mode) {
-                Mode.ASK -> hideCard()
+                Mode.ASK, Mode.CHOICE -> hideCard()
                 Mode.CONFIRM -> onDecline()
                 Mode.DONE, Mode.LOST, Mode.INFO, Mode.ALARM -> { hideCard(); onStop() }
                 else -> onStop()

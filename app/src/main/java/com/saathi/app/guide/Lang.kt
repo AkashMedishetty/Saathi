@@ -46,6 +46,10 @@ object Prefs {
         sp(c).edit().putString("contacts", a.toString()).apply()
     }
 
+    /** WhatsApp showed its "set up / sign in" screen: don't offer WhatsApp until we see it working. */
+    fun waNotSetUp(c: Context) = sp(c).getBoolean("wa_not_set_up", false)
+    fun setWaNotSetUp(c: Context, v: Boolean) = sp(c).edit().putBoolean("wa_not_set_up", v).apply()
+
     fun family(c: Context): String = contacts(c).firstOrNull()?.name ?: ""
     fun familyPhone(c: Context): String = contacts(c).firstOrNull()?.phone ?: ""
     fun setFamily(c: Context, v: String) = setContacts(c, listOf(Contact(v, familyPhone(c))) + contacts(c).drop(1))

@@ -259,7 +259,7 @@ class Guide(
                 return true
             }
             "call" -> { begin(goalText, skill("call"), autoMode); return true }
-            "video_call" -> { begin(goalText, skill("wa_video", if (u.person != null && !goalText.contains(u.person, true)) "video call ${u.person}" else goalText), autoMode); return true }
+            "video_call" -> { videoCall(goalText, u.person, autoMode); return true }
             "message" -> { begin(goalText, skill("wa_message"), autoMode); return true }
             "photo" -> { begin(goalText, skill("wa_photo"), autoMode); return true }
             "alarm" -> { begin(goalText, skill("alarm"), autoMode); return true }
@@ -1152,6 +1152,7 @@ class Guide(
                 "$app में पहले साइन इन करना होगा। पासवर्ड सिर्फ़ आप लिखिए। “${w.button?.title ?: "Sign in"}” दबाइए।",
                 "$app లో ముందు సైన్ ఇన్ చేయాలి. పాస్‌వర్డ్ మీరే టైప్ చేయండి. “${w.button?.title ?: "Sign in"}” నొక్కండి.").pick(lang)
         com.saathi.app.DebugLog.i("wall", "${screen.pkg} setup=${w.setup} button=${w.button?.title}")
+        if (screen.pkg.startsWith("com.whatsapp")) Prefs.setWaNotSetUp(svc, true)
         show(Target(if (w.setup) null else w.button, t, "wall_${screen.pkg}", noAct = w.setup))
     }
 
@@ -1177,6 +1178,53 @@ class Guide(
         "com.google.android.apps.photos" to "Google Photos", "com.google.android.apps.nbu.paisa.user" to "Google Pay", "com.phonepe.app" to "PhonePe")
 
     /** A question or chit-chat: answer out loud (the Clicky lesson), no screen navigation. */
+    /**
+     * "Video call my son": WhatsApp or a normal phone video call? Ask, unless they named WhatsApp, or WhatsApp isn't
+     * installed / set up on this phone (then the phone's own video call). Saathi never presses Call itself.
+     */
+    fun videoCall(goalText: String, person: String?, autoMode: Boolean = false) {
+        lang = Prefs.lang(svc)
+        val g = if (person != null && !goalText.contains(person, true)) "video call $person" else goalText
+        val wa = { begin(goalText, Skills.byId("wa_video")?.build(svc, SlotExtractor.from(g, Prefs.family(svc))), autoMode) }
+        val phone = { phoneVideoCall(g, autoMode) }
+        val saidWa = Regex("(?i)whats ?app|व्हाट्स|వాట్స").containsMatchIn(goalText)
+        val waOk = AppLauncher.first(svc, "com.whatsapp", "com.whatsapp.w4b") != null && !Prefs.waNotSetUp(svc)
+        when {
+            saidWa -> wa()
+            !waOk -> phone()
+            else -> {
+                val q = say("Video call on WhatsApp, or a normal phone video call?", "WhatsApp पर वीडियो कॉल, या फ़ोन से सीधी वीडियो कॉल?",
+                    "WhatsApp లో వీడియో కాల్ చేయాలా, లేక మామూలు ఫోన్ వీడియో కాల్?").pick(lang)
+                if (goal != null) stop() // (no stop() otherwise: its card fade-out would remove this card)
+                hideJob?.cancel()
+                current = Target(null, q, "choose_video"); lastSpokenKey = current?.key
+                overlay.showChoice(q, Triple("WhatsApp", com.saathi.app.R.drawable.ic_chat, wa),
+                    Triple(say("Phone call", "फ़ोन कॉल", "ఫోన్ కాల్").pick(lang), com.saathi.app.R.drawable.ic_call, phone))
+                speaker.say(q, lang)
+            }
+        }
+    }
+
+    /** The phone's own video call: the dialer opens with their number; Saathi glows the video button. */
+    private fun phoneVideoCall(g: String, autoMode: Boolean) {
+        val slots = SlotExtractor.from(g, Prefs.family(svc))
+        val who = slots.contact ?: Prefs.family(svc)
+        val number = Prefs.contacts(svc).firstOrNull { it.name.equals(who, true) }?.phone?.takeIf { it.isNotBlank() }
+            ?: Prefs.familyPhone(svc).takeIf { it.isNotBlank() && who.equals(Prefs.family(svc), true) }
+        if (number == null) { begin(g, Skills.byId("call")?.build(svc, slots), autoMode); return } // find them in Contacts
+        val f = Flow("phone_video", { Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:" + number)) },
+            listOf(Step("video", rx("^Video call", "^Video$", "video call", "^Make video call"),
+                say("Tap the video camera button to start the video call.", "वीडियो कॉल शुरू करने के लिए वीडियो कैमरा वाला बटन दबाइए।",
+                    "వీడియో కాల్ మొదలుపెట్టడానికి వీడియో కెమెరా బటన్ నొక్కండి.")),
+                Step("call", rx("^Call$", "^Dial$", "^Voice call"), say("No video button here? Tap the green call button; you can switch on video in the call.",
+                    "यहाँ वीडियो बटन नहीं? हरा कॉल बटन दबाइए; कॉल में वीडियो चालू कर सकते हैं।",
+                    "ఇక్కడ వీడియో బటన్ లేదా? ఆకుపచ్చ కాల్ బటన్ నొక్కండి; కాల్‌లో వీడియో ఆన్ చేయవచ్చు."))),
+            { sc -> Regex("Calling|Dialing|Ringing|End call", RegexOption.IGNORE_CASE).containsMatchIn(sc.allText) },
+            say("Calling $who. Hold the phone in front of your face!", "$who को कॉल लग रहा है। फ़ोन चेहरे के सामने रखिए!", "$who కి కాల్ వెళ్తోంది. ఫోన్ ముఖం ముందు పెట్టుకోండి!"),
+            say("Let's video call $who.", "$who को वीडियो कॉल करते हैं।", "$who కి వీడియో కాల్ చేద్దాం."))
+        begin(g, f, autoMode)
+    }
+
     /**
      * Saathi acts and guides; it isn't a chatbot (Google already answers questions). So a "question":
      *  - mid-task → a short answer, then back to the task (answerQuestion);
