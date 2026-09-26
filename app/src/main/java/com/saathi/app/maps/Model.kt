@@ -123,6 +123,9 @@ data class Route(
     val presets: Map<String, String> = emptyMap(),
     /** Done only after the last step was reached (a Settings page that merely mentions the topic is not the goal). */
     val doneNeedsLastStep: Boolean = false,
+    /** With [doneNeedsLastStep]: the step index that counts as "last" (a route whose final step is optional, e.g.
+     *  YouTube's "Play all" after a playlist result). Null = the last step. */
+    val doneAfter: Int? = null,
 )
 
 data class AppMap(

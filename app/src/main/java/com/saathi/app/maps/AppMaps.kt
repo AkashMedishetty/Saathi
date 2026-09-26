@@ -80,7 +80,7 @@ object AppMaps {
         val t = Tree(nodes)
 
         val lastPkg = r.steps.lastOrNull()?.let(pkgsOf) ?: r.pkg
-        if (r.done.isNotEmpty() && samePkg(lastPkg, pkg) && (!r.doneNeedsLastStep || doneSteps >= r.steps.lastIndex) &&
+        if (r.done.isNotEmpty() && samePkg(lastPkg, pkg) && (!r.doneNeedsLastStep || doneSteps >= (r.doneAfter ?: r.steps.lastIndex)) &&
             r.done.all { t.present(it, slots) } && r.doneNot.none { t.present(it, slots) }) return Decision.Done
 
         val screenId = screenOf(pkg, nodes, slots) ?: return Decision.Unknown

@@ -95,20 +95,22 @@ object YouTubeMap {
                     MapStep("yt_search", listOf(SUGGESTION),
                         say("Tap “{query}” in the list.", "सूची में “{query}” दबाइए।", "జాబితాలో “{query}” నొక్కండి."),
                         why = say("Or press the search key on the keyboard.", "या कीबोर्ड पर खोज वाला बटन दबाइए।", "లేదా కీబోర్డ్‌లో సెర్చ్ బటన్ నొక్కండి.")),
-                    // Before the result step on purpose: after a playlist result is tapped, the furthest step reached is
-                    // the result, so "Play all" is found as a step on this screen and "done" still needs the result step.
-                    MapStep("yt_playlist", listOf(PLAY_ALL),
-                        say("This is a playlist. Tap Play all to play the songs one after another.", "यह प्लेलिस्ट है। सारे गाने एक के बाद एक चलाने के लिए 'Play all' दबाइए।",
-                            "ఇది ప్లేలిస్ట్. పాటలన్నీ ఒకదాని తర్వాత ఒకటి ప్లే చేయడానికి 'Play all' నొక్కండి.")),
                     MapStep("yt_results_for", listOf(RESULT),
                         say("Tap the first video to play it.", "चलाने के लिए पहला वीडियो दबाइए।", "ప్లే చేయడానికి మొదటి వీడియో నొక్కండి."),
                         why = say("I skipped the advertisement at the top.", "ऊपर वाला विज्ञापन मैंने छोड़ दिया।", "పైన ఉన్న ప్రకటనను వదిలేశాను."),
                         scrollHint = say("Slowly scroll down to the first video.", "धीरे से नीचे पहले वीडियो तक स्क्रॉल कीजिए।",
                             "నెమ్మదిగా మొదటి వీడియో వరకు కిందకు స్క్రోల్ చేయండి.")),
+                    // After a playlist result: its page, "Play all". Only for a playlist picked in THIS search.
+                    MapStep("yt_playlist", listOf(PLAY_ALL),
+                        say("This is a playlist. Tap Play all to play the songs one after another.", "यह प्लेलिस्ट है। सारे गाने एक के बाद एक चलाने के लिए 'Play all' दबाइए।",
+                            "ఇది ప్లేలిస్ట్. పాటలన్నీ ఒకదాని తర్వాత ఒకటి ప్లే చేయడానికి 'Play all' నొక్కండి."),
+                        // Only a playlist they picked in THIS search (field: YouTube reopened on an old playlist page and
+                        // the route glowed its Play all).
+                        needsReached = 4),
                 ),
                 // Done = on a watch page after the result was tapped. Shorts on the Home tab also have a Like button
                 // (found on the phone), so the Like button alone is not enough: the last step must be reached too.
-                done = listOf(LIKE), doneNot = listOf(TAB_HOME, SEARCH_BOX), doneNeedsLastStep = true,
+                done = listOf(LIKE), doneNot = listOf(TAB_HOME, SEARCH_BOX), doneNeedsLastStep = true, doneAfter = 4,
                 doneSay = say("It's playing. Enjoy! Say “pause”, “louder” or “close” any time.", "चल रहा है। आनंद लीजिए! कभी भी “रोको”, “आवाज़ बढ़ाओ” या “बंद करो” बोलिए।",
                     "ప్లే అవుతోంది. ఆనందించండి! ఎప్పుడైనా “ఆపు”, “సౌండ్ పెంచు” లేదా “మూసేయి” అనండి."),
                 next = listOf(say("Want me to show you how to like it or share it with family?",

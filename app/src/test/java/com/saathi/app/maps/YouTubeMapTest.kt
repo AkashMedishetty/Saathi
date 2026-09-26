@@ -56,7 +56,7 @@ class YouTubeMapTest {
         assertTrue(c.node.clickable)
         // 4. Results: the first real video, skipping the "Sponsored" ad above it
         val d = AppMaps.next(search, pkg, yt("results"), 3, q) as Decision.Glow
-        assertEquals(5, d.step)
+        assertEquals(4, d.step)
         assertTrue(d.node.desc!!.endsWith("play video"))
         assertFalse(d.node.desc!!.contains("Sponsored"))
         assertEquals(1851, d.node.box.t)
@@ -73,7 +73,7 @@ class YouTubeMapTest {
     @Test fun latestStepWinsWhenPeopleSkipAhead() {
         // They typed and pressed search themselves: straight to the result, from step 0.
         val d = AppMaps.next(search, pkg, yt("results"), 0, q) as Decision.Glow
-        assertEquals(5, d.step)
+        assertEquals(4, d.step)
         // Already on the typed screen at the start: the suggestion, not "tap search"
         assertEquals(3, (AppMaps.next(search, pkg, yt("search_typed"), 0, q) as Decision.Glow).step)
     }
@@ -86,11 +86,11 @@ class YouTubeMapTest {
     }
 
     @Test fun neverGoesBackBehindTheFurthestStep() {
-        // They reached the result list (step 5), then the list scrolled so no real result is visible:
+        // They reached the result list (step 4), then the list scrolled so no real result is visible:
         val adOnly = yt("results").filterNot { it.desc?.endsWith("play video") == true }
-        val s = AppMaps.next(search, pkg, adOnly, 5, q)
+        val s = AppMaps.next(search, pkg, adOnly, 4, q)
         assertTrue("$s", s is Decision.Scroll)
-        assertEquals(5, (s as Decision.Scroll).step)
+        assertEquals(4, (s as Decision.Scroll).step)
         assertEquals("Slowly scroll down to the first video.", s.hint[Lang.EN])
     }
 
@@ -165,7 +165,7 @@ class YouTubeMapTest {
         val watch = Fixtures.tree("FrameLayout t=null d=null id=null  ri=null acts= Rect(0, 0 - 1440, 3168)",
             "  Button t=null d=like this video along with 12K other people id=null CF ri=null acts= Rect(100, 1500 - 400, 1650)",
             "  Button t=null d=Share id=null CF ri=null acts= Rect(420, 1500 - 700, 1650)")
-        assertEquals(Decision.Done, AppMaps.next(search, pkg, watch, 5, q))
+        assertEquals(Decision.Done, AppMaps.next(search, pkg, watch, 4, q))
         assertTrue(AppMaps.next(search, pkg, watch, 0, q) !is Decision.Done)
     }
 
@@ -177,7 +177,9 @@ class YouTubeMapTest {
             "  TextView t=Telugu Hit Melody Songs d=null id=null  ri=null acts= Rect(60, 1180 - 1300, 1400)",
             "  Button t=null d=Play all id=null CF ri=null acts= Rect(60, 1880 - 880, 2010)")
         assertEquals("yt_playlist", AppMaps.screenOf(pkg, page))
-        val d = AppMaps.next(search, pkg, page, 5, q)
-        assertTrue(d is Decision.Glow && d.step == 4)
+        val d = AppMaps.next(search, pkg, page, 4, q)
+        assertTrue("$d", d is Decision.Glow && d.step == 5)
+        // An old playlist page before anything was searched: not ours to play.
+        assertTrue(AppMaps.next(search, pkg, page, 0, q) !is Decision.Glow)
     }
 }
