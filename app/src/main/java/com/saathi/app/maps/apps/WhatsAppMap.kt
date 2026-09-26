@@ -49,8 +49,8 @@ object WhatsAppMap {
     val map = AppMap(
         pkg = PKG, name = "WhatsApp", alsoPkgs = listOf("com.whatsapp.w4b"),
         screens = listOf(
+            // The search icon (menuitem_search, labelled "Search") or the newer "Ask Meta AI or Search" bar.
             ScreenDef("wa_home", listOf(TABS, SEARCH.last().copy(clickable = null)), mustNot = listOf(ENTRY.first())),
-            ScreenDef("wa_home_id", listOf(TABS, id("menuitem_search")), mustNot = listOf(ENTRY.first())),
             ScreenDef("wa_search", listOf(Sel(editable = true, above = 0.2f)), mustNot = listOf(ENTRY.first())),
             ScreenDef("wa_chat", listOf(CHAT_TITLE.first(), ENTRY.first())),
             ScreenDef("wa_chat_label", listOf(lbl("^(Message|Type a message)$"), lbl("^(Attach|Camera|Emoji|Voice message|Video call)$", clickable = true))),
@@ -92,7 +92,7 @@ object WhatsAppMap {
             Route(
                 id = "wa_message", pkg = PKG,
                 goals = goals("(message|text|msg|write to) .+", "send (a )?message", "मैसेज (भेजो|करो)", ".+ (को|ko) (मैसेज|msg|message)", "మెసేజ్ (పంపు|చేయి)"),
-                avoid = listOf(rx("photo|picture|फोटो|ఫోటో|location|लोकेशन|లొకేషన్|sms|text message on phone")),
+                avoid = listOf(rx("photo|picture|फोटो|ఫోటో|location|लोकेशन|లొకేషన్|\\bsms\\b|size|bigger|smaller|font|अक्षर|అక్షర")),
                 slots = listOf("contact", "text"),
                 steps = inChat(
                     MapStep("wa_chat", ENTRY, say("Tap the box at the bottom and type your message.[ I can type: “{text}”.]",
@@ -125,7 +125,7 @@ object WhatsAppMap {
                 slots = emptyList(),
                 steps = listOf(
                     MapStep("wa_home", listOf(lbl("^More options$", clickable = true)), say("Tap the three dots at the top right.", "ऊपर दाईं ओर तीन बिंदु दबाइए।",
-                        "పైన కుడివైపు మూడు చుక్కలు నొక్కండి."), alsoOn = listOf("wa_home_id")),
+                        "పైన కుడివైపు మూడు చుక్కలు నొక్కండి.")),
                     MapStep("wa_menu", listOf(lbl("^Settings$", clickable = true)), say("Tap Settings.", "'Settings' दबाइए।", "'Settings' నొక్కండి.")),
                     MapStep("wa_settings", listOf(lbl("^Chats$", clickable = true)), say("Tap Chats.", "'Chats' दबाइए।", "'Chats' నొక్కండి.")),
                     MapStep("wa_chats_settings", listOf(lbl("^Chat backup$", clickable = true)), say("Tap Chat backup.", "'Chat backup' दबाइए।", "'Chat backup' నొక్కండి."),

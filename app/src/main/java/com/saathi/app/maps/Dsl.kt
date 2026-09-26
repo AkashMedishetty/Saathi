@@ -30,6 +30,7 @@ object MapSlots {
             val v = when (k) {
                 "query" -> query(goal, s.query)
                 "contact" -> s.contact
+                "text" -> s.text
                 "place" -> s.place
                 "term" -> SettingsTerms.termFor(goal) ?: settingsWords(goal)
                 "app" -> appName(goal)

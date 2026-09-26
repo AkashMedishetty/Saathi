@@ -71,7 +71,8 @@ class GoalsTest {
         "photo is too dark" to "photos_brightness",
         "फोटो की रोशनी बढ़ाओ" to "photos_brightness",
         "ఫోటో వెలుతురు పెంచు" to "photos_brightness",
-        "send the photo to my son" to "photos_share",
+        "share this photo" to "photos_share",
+        "send the photo to my son" to "wa_photo",
         "फोटो भेजो" to "photos_share",
         "ఫోటో పంపు" to "photos_share",
     ))
@@ -121,10 +122,28 @@ class GoalsTest {
         "मेरे दस्तावेज़ दिखाओ" to "docs_open_recent",
     ))
 
+    @Test fun whatsapp() = check(listOf(
+        "video call my son" to "wa_video_call",
+        "video call Rahul" to "wa_video_call",
+        "बेटे को वीडियो कॉल करो" to "wa_video_call",
+        "కొడుకుకి వీడియో కాల్ చేయి" to "wa_video_call",
+        "call Rahul on whatsapp" to "wa_voice_call",
+        "व्हाट्सएप पर कॉल करो" to "wa_voice_call",
+        "message Rahul" to "wa_message",
+        "send a message to my daughter" to "wa_message",
+        "बेटी को मैसेज भेजो" to "wa_message",
+        "send a photo to Rahul" to "wa_photo",
+        "फोटो व्हाट्सएप पर भेजो" to "wa_photo",
+        "whatsapp backup" to "wa_backup",
+        "चैट बैकअप" to "wa_backup",
+        "open the location Ravi sent" to "wa_open_location",
+        "रवि की भेजी हुई लोकेशन खोलो" to "wa_open_location",
+    ))
+
     @Test fun noCrossMatches() = check(listOf(
-        "video call my son" to null,
-        "बेटे को वीडियो कॉल करो" to null,
         "what time is it" to null,
         "" to null,
+        "make the text bigger" to "settings_font",
+        "watch a video about gardening on youtube" to "yt_search",
     ))
 }
