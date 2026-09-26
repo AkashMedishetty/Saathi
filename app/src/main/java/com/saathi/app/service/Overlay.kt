@@ -37,7 +37,7 @@ import kotlin.math.abs
 
 /**
  * Everything Saathi draws over other apps. All TYPE_ACCESSIBILITY_OVERLAY windows (no extra permission):
- *  glow (full screen, not touchable) · watcher (1×1, told about every outside touch) · card · bubble.
+ *  halo (4 slim non-touchable windows around the target) · watcher (1×1, told about every outside touch) · card · bubble.
  *
  * The card follows one rule: one clear primary action, everything else quiet and labelled
  * (icons alone are hard for elderly users).
@@ -60,7 +60,8 @@ class Overlay(
     enum class Mode { INFO, THINKING, STEP, SCROLL, FINAL, WARN, DONE, PAUSED, LOST, ALARM, CONFIRM, AUTO, ASK }
 
     private val wm = ctx.getSystemService(WindowManager::class.java)
-    val glow = GlowView(ctx)
+    /** The pointer: four slim windows around the target, never over it (see Halo). */
+    private val halo = Halo(ctx, wm)
     private val watcher = View(ctx)
 
     // bubble
@@ -100,26 +101,22 @@ class Overlay(
 
     @SuppressLint("ClickableViewAccessibility")
     fun attach() {
-        // The full-screen glow window is only added while something glows (see ensureGlow): an always-present window
-        // over other apps makes banking/IRCTC apps reject touches as "obscured" (field test).
+        // Nothing of ours ever sits over the thing they tap: the halo is four windows around it (see Halo).
         attachWatcher()
-        watcher.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_OUTSIDE) onTouchOutside(); false }
+        watcher.setOnTouchListener { _, e ->
+            if (e.action == MotionEvent.ACTION_OUTSIDE) {
+                // Finger down anywhere: nothing of ours on screen while whatever they tap opens (trap #45).
+                if (halo.showing) { clearForLaunch(); watcher.removeCallbacks(restore); watcher.postDelayed(restore, 1200) }
+                onTouchOutside()
+            }
+            false
+        }
         buildCard()
         buildBubble()
     }
 
-    private var glowAttached = false
     private var watcherAttached = false
     private var bubbleAttached = true
-    private val idleCheck = Runnable { if (glow.idle()) { runCatching { wm.removeView(glow) }; glowAttached = false } }
-
-    private fun ensureGlow() {
-        glow.removeCallbacks(idleCheck)
-        if (!glowAttached && !steppedBack) glowAttached = add(glow, lp(WLP.MATCH_PARENT, WLP.MATCH_PARENT, false))
-    }
-
-    /** Remove the glow window shortly after it has nothing to show. */
-    private fun releaseGlowSoon() { glow.removeCallbacks(idleCheck); glow.postDelayed(idleCheck, 900) }
 
     private fun attachWatcher() {
         if (watcherAttached) return
@@ -139,20 +136,21 @@ class Overlay(
         if (on == steppedBack) return
         steppedBack = on
         if (on) {
-            glow.setTarget(null, false); glow.setAura(false)
-            if (glowAttached) { runCatching { wm.removeView(glow) }; glowAttached = false }
+            halo.suspend()
             if (watcherAttached) { runCatching { wm.removeView(watcher) }; watcherAttached = false }
             if (bubbleAttached) { runCatching { wm.removeView(bubble) }; bubbleAttached = false }
             hideCardNow()
         } else {
+            halo.resume()
             attachWatcher()
             bubbleLp?.let { if (!bubbleAttached) bubbleAttached = add(bubble, it) }
         }
     }
 
     fun detach() {
-        listOf(glow, watcher, bubble).forEach { runCatching { wm.removeView(it) } }
-        glowAttached = false; watcherAttached = false; bubbleAttached = false
+        halo.suspend()
+        listOf(watcher, bubble).forEach { runCatching { wm.removeView(it) } }
+        watcherAttached = false; bubbleAttached = false
         if (cardShown) runCatching { wm.removeView(cardWrap) }
         cardShown = false
     }
@@ -160,39 +158,46 @@ class Overlay(
     // ───────── glow ─────────
 
     fun highlight(r: Rect?, warn: Boolean) {
-        glow.dim = Prefs.dim(ctx)
         val m = ctx.resources.displayMetrics
         val clipped = r?.let { Rect(it).apply { if (!intersect(0, 0, m.widthPixels, m.heightPixels)) setEmpty() } }?.takeIf { !it.isEmpty }
         if (steppedBack) return
-        if (clipped != null) ensureGlow()
-        glow.setTarget(clipped, warn)
-        if (clipped == null) releaseGlowSoon()
+        halo.show(clipped, warn)
+        val prev = targetBox
+        targetBox = clipped
+        if (cardShown && clipped != null && clipped != prev) place(animateIn = false)
         r?.let { dodgeBubble(it) }
     }
 
-    fun setMoving(moving: Boolean) = glow.setMoving(moving)
+    fun setMoving(moving: Boolean) = halo.setMoving(moving)
+
+    /** A tap is about to open another screen (e.g. Settings): take every window away until it settles. */
+    fun clearForLaunch() { halo.suspend(); if (bubbleAttached) { runCatching { wm.removeView(bubble) }; bubbleAttached = false } }
+    private val restore = Runnable { restoreAfterLaunch() }
+    fun restoreAfterLaunch() { if (steppedBack) return; halo.resume(); bubbleLp?.let { if (!bubbleAttached) bubbleAttached = add(bubble, it) } }
 
     private var imeVisible = false
+    private var imeTop: Int? = null
+    private var focusBox: Rect? = null
+    private var targetBox: Rect? = null
 
-    /** Keyboard up: the card moves to the top so it never covers what they're typing (field test, YouTube search). */
-    fun setImeVisible(v: Boolean) {
-        if (v == imeVisible) return
-        imeVisible = v
+    /** Keyboard up: the card sits where it covers neither the keyboard, the box being typed in, nor the target. */
+    fun setImeVisible(v: Boolean, top: Int? = null, focus: Rect? = null) {
+        if (v == imeVisible && top == imeTop && focus == focusBox) return
+        imeVisible = v; imeTop = if (v) top else null; focusBox = if (v) focus else null
         if (cardShown) place(animateIn = false, moved = true)
     }
 
     /** Lock screen: hide glow + card without forgetting them. */
     fun setHidden(h: Boolean) {
         val v = if (h) View.INVISIBLE else View.VISIBLE
-        glow.visibility = v; cardWrap.visibility = v
+        halo.setVisible(!h); cardWrap.visibility = v
     }
 
     /** Listening / thinking: the edge of the screen comes alive, and so do the orbs. */
     fun setAura(on: Boolean) {
+        // No screen-edge glow over other apps any more (it covered every tap); the orbs show listening/thinking.
         if (steppedBack) return
-        if (on) ensureGlow()
-        glow.setAura(on)
-        if (!on) releaseGlowSoon()
+        orb.mood = if (on) OrbView.Mood.ACTIVE else orb.mood
         bubbleOrb.mood = if (on) OrbView.Mood.ACTIVE else OrbView.Mood.IDLE
     }
 
@@ -321,43 +326,47 @@ class Overlay(
      * Top or bottom: where the person dragged it, else away from the target. Never on top of the target
      * (trap #30), even if they chose that side.
      */
+    /**
+     * Where the card goes: the first spot (top, bottom, just below or above the target) that covers neither the
+     * target, the box being typed in, nor the keyboard. It stays put while its spot is still clear (no jumping).
+     */
     private fun place(animateIn: Boolean, moved: Boolean = false) {
         val screenH = ctx.resources.displayMetrics.heightPixels
-        val ty = lastTargetY
-        // Where it would like to be: the person's choice, else the side away from the target.
-        val preferTop = when (Prefs.cardPos(ctx)) { "top" -> true; "bottom" -> false; else -> ty != null && ty > screenH * 0.5 }
-        // Hysteresis: once shown, only move if the target would actually sit under the card.
-        val cardH = (if (card.height > 0) card.height else ctx.dp(170)) + ctx.dp(40)
-        fun covers(top: Boolean) = ty != null && (if (top) ty < ctx.dp(46) + cardH else ty > screenH - cardH)
-        val wantTop = when {
-            imeVisible -> true
-            animateIn || moved -> if (covers(preferTop)) !preferTop else preferTop
-            covers(cardAtTop) -> !cardAtTop
-            else -> cardAtTop
+        val topMin = ctx.dp(46)                                   // clear of the status bar (and the event's HackTracker pill)
+        val bottomMax = (imeTop ?: screenH) - ctx.dp(10)
+        val ch = (if (card.height > 0) card.height else ctx.dp(170)) + ctx.dp(16)
+        val avoid = listOfNotNull(targetBox, focusBox).map { Rect(it).apply { inset(0, -ctx.dp(8)) } }
+        fun clear(y: Int) = y >= topMin && y + ch <= bottomMax && avoid.none { it.top < y + ch && it.bottom > y }
+        val tgt = targetBox
+        val candidates = buildList {
+            when (Prefs.cardPos(ctx)) { "top" -> add(topMin); "bottom" -> add(bottomMax - ch) }
+            if (!animateIn && cardY != null) add(cardY!!)          // hysteresis: stay if still clear
+            if (tgt != null && tgt.centerY() > screenH / 2) { add(topMin); add(bottomMax - ch) } else { add(bottomMax - ch); add(topMin) }
+            if (tgt != null) { add(tgt.bottom + ctx.dp(14)); add(tgt.top - ctx.dp(14) - ch) }
+            focusBox?.let { add(it.bottom + ctx.dp(14)) }
         }
-        val p = lp(WLP.MATCH_PARENT, WLP.WRAP_CONTENT, true).apply {
-            gravity = if (wantTop) Gravity.TOP else Gravity.BOTTOM
-            y = ctx.dp(if (wantTop) 46 else 10) // clear the status bar (and the event HackTracker pill)
-        }
+        val y = candidates.firstOrNull { clear(it) }
+            ?: candidates.minByOrNull { c -> avoid.sumOf { a -> maxOf(0, minOf(a.bottom, c + ch) - maxOf(a.top, c)) } } ?: topMin
+        val wantTop = y + ch / 2 < screenH / 2
+        val p = lp(WLP.MATCH_PARENT, WLP.WRAP_CONTENT, true).apply { gravity = Gravity.TOP; this.y = y.coerceAtLeast(topMin) }
+        val changed = y != cardY
         if (animateIn) {
             if (!add(cardWrap, p)) return
             cardShown = true
             card.translationY = ctx.dpf(if (wantTop) -40 else 40); card.alpha = 0f
             card.scaleX = 0.96f; card.scaleY = 0.96f
             card.animate().translationY(0f).alpha(1f).scaleX(1f).scaleY(1f).setInterpolator(EASE).setDuration(400).start()
-        } else if (moved) {
-            runCatching { wm.updateViewLayout(cardWrap, p) }
-            card.translationY = ctx.dpf(if (wantTop) -24 else 24)
-            card.animate().alpha(1f).translationY(0f).setInterpolator(EASE).setDuration(300).start()
-        } else if (wantTop != cardAtTop) {
-            card.animate().alpha(0f).setDuration(120).withEndAction {
+        } else if (changed) {
+            card.animate().alpha(0f).setDuration(110).withEndAction {
                 runCatching { wm.updateViewLayout(cardWrap, p) }
-                card.translationY = ctx.dpf(if (wantTop) -24 else 24)
-                card.animate().alpha(1f).translationY(0f).setInterpolator(EASE).setDuration(300).start()
+                card.translationY = ctx.dpf(if (wantTop) -20 else 20)
+                card.animate().alpha(1f).translationY(0f).setInterpolator(EASE).setDuration(260).start()
             }.start()
         }
-        cardAtTop = wantTop
+        cardY = y; cardAtTop = wantTop
     }
+
+    private var cardY: Int? = null
 
     private fun hideCardNow() {
         if (!cardShown) return

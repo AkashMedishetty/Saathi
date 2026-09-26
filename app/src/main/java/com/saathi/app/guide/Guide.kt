@@ -476,7 +476,14 @@ class Guide(
         if (current?.warn == true && goal == null) clearVisuals()
 
         // Keep the card clear of the keyboard.
-        overlay.setImeVisible(runCatching { svc.windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD } }.getOrDefault(false))
+        // Keyboard + the box being typed in: the card must cover neither.
+        runCatching {
+            val ime = svc.windows.firstOrNull { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+            val imeTop = ime?.let { w -> android.graphics.Rect().also { w.getBoundsInScreen(it) }.top }
+            val focus = if (ime != null) svc.rootInActiveWindow?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
+                ?.let { n -> android.graphics.Rect().also { n.getBoundsInScreen(it) } } else null
+            overlay.setImeVisible(ime != null, imeTop, focus)
+        }
 
         // 4. No task → nothing more.
         val g = goal ?: return
@@ -502,14 +509,15 @@ class Guide(
         }
         if (settingsFresh && screen.pkg == "com.android.settings") {
             val home = screen.find(listOf(Regex("^Search settings", RegexOption.IGNORE_CASE), Regex("^Search$", RegexOption.IGNORE_CASE))) != null
-            if (home || (f != null && matchStep(f, screen) != null) || settingsBacks >= 5) settingsFresh = false
+            if (home || (f != null && matchStep(f, screen) != null)) settingsFresh = false
             else {
-                settingsBacks++
-                com.saathi.app.DebugLog.i("settings", "old sub-page open → back ($settingsBacks)")
-                lastOwnAction = SystemClock.uptimeMillis()
-                svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
-                lastSig = 0
-                schedule(700, force = true)
+                // Saathi never presses anything inside Settings itself (the phone treats that as a hijack, trap #45):
+                // ask them to go back, glowing the back arrow.
+                com.saathi.app.DebugLog.i("settings", "old sub-page open → asking them to go back")
+                val back = screen.find(listOf(Regex("^(Navigate up|Back|Go back|Up)$", RegexOption.IGNORE_CASE)))
+                show(Target(back, say("This is an older Settings page. Tap the back arrow at the top until you see the main Settings page.",
+                    "यह पुराना Settings पेज है। ऊपर पीछे वाला तीर दबाइए, जब तक मुख्य Settings पेज न दिखे।",
+                    "ఇది పాత Settings పేజీ. ప్రధాన Settings పేజీ వచ్చే వరకు పైన వెనక్కి బాణం నొక్కండి.").pick(lang), "settings_back", noAct = true))
                 return
             }
         }
@@ -819,6 +827,12 @@ class Guide(
             if (wait > 0) delay(wait + 50)
             // List rows get recycled while scrolling: re-find by label + role on a fresh read (trap #11).
             val fresh = readScreen()
+            // Inside Settings, Saathi only types into the search box; taps must be the person's own (trap #45).
+            if (fresh?.pkg == "com.android.settings" && t.fill == null) {
+                speaker.say(say("Please tap it yourself here. Settings only accepts your own finger.", "यहाँ आप ख़ुद दबाइए। Settings सिर्फ़ आपकी उँगली मानता है।",
+                    "ఇక్కడ మీరే నొక్కండి. Settings మీ వేలినే ఒప్పుకుంటుంది.").pick(lang), lang)
+                return@launch
+            }
             val el = t.el?.let { old ->
                 fresh?.elements?.firstOrNull { it.label == old.label && it.role == old.role }
                     ?: run { lastSig = 0; schedule(200, force = true); return@launch }

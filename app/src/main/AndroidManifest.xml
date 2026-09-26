@@ -10,6 +10,8 @@
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- One-time reminders must ring on time (inexact alarms can be minutes late on vivo). -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Demo-phone safety net only: granted over adb (scripts/grant-heal.sh), never requested from users. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.TRANSMIT_IR" />
     <uses-permission android:name="android.permission.CALL_PHONE" />

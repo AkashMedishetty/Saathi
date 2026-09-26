@@ -48,7 +48,11 @@ object Skills {
         Step("search", SEARCH_BTN, s3("Tap the magnifying glass to search.", "खोजने के लिए आवर्धक काँच (खोज) दबाइए।", "వెతకడానికి భూతద్దం నొక్కండి.")),
         Step("type", SEARCH_BOX, s3("Type \"$query\". Or tap Do it and I'll type it.", "\"$query\" लिखिए। या 'आप कर दो' दबाइए, मैं लिख दूँगा।", "\"$query\" టైప్ చేయండి. లేదా 'మీరే చేయండి' నొక్కండి, నేను టైప్ చేస్తాను."),
             role = "input", fill = query),
-        Step("pick", listOf(Regex(Regex.escape(query.split(" ").maxByOrNull { it.length } ?: query), RegexOption.IGNORE_CASE)), pick),
+        // A real result: never a search suggestion or an ad, and only once the search box isn't empty (field test:
+        // "Tap the video you like" pointed at a history suggestion).
+        Step("pick", listOf(Regex("^(?!.*(Edit suggestion|Sponsored|Search for|Search YouTube)).*" +
+            Regex.escape(query.split(" ").maxByOrNull { it.length } ?: query), RegexOption.IGNORE_CASE)), pick,
+            unlessVisible = listOf(Regex("^Search YouTube$", RegexOption.IGNORE_CASE))),
     )
 
     val all: List<Skill> = listOf(

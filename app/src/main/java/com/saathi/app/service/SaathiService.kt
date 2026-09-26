@@ -47,6 +47,8 @@ class SaathiService : AccessibilityService() {
     private var wasLocked = false
 
     @Volatile private var debugHidden = false
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val restoreOverlay = Runnable { if (!debugHidden) overlay?.restoreAfterLaunch() }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -54,6 +56,7 @@ class SaathiService : AccessibilityService() {
         com.saathi.app.DebugLog.init(this)
         com.saathi.app.DebugLog.i("service", "connected")
         com.saathi.app.llm.Brain.connect(this) // the models live in the ":brain" process
+        A11yGuard.start(this)
         speaker = Speaker(this)
         val o = Overlay(
             this,
@@ -108,6 +111,12 @@ class SaathiService : AccessibilityService() {
                     com.saathi.app.DebugLog.i("stepback", "off ($pkg)")
                 }
             }
+        }
+        // A tap may open a new screen (Settings especially): nothing of Saathi's on screen while it opens (trap #45),
+        // back ~1.2 s later when the new screen has settled.
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && event.packageName != packageName) {
+            overlay?.clearForLaunch()
+            handler.removeCallbacks(restoreOverlay); handler.postDelayed(restoreOverlay, 1200)
         }
         // "Teach Saathi once": while recording, remember the label of everything they tap (never pixels).
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && com.saathi.app.guide.Recipes.recording != null) {
