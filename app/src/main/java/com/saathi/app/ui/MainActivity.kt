@@ -12,7 +12,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.saathi.app.R
+import com.saathi.app.llm.NpuProbe
 import com.saathi.app.service.SaathiService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.lifecycle.lifecycleScope
 
 /** Placeholder home for the skeleton; the editorial Home arrives in P0-5. */
 class MainActivity : AppCompatActivity() {
@@ -48,10 +53,30 @@ class MainActivity : AppCompatActivity() {
             setPadding(pad, pad, pad, pad)
             addView(title); addView(status); addView(turnOn)
         })
+        probe(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        probe(intent)
+    }
+
+    /** Debug: adb shell am start -n com.saathi.app/.ui.MainActivity --es probe NPU [--es model text] */
+    private fun probe(intent: Intent) {
+        intent.getStringExtra("probe")?.let { backend ->
+            val which = intent.getStringExtra("model") ?: "vision"
+            status.text = "Testing $which model on $backend…"
+            lifecycleScope.launch {
+                val r = withContext(Dispatchers.IO) { NpuProbe.run(applicationContext, backend, which, intent.getBooleanExtra("vis", true)) }
+                status.text = r
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        if (intent.hasExtra("probe")) return
         status.text = if (SaathiService.isEnabled(this)) "● Helper on · works without internet" else "○ Helper off"
     }
 }
