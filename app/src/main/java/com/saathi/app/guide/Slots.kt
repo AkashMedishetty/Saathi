@@ -16,6 +16,9 @@ object SlotExtractor {
     private val STOP = setOf(
         "on", "in", "via", "using", "whatsapp", "saying", "that", "and", "a", "an", "the", "my", "video", "call",
         "message", "msg", "hello", "hi", "about", "now", "please", "to", "for", "at", "from", "photo", "picture", "me",
+        // "how to SEE IT" is not a person (field: contact = "see it").
+        "see", "watch", "open", "use", "do", "make", "find", "show", "get", "go", "read", "hear", "know", "learn", "look",
+        "it", "this", "that", "them", "him", "her", "us",
     )
     /** Relations resolve to the registered family contact when there is one. */
     val FAMILY = setOf("son", "daughter", "beta", "beti", "wife", "husband", "grandson", "granddaughter", "family",

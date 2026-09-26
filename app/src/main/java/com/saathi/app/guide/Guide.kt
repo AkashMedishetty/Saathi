@@ -354,6 +354,8 @@ class Guide(
                 //    request in any words reaches the right route; phrases are only the fast path.
                 //    The model rewrites their words (any language) as one plain command; a command that reaches a known
                 //    route is run as if they'd said it. Small models rewrite well; they pick badly from numbered lists.
+                //    Gemma 4 (GPU) only. Tried the NPU 1B for this (04:05): yes/no said yes to everything, the topic
+                //    variant sent "an ugly ringtone" to the Phone call route. It keeps doing intent classification only.
                 canonical(goalText)?.let { c -> start(c, autoMode, learnMode = learn); return@launch }
                 // 1) Understand the vague request. 2) Jump there with an intent. 3) Only then guide / answer.
                 com.saathi.app.llm.AiMeter.purpose = "understand"
@@ -389,7 +391,8 @@ class Guide(
         if (!LlmManager.isReady) {
             LlmManager.loadAsync(svc)
             var waited = 0
-            while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && LlmManager.state.value !is LlmManager.State.NoModel && waited < 6000) { delay(200); waited += 200 }
+            overlay.showCard(say("Let me think…", "सोच रहा हूँ…", "ఆలోచిస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
+            while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && LlmManager.state.value !is LlmManager.State.NoModel && waited < 12000) { delay(200); waited += 200 }
             if (!LlmManager.isReady) { com.saathi.app.DebugLog.i("route", "model: not ready, old path"); return null }
         }
         com.saathi.app.llm.AiMeter.purpose = "rewrite"
@@ -403,11 +406,58 @@ class Guide(
         return if (ok) c else null
     }
 
+    /** The 3 likeliest known routes for [g]: same app (+5) and shared words with the route's description. */
+    private fun shortlist(g: String, n: Int = 3): List<Pair<com.saathi.app.maps.Route, String>> {
+        val words = g.lowercase().split(Regex("[^\\p{L}\\p{M}]+")).filter { it.length >= 3 }.toSet() - setOf("the", "and", "for", "want", "please", "can", "you", "how", "what")
+        val app = AppLauncher.findInGoal(svc, g)?.pkg
+        return com.saathi.app.maps.AppMaps.all.flatMap { m -> m.routes.map { r -> m to r } }
+            .filter { (_, r) -> runCatching { AppLauncher.isInstalled(svc, r.pkg) }.getOrDefault(false) }
+            .map { (m, r) ->
+                val d = describeRoute(m, r)
+                Triple(r, d, (if (app != null && (r.pkg == app || app in m.alsoPkgs)) 5 else 0) + words.count { w -> d.lowercase().contains(w) })
+            }.filter { it.third > 0 }.sortedByDescending { it.third }.take(n).map { it.first to it.second }
+    }
+
+    /**
+     * NLU on the NPU: yes / no, one known route at a time (small models answer yes/no well; they pick badly from lists).
+     * Null = no model, nothing likely, or every answer was no → Gemma 4's rewrite, then the old path.
+     */
+    private suspend fun npuRoute(g: String): com.saathi.app.maps.Route? {
+        // The 1B answered "yes" to everything (field 04:05: "make the writing larger" → Photos brightness), so it no
+        // longer judges. It only pulls out the TOPIC in a few words; Saathi's own rules map the topic to a route.
+        com.saathi.app.llm.AiMeter.purpose = "topic"
+        val topic = runCatching { com.saathi.app.llm.FastBrain.generate(svc,
+            "Say in 2 to 4 plain English words what the person wants to change, see or do on their phone. Reply with the words only.",
+            g) }.getOrNull()?.lines()?.firstOrNull { it.isNotBlank() }?.trim()?.trim('"', '.', '*', ' ')?.lowercase()?.take(40)
+        if (topic.isNullOrBlank()) return null
+        val candidates = listOf(topic, "change my $topic", "show my $topic", "open $topic", "see $topic")
+        val r = candidates.firstNotNullOfOrNull { c -> mapRouteFor(c) }
+        com.saathi.app.DebugLog.i("route", "npu topic: \"$topic\" → ${r?.id ?: "none"}")
+        return r
+    }
+
+    private suspend fun npuYesNo(g: String): com.saathi.app.maps.Route? {
+        val cands = shortlist(g)
+        if (cands.isEmpty()) return null
+        val sys = "You check if a phone task matches what an elderly person asked for. Answer only yes or no."
+        for ((r, d) in cands) {
+            com.saathi.app.llm.AiMeter.purpose = "route yes/no"
+            val out = runCatching { com.saathi.app.llm.FastBrain.generate(svc, sys,
+                "Person asked: \"$g\"\nTask: $d\nDoes this task do what the person asked? yes or no:") }.getOrNull() ?: return null
+            val yes = Regex("(?i)^\\W*(yes|haan|हाँ|అవును)\\b").containsMatchIn(out.trim())
+            com.saathi.app.DebugLog.i("route", "npu: ${r.id}? ${out.trim().take(12)}")
+            if (yes) return r
+        }
+        return null
+    }
+
     /** A route in plain words for the model: "WhatsApp — see photo: Here it is, big…". */
     private fun describeRoute(m: com.saathi.app.maps.AppMap, r: com.saathi.app.maps.Route): String {
         val what = r.id.substringAfter('_').replace('_', ' ')
-        val end = (r.doneSay[Lang.EN] ?: "").replace(Regex("\\{[a-z]+\\}"), "someone").replace(Regex("\\[[^]]*\\]"), "").take(90)
-        return "${m.name} — $what: $end"
+        val clean = { s: String -> s.replace(Regex("\\{[a-z]+\\}"), "someone").replace(Regex("\\[[^]]*\\]"), "") }
+        // What it's about, how it goes (its steps' words) and how it ends: enough for a yes / no.
+        val steps = r.steps.takeLast(2).joinToString(" ") { clean(it.say[Lang.EN] ?: "") }.take(110)
+        return "in ${m.name}, $what. Steps: $steps Ends: ${clean(r.doneSay[Lang.EN] ?: "").take(70)}"
     }
 
     /**

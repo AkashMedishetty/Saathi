@@ -132,6 +132,8 @@ object WhatsAppMap {
             ),
             Route(
                 id = "wa_photo", pkg = PKG,
+                // Sending theirs, never seeing one someone sent ("my grandson posted a picture… I want to look at it").
+                avoid = listOf(rx("posted|sent me|send me|look at|see it|received|got a|how (do i|to|can i) (see|open|view)")),
                 goals = goals("send (a |the |my )?(photo|picture|pic) (to|on) .+", "(photo|picture) .*whatsapp", "(फोटो|फ़ोटो) .*(भेजो|व्हाट्सएप)", "ఫోటో .*(పంపు|వాట్సాప్)"),
                 slots = listOf("contact"),
                 steps = inChat(
