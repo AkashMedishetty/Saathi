@@ -3,6 +3,7 @@ package com.saathi.app.maps
 import com.saathi.app.guide.Lang
 import com.saathi.app.guide.Say
 import com.saathi.app.guide.say
+import com.saathi.app.maps.apps.DocsMap
 import com.saathi.app.maps.apps.PhotosMap
 import com.saathi.app.maps.apps.PlayStoreMap
 import com.saathi.app.maps.apps.SettingsMap
@@ -18,7 +19,7 @@ import com.saathi.app.maps.apps.YouTubeMap
  */
 object AppMaps {
     /** All maps, in priority order for goal matching ties. */
-    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map, PhotosMap.map, PlayStoreMap.map, SpotifyMap.map) }
+    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map, PhotosMap.map, PlayStoreMap.map, SpotifyMap.map, DocsMap.map) }
 
     private val byPkg by lazy { all.flatMap { m -> (listOf(m.pkg) + m.alsoPkgs).map { it to m } }.toMap() }
 
