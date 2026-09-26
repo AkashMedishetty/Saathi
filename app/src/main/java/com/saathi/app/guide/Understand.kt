@@ -53,7 +53,7 @@ object Understand {
      * model over-uses) Gemma 4 on the GPU double-checks. Measured: NPU alone 83%, GPU alone 94%.
      */
     private val MEDIA = Regex("(?i)\\b(videos?|songs?|movies?|films?|serials?|bhajans?|cartoons?)\\b|वीडियो|गाने|गाना|फ़िल्म|फिल्म|భజన|పాటలు|పాట|సినిమా|వీడియోలు")
-    private val CALLING = Regex("(?i)\\bcall|कॉल|కాల్")
+    private val CALLING = Regex("(?i)\\bcall|\\btalk|\\bspeak|कॉल|बात|కాల్|మాట్లాడ")
 
     /** "show me minecraft videos" is watching, not a video call (the 1B model mixed them up in the field). */
     private fun fixMedia(goal: String, r: Intent2?): Intent2? {

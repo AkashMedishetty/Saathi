@@ -22,7 +22,7 @@ I want to talk to my daughter on video	EN	intent:video_call|skill:wa_video
 send a message to rahul that I reached	EN	intent:message|skill:wa_message
 send the photo to my son	EN	intent:photo|skill:wa_photo
 wake me up at 6	EN	intent:alarm|skill:alarm
-remind me to take BP tablet at 8 am	EN	skill:medicine|intent:alarm|routine
+remind me to take BP tablet at 8 am	EN	reminder|skill:medicine|routine
 every morning at 7 play bhajan	EN	routine
 how do I go to the nearest hospital	EN	intent:directions|skill:maps
 take me to charminar	EN	intent:directions|skill:maps
