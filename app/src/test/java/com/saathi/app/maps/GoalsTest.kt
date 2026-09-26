@@ -154,6 +154,28 @@ class GoalsTest {
         "cab to the airport using maps" to "maps_cab",
     ))
 
+    @Test fun systemApps() = check(listOf(
+        "search upma recipe on google" to "chrome_search",
+        "गूगल पर मौसम खोजो" to "chrome_search",
+        "open a new tab" to "chrome_new_tab",
+        "close this popup" to "chrome_dismiss",
+        "reject the cookies" to "chrome_dismiss",
+        "call Rahul" to "phone_call",
+        "call my son" to "phone_call",
+        "बेटे को फ़ोन करो" to "phone_call",
+        "రాహుల్ కి ఫోన్ చేయి" to "phone_call",
+        "read my latest sms" to "messages_read_latest",
+        "नया मैसेज दिखाओ" to "messages_read_latest",
+        "block this number" to "messages_block",
+        "turn off the 8 am alarm" to "clock_alarm_off",
+        "अलार्म बंद करो" to "clock_alarm_off",
+        "అలారం ఆఫ్ చేయి" to "clock_alarm_off",
+        "show me how to set an alarm" to "clock_alarm_new",
+        "open my instagram profile" to "instagram_profile",
+        "watch reels" to "instagram_reels",
+        "post a photo on instagram" to "instagram_post",
+    ))
+
     @Test fun noCrossMatches() = check(listOf(
         "what time is it" to null,
         "" to null,

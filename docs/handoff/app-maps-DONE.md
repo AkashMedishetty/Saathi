@@ -16,6 +16,11 @@ is updated with each commit.
 | WhatsApp (+ Business) | video call · voice call (both **risky**, glow only) · message (types the `text` slot; **Send risky**) · send a photo (attach → Gallery → photo → **Send risky**) · chat backup · open a shared location (→ Google Maps) | **No dump; UNVERIFIED.** Built on WhatsApp's long-standing ids (`menuitem_search`, `search_input`, `conversations_row_contact_name`, `conversation_contact_name`, `entry`, `send`, `input_attach_button`). Re-check once the owner registers WhatsApp and a dump exists |
 | Google Maps | directions to X (search → type → the suggestion naming X → Directions → Start) · cab via Maps (… → Directions → ride tab → Uber) | **No dump; UNVERIFIED** (ids `search_omnibox_text_box` / `search_omnibox_edit_text`, labels) |
 | Uber | book a cab to X (Where to? → type → the place → ride **risky** → Choose/Confirm **risky** → Confirm pickup **risky** → Wait while finding a driver) | **No dump; UNVERIFIED** |
+| Chrome | search X · new tab · dismiss popups/cookie banners (**reject / only-necessary first**, accept only if it's the only way) · the notifications prompt → "No thanks" | notifications prompt: **real dump, verified**. New-tab page (`search_box_text`), `url_bar`, tab switcher, banners: unverified |
+| Phone (vivo dialer + Google dialer) | call a contact (Contacts tab → search → type → the contact → Call **risky**) | Dial tab: **real dump, verified** (package assumed `com.android.contacts`, the dump doesn't say). Contact search / detail: unverified |
+| Messages (Google + vivo) | read latest SMS (first-run "Continue" handled) · block a number | first-run screen: **real dump, verified**. List / thread: unverified |
+| Clock (vivo + Google) | turn off the X o'clock alarm (the switch **inside that alarm's card**) · show how to add an alarm | alarm list: **real dump, verified** (package assumed `com.android.BBKClock`). Edit screen: unverified |
+| Instagram | open profile · reels · post a photo (Share **risky**) | **No dump; UNVERIFIED** (owner logs in) |
 
 **Checkpoint 1 (engine + YouTube + Settings + Photos): done.** Full suite `testDebugUnitTest assembleDebug` passes
 (1036 tests, 0 failures); merged manifest has no INTERNET.

@@ -3,7 +3,12 @@ package com.saathi.app.maps
 import com.saathi.app.guide.Lang
 import com.saathi.app.guide.Say
 import com.saathi.app.guide.say
+import com.saathi.app.maps.apps.ChromeMap
+import com.saathi.app.maps.apps.ClockMap
 import com.saathi.app.maps.apps.DocsMap
+import com.saathi.app.maps.apps.InstagramMap
+import com.saathi.app.maps.apps.MessagesMap
+import com.saathi.app.maps.apps.PhoneMap
 import com.saathi.app.maps.apps.MapsMap
 import com.saathi.app.maps.apps.UberMap
 import com.saathi.app.maps.apps.PhotosMap
@@ -22,7 +27,7 @@ import com.saathi.app.maps.apps.YouTubeMap
  */
 object AppMaps {
     /** All maps, in priority order for goal matching ties. */
-    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map, PhotosMap.map, PlayStoreMap.map, SpotifyMap.map, DocsMap.map, WhatsAppMap.map, MapsMap.map, UberMap.map) }
+    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map, PhotosMap.map, PlayStoreMap.map, SpotifyMap.map, DocsMap.map, WhatsAppMap.map, MapsMap.map, UberMap.map, ChromeMap.map, PhoneMap.map, MessagesMap.map, ClockMap.map, InstagramMap.map) }
 
     private val byPkg by lazy { all.flatMap { m -> (listOf(m.pkg) + m.alsoPkgs).map { it to m } }.toMap() }
 
@@ -130,7 +135,7 @@ object AppMaps {
 
     /** Labels Saathi never taps even when a map forgets to mark them risky. */
     private val RISKY = Regex("(install|uninstall|update|update all|send|pay|pay now|buy|purchase|call|video call|voice call|" +
-        "request.*|confirm.*|book .*|delete|post|share)")
+        "request.*|confirm.*|book .*|delete|post|share|dial)")
 
     private val BACK = listOf(
         Sel(label = Regex("^(Navigate up|Back|Go back|Up|वापस|పైకి నావిగేట్ చేయి|వెనుకకు)$", RegexOption.IGNORE_CASE), clickable = true),
@@ -190,6 +195,11 @@ internal class Tree(val nodes: List<Node>) {
         val text = own ?: if (n.clickable) rowText(i) else ""
         if (s.label != null && !s.label.containsMatchIn(text)) return false
         if (s.not != null && (s.not.containsMatchIn(text) || (n.clickable && s.not.containsMatchIn(rowText(i))))) return false
+        if (s.inside != null) {
+            var p = parent[i]; var ok = false
+            while (p >= 0 && !ok) { ok = matches(p, s.inside, slots); p = parent[p] }
+            if (!ok) return false
+        }
         if (s.slot != null) {
             val v = slots[s.slot]?.let(::norm)?.takeIf { it.isNotEmpty() } ?: return false
             val x = norm(if (n.editable) n.text ?: "" else text)
