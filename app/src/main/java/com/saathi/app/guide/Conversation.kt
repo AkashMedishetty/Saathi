@@ -10,6 +10,12 @@ import com.saathi.app.llm.Templates
 object Conversation {
     private val history = ArrayDeque<Pair<String, String>>()
 
+    /** The paper the camera just read, so "what's the due date?" is answered from it. RAM only; 15 min; cleared on close. */
+    @Volatile private var paperText: String? = null
+    @Volatile private var paperAt = 0L
+    fun setPaper(t: String?) { paperText = t?.take(3000); paperAt = System.currentTimeMillis() }
+    fun paper(): String? = paperText?.takeIf { System.currentTimeMillis() - paperAt < 15 * 60_000L }
+
     @Synchronized fun remember(user: String, saathi: String) {
         history.addLast(user.take(200) to saathi.take(300))
         while (history.size > 6) history.removeFirst()

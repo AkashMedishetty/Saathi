@@ -279,10 +279,27 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
                 val bmp = runCatching { upright(image) }.getOrNull()
                 image.close()
                 if (bmp == null) { reset(); return }
+                if (tooDark(bmp)) {
+                    // A black or blank frame (lens covered, dark room): say so instead of "describing" nothing.
+                    aura.setAura(false); busy = false
+                    val t = s("It's too dark to read. Hold it in the light, a little further away, and try again.",
+                        "बहुत अँधेरा है। रोशनी में, थोड़ा दूर रखकर फिर कोशिश कीजिए।", "చాలా చీకటిగా ఉంది. వెలుతురులో, కొంచెం దూరంగా పెట్టి మళ్ళీ ప్రయత్నించండి.")
+                    showSheet(t, "", listOf(again(), close())); speaker?.say(t, lang); return
+                }
                 lifecycleScope.launch { understand(bmp) }
             }
             override fun onError(e: ImageCaptureException) { reset() }
         })
+    }
+
+    /** Mean luminance and spread on a 24×24 thumbnail: too dark, or one flat colour (lens covered). */
+    private fun tooDark(b: Bitmap): Boolean {
+        val t = Bitmap.createScaledBitmap(b, 24, 24, true)
+        val px = IntArray(576).also { t.getPixels(it, 0, 24, 0, 0, 24, 24) }
+        val lum = px.map { (0.299 * ((it shr 16) and 255) + 0.587 * ((it shr 8) and 255) + 0.114 * (it and 255)) }
+        val mean = lum.average()
+        val sd = kotlin.math.sqrt(lum.sumOf { (it - mean) * (it - mean) } / lum.size)
+        return mean < 28 || sd < 6
     }
 
     private fun upright(img: ImageProxy): Bitmap {
@@ -334,7 +351,8 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
         val words = plain.replace(Regex("\\s+"), " ").trim()
         val textHeavy = mode == MODE_READ && words.length >= 40
         fun ok(t: String?) = t?.takeIf { it.isNotBlank() && !com.saathi.app.llm.Templates.garbled(it) }
-        val explainSys = "You explain a paper to an elderly person in India in very simple English, in 2 short sentences. " +
+        val explainSys = "You explain a paper to an elderly person in India in very simple English, in 3 short sentences: " +
+            "1) what this paper is, 2) what matters in it (amount, due date, who sent it, what they want), 3) what the person should do next. " +
             "Use ONLY what the paper's text says; never invent names, amounts or dates. Bills: the amount and the due date. " +
             "Letters: who it is from and what they want. Medicine: its name. If it asks for an OTP, PIN, bank details or urgent payment, say it may be a scam."
         val explainUser = "The paper's text (read by the camera, may have small mistakes):\n${words.take(1500)}"
@@ -358,7 +376,7 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
                 "If it is a bill, say the amount and the due date. If it is a medicine, say its name. " +
                 "If it is a letter, say who it is from and what they want. If it looks like a scam, say so clearly. Only say what you can see.$hint"))
         if (vlm != null) usedEngine = "FastVLM · Snapdragon NPU · ${VisionBrain.lastMs} ms"
-        val explained = (vlm ?: llm)?.let { firstSentences(it, if (mode == MODE_OBJECT) 4 else 2) }
+        val explained = (vlm ?: llm)?.let { firstSentences(it, if (mode == MODE_OBJECT) 4 else 3) }
         aura.setAura(false)
         busy = false
         // "Tap here" on the real thing: glow the printed button the explanation talks about (object mode),
@@ -379,8 +397,13 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
             else s("", "इस पर लिखा है:", "దీని మీద రాసి ఉంది:") + "\n" + plain.lines().take(6).joinToString("\n")) + (pressLine?.let { "\n\n$it" } ?: "")
         val preview = plain.lines().filter { it.isNotBlank() }.take(4).joinToString(" · ")
         val sub = if (lang == Lang.EN) (if (explained != null) preview else "") else (explained ?: "")
+        // Keep the words (RAM only) so a follow-up question is answered from this paper.
+        com.saathi.app.guide.Conversation.setPaper(plain.ifBlank { explained })
         showSheet(shown, listOf(sub, engine).filter { it.isNotBlank() }.joinToString("\n\n"),
-            listOf(primaryButton(s("Read it again", "फिर से पढ़ो", "మళ్ళీ చదువు"), R.drawable.ic_volume_up) { speaker?.say(shown, lang) }, again(), close()))
+            listOf(primaryButton(s("Ask about it", "इसके बारे में पूछें", "దీని గురించి అడగండి"), R.drawable.ic_mic) {
+                    SaathiService.instance?.openAsk(listen = true) },
+                primaryButton(s("Read it again", "फिर से पढ़ो", "మళ్ళీ చదువు"), R.drawable.ic_volume_up, bg = C.PAPER_2, fg = C.PINE_DEEP) { speaker?.say(shown, lang) },
+                again(), close()))
         speaker?.say(shown, lang)
     }
 
@@ -423,7 +446,7 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
     }
     private fun close() = body(s("Close", "बंद करें", "మూసివేయి"), 18f, C.PINE_DEEP, bold = true).apply {
         gravity = Gravity.CENTER; minHeight = dp(52)
-    }.pressable { finish() }
+    }.pressable { com.saathi.app.guide.Conversation.setPaper(null); finish() }
 
     private val BUTTON_WORDS = listOf("start", "power", "on/off", "on", "off", "stop", "cancel", "ok", "enter", "timer", "time", "clock", "temp",
         "menu", "mode", "set", "reset", "defrost", "reheat", "quick", "wash", "spin", "rinse", "eco", "auto", "fan", "swing", "cool", "heat",

@@ -1259,6 +1259,7 @@ class Guide(
     fun respond(q: String) {
         lang = Prefs.lang(svc)
         if (goal != null) { answerQuestion(q); return }
+        Conversation.paper()?.takeIf { aboutPaper(q, it) }?.let { paper -> answerFromPaper(q, paper); return }
         if (IntentRouter.isGreeting(q)) {
             finish(say("Namaste! I'm here. What shall we do on your phone?", "नमस्ते! मैं यहीं हूँ। फ़ोन पर क्या करें?", "నమస్కారం! నేను ఇక్కడే ఉన్నాను. ఫోన్‌లో ఏం చేద్దాం?").pick(lang))
             return
@@ -1273,6 +1274,29 @@ class Guide(
         }
         com.saathi.app.DebugLog.i("respond", "general question → look it up")
         lookUp(q, q)
+    }
+
+    /** Does the question refer to the paper ("this bill", "due date", "कितना", "ఎంత") or share real words with it? */
+    private fun aboutPaper(q: String, paper: String): Boolean {
+        if (Regex("(?i)\\b(this|it|paper|letter|bill|notice|form|due|amount|date|pay|total|who sent|what does)\\b|यह|इस|काग़ज़|कागज|बिल|कितना|कब|ఇది|దీని|కాగితం|బిల్లు|ఎంత|ఎప్పుడు").containsMatchIn(q)) return true
+        val pw = paper.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.length >= 4 }.toSet()
+        return q.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).count { it.length >= 4 && it in pw } >= 1
+    }
+
+    /** A question about the paper the camera just read: answered only from its words. */
+    private fun answerFromPaper(q: String, paper: String) {
+        overlay.showCard(say("Let me check the paper…", "काग़ज़ देख रहा हूँ…", "కాగితం చూస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
+        scope.launch {
+            val sys = "Answer the elderly person's question using ONLY the paper's text below, in 1 or 2 short, simple sentences. " +
+                "If the answer is not in the text, say: I can't see that on this paper. Never guess amounts, dates or names. " +
+                when (lang) { Lang.EN -> "Answer in English."; Lang.HI -> "Answer in Hindi (Devanagari)."; Lang.TE -> "Answer in Telugu script." }
+            val user = "Paper text:\n$paper\n\nQuestion: $q"
+            val raw = if (LlmManager.isReady) LlmManager.generate(sys, user) else com.saathi.app.llm.FastBrain.generate(svc, sys, user)
+            val a = raw?.trim()?.takeIf { it.isNotBlank() && it.length < 400 && !com.saathi.app.llm.Templates.garbled(it) }
+                ?: say("I can't see that on this paper.", "यह इस काग़ज़ पर नहीं दिख रहा।", "ఇది ఈ కాగితం మీద కనిపించట్లేదు.").pick(lang)
+            com.saathi.app.DebugLog.i("answer", "paper q=\"$q\" a=\"${a.take(160)}\"")
+            finish(a)
+        }
     }
 
     fun answerQuestion(q: String) {
