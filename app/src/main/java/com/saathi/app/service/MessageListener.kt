@@ -9,7 +9,8 @@ import com.saathi.app.guide.MessageScam
 
 /**
  * Reads incoming messages so Saathi can read them aloud and warn about scams.
- * Kept in RAM only (last 20), never written to disk or memory, never sent anywhere.
+ * Kept in RAM only (last 20, at most 15 minutes old), never written to disk or memory, never sent anywhere.
+ * Cleared as soon as they've been read aloud.
  * Grant: Settings › Notification access › Saathi (or Saathi's own Settings screen).
  */
 class MessageListener : NotificationListenerService() {
@@ -22,10 +23,12 @@ class MessageListener : NotificationListenerService() {
             "com.samsung.android.messaging", "org.telegram.messenger", "com.truecaller",
         )
         private val recent = ArrayDeque<Msg>()
-        @Synchronized fun latest(n: Int = 3): List<Msg> = recent.takeLast(n).reversed()
+        private const val MAX_AGE_MS = 15 * 60_000L
+        @Synchronized private fun expire() { val cut = System.currentTimeMillis() - MAX_AGE_MS; while (recent.isNotEmpty() && recent.first().at < cut) recent.removeFirst() }
+        @Synchronized fun latest(n: Int = 3): List<Msg> { expire(); return recent.takeLast(n).reversed() }
         @Synchronized private fun keep(m: Msg) {
             if (recent.any { it.sender == m.sender && it.text == m.text }) return
-            recent.addLast(m); while (recent.size > 20) recent.removeFirst()
+            expire(); recent.addLast(m); while (recent.size > 20) recent.removeFirst()
         }
         @Synchronized fun clear() = recent.clear()
     }
