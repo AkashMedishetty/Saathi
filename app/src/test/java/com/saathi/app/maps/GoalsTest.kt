@@ -34,6 +34,31 @@ class GoalsTest {
         "ఈ వీడియో షేర్ చేయి" to "yt_share_whatsapp",
     ))
 
+    @Test fun settings() = check(listOf(
+        "change my ringtone" to "settings_ringtone",
+        "रिंगटोन बदलो" to "settings_ringtone",
+        "రింగ్‌టోన్ మార్చు" to "settings_ringtone",
+        "make the text bigger" to "settings_font",
+        "letters are too small" to "settings_font",
+        "अक्षर बड़े करो" to "settings_font",
+        "అక్షరాలు పెద్దవి చేయి" to "settings_font",
+        "screen is too dark" to "settings_brightness",
+        "स्क्रीन की रोशनी बढ़ाओ" to "settings_brightness",
+        "స్క్రీన్ వెలుతురు పెంచు" to "settings_brightness",
+        "change the wallpaper" to "settings_wallpaper",
+        "वॉलपेपर बदलो" to "settings_wallpaper",
+        "connect to wifi" to "settings_wifi",
+        "pair my earphones" to "settings_bluetooth",
+        "turn on dark mode" to "settings_dark_mode",
+        "डार्क मोड चालू करो" to "settings_dark_mode",
+        "change the phone language" to "settings_language",
+        "फ़ोन की भाषा बदलो" to "settings_language",
+        "my screen turns off too fast" to "settings_timeout",
+        "स्क्रीन जल्दी बंद हो जाती है" to "settings_timeout",
+        "how much storage is used" to "settings_storage",
+        "open the settings for vibration" to "settings_search",
+    ))
+
     @Test fun noCrossMatches() = check(listOf(
         "video call my son" to null,
         "बेटे को वीडियो कॉल करो" to null,

@@ -31,12 +31,13 @@ object MapSlots {
                 "query" -> query(goal, s.query)
                 "contact" -> s.contact
                 "place" -> s.place
-                "term" -> SettingsTerms.termFor(goal)
+                "term" -> SettingsTerms.termFor(goal) ?: settingsWords(goal)
                 "app" -> appName(goal)
                 else -> null
             }
             v?.trim()?.takeIf { it.isNotEmpty() }?.let { out[k] = it }
         }
+        for ((k, v) in r.presets) if (k !in out) out[k] = v
         return out
     }
 
@@ -55,6 +56,16 @@ object MapSlots {
     private val INSTALL_WORDS = rx("(^|\\s)(install|download|get|find|search|open|learn|use|how|do|i|to|the|app|application|" +
         "new|from|play store|playstore|google play|please|me|a|an|on|my|phone|इंस्टॉल|डाउनलोड|ऐप|करो|चाहिए|सीखना|है|" +
         "ఇన్‌స్టాల్|డౌన్‌లోడ్|యాప్|చేయి|కావాలి)(?=\\s|$)")
+
+    private val SETTINGS_FILLER = rx("(^|\\s)(change|open|find|show|where|is|the|my|a|an|of|for|in|on|phone|setting|settings|" +
+        "please|how|do|i|to|turn|set|make|सेटिंग|फ़ोन|फोन|की|का|के|में|बदलो|खोलो|दिखाओ|సెట్టింగ్|ఫోన్|లో|మార్చు|తెరువు|చూపించు)(?=\\s|$)")
+
+    /** Any other setting: the person's own key words ("change the ringtone for calls" → "ringtone calls"). */
+    private fun settingsWords(goal: String): String? {
+        var q = " ${goal.lowercase()} "
+        repeat(3) { q = SETTINGS_FILLER.replace(q, " ") }
+        return q.replace(Regex("\\s+"), " ").trim().split(' ').takeLast(2).joinToString(" ").ifBlank { null }
+    }
 
     private fun appName(goal: String): String? {
         var q = " ${goal.lowercase()} "

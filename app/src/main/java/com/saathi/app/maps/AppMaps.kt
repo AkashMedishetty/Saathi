@@ -3,6 +3,7 @@ package com.saathi.app.maps
 import com.saathi.app.guide.Lang
 import com.saathi.app.guide.Say
 import com.saathi.app.guide.say
+import com.saathi.app.maps.apps.SettingsMap
 import com.saathi.app.maps.apps.YouTubeMap
 
 /**
@@ -14,7 +15,7 @@ import com.saathi.app.maps.apps.YouTubeMap
  */
 object AppMaps {
     /** All maps, in priority order for goal matching ties. */
-    val all: List<AppMap> by lazy { listOf(YouTubeMap.map) }
+    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map) }
 
     private val byPkg by lazy { all.flatMap { m -> (listOf(m.pkg) + m.alsoPkgs).map { it to m } }.toMap() }
 
@@ -65,7 +66,8 @@ object AppMaps {
         val t = Tree(nodes)
 
         val lastPkg = r.steps.lastOrNull()?.let(pkgsOf) ?: r.pkg
-        if (r.done.isNotEmpty() && samePkg(lastPkg, pkg) && r.done.all { t.present(it, slots) }) return Decision.Done
+        if (r.done.isNotEmpty() && samePkg(lastPkg, pkg) && (!r.doneNeedsLastStep || doneSteps >= r.steps.lastIndex) &&
+            r.done.all { t.present(it, slots) } && r.doneNot.none { t.present(it, slots) }) return Decision.Done
 
         val screenId = screenOf(pkg, nodes, slots) ?: return Decision.Unknown
         app.screens.first { it.id == screenId }.wait?.let { return Decision.Wait(it) }
@@ -163,6 +165,7 @@ internal class Tree(val nodes: List<Node>) {
         if (s.editable != null && n.editable != s.editable) return false
         if (s.cls != null && !s.cls.containsMatchIn(n.cls)) return false
         if (s.below != null && screen.h > 0 && n.box.t < screen.t + screen.h * s.below) return false
+        if (s.above != null && screen.h > 0 && n.box.t > screen.t + screen.h * s.above) return false
         val own = n.label?.trim()
         // A row's children's text stands in for its label only for a clickable row, never for a layout container.
         val text = own ?: if (n.clickable) rowText(i) else ""
@@ -171,7 +174,11 @@ internal class Tree(val nodes: List<Node>) {
         if (s.slot != null) {
             val v = slots[s.slot]?.let(::norm)?.takeIf { it.isNotEmpty() } ?: return false
             val x = norm(if (n.editable) n.text ?: "" else text)
-            if (if (s.slotExact) x != v else !x.contains(v)) return false
+            when {
+                s.slotExact -> if (x != v) return false
+                s.slotLonger -> if (!x.contains(v) || x.length < v.length + 2) return false
+                else -> if (!x.contains(v)) return false
+            }
         }
         return true
     }

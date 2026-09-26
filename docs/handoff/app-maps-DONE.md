@@ -8,6 +8,7 @@ is updated with each commit.
 | App | Routes | Verified against real fixtures? |
 |---|---|---|
 | YouTube | search & play X · subscriptions · history · like · share to WhatsApp | home, search (empty + typed), results (ad + video, playlist), subscriptions, you: **yes**. Watch page (like/share), History page: **no fixture**, selectors from YouTube's labels |
+| Settings (vivo + AOSP search page) | ringtone · font size · brightness · wallpaper · Wi-Fi · Bluetooth · dark mode · language · screen timeout · storage · any other setting (the person's words) | **No dump of Settings exists.** Tests use hand-built trees shaped like what Saathi saw on this phone. Every route = search bar → type → the result row (never the history chip) → Done on the result page |
 
 ## Integration calls (for Claude)
 

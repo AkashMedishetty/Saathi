@@ -57,9 +57,13 @@ data class Sel(
     val cls: Regex? = null,
     val slot: String? = null,
     val slotExact: Boolean = false,
+    /** The slot plus at least one more word: a Settings result row "Incoming call ringtone", never the history chip "ringtone". */
+    val slotLonger: Boolean = false,
     val pick: Pick = Pick.LARGEST,
     /** Only nodes whose top is at least this far down the screen (fraction 0..1), e.g. "a row, not the search bar". */
     val below: Float? = null,
+    /** Only nodes whose top is in the top part of the screen (fraction 0..1), e.g. a page title. */
+    val above: Float? = null,
 )
 
 /** How to recognise a screen: all `must` selectors present, none of `mustNot`. [wait] marks a progress screen. */
@@ -103,6 +107,12 @@ data class Route(
     val avoid: List<Regex> = emptyList(),
     /** The screen where this route begins, and how to get there when the person is elsewhere in the app. */
     val start: Say? = null,
+    /** Not done while any of these is present (e.g. the search box: a results list also contains the word). */
+    val doneNot: List<Sel> = emptyList(),
+    /** Fixed slot values for topic routes ("settings_ringtone" → term = "ringtone"); the person's words win. */
+    val presets: Map<String, String> = emptyMap(),
+    /** Done only after the last step was reached (a Settings page that merely mentions the topic is not the goal). */
+    val doneNeedsLastStep: Boolean = false,
 )
 
 data class AppMap(
