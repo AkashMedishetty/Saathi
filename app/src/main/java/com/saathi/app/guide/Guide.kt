@@ -1425,7 +1425,14 @@ class Guide(
             is com.saathi.app.maps.Decision.Done -> {
                 com.saathi.app.DebugLog.i("map", "done ${r.id}")
                 val f = flow; mapRoute = null
-                if (f != null) complete(f) else finish(r.doneSay.pick(lang))
+                val newApp = mapSlots["query"] ?: mapSlots["app"]
+                if (r.pkg == "com.android.vending" && newApp != null && r.id.contains("install", true)) {
+                    // A new app is in: the next natural step is learning it.
+                    Memory.completed(f?.id ?: r.id)
+                    finish(com.saathi.app.maps.AppMaps.fillIn(r.doneSay, mapSlots).pick(lang),
+                        Triple(say("Show me how to use it", "इसे चलाना सिखाओ", "దీన్ని వాడటం నేర్పు").pick(lang), com.saathi.app.R.drawable.ic_school,
+                            { learnTask("how do I use $newApp") }))
+                } else if (f != null) complete(f) else finish(r.doneSay.pick(lang))
             }
             is com.saathi.app.maps.Decision.Unknown -> return false
         }
