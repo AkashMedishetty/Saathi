@@ -31,6 +31,7 @@ object MapSlots {
                 "query" -> query(goal, s.query)
                 "contact" -> s.contact
                 "text" -> s.text
+                "time" -> timeFor(goal, s.hour, s.minute)
                 "place" -> placeFor(goal) ?: s.place
                 "term" -> SettingsTerms.termFor(goal) ?: settingsWords(goal)
                 "app" -> appName(goal)
@@ -67,6 +68,17 @@ object MapSlots {
     fun placeFor(goal: String): String? {
         val g = goal.trim()
         return (PLACE_EN.find(g) ?: PLACE_HI.find(g) ?: PLACE_TE.find(g))?.groupValues?.get(1)?.trim()?.ifBlank { null }
+    }
+
+    private val CLOCK_TIME = Regex("\\b(\\d{1,2})[:.](\\d{2})\\b")
+
+    /** "the 8 am alarm" → "8:00"; "the 8:30 alarm" → "8:30" (12-hour, as the Clock app shows it). */
+    fun timeFor(goal: String, hour: Int? = null, minute: Int? = null): String? {
+        val m = CLOCK_TIME.find(goal)
+        val h = hour ?: m?.groupValues?.get(1)?.toIntOrNull() ?: return null
+        val min = if (hour != null) minute ?: 0 else m?.groupValues?.get(2)?.toIntOrNull() ?: 0
+        if (h !in 0..23 || min !in 0..59) return null
+        return "%d:%02d".format(if (h % 12 == 0) 12 else h % 12, min)
     }
 
     private val SETTINGS_FILLER = rx("(^|\\s)(change|open|find|show|where|is|the|my|a|an|of|for|in|on|phone|setting|settings|" +

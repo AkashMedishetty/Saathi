@@ -64,6 +64,8 @@ data class Sel(
     val below: Float? = null,
     /** Only nodes whose top is in the top part of the screen (fraction 0..1), e.g. a page title. */
     val above: Float? = null,
+    /** Only nodes inside (a descendant of) a node matching this: the switch of the 8:00 alarm card. */
+    val inside: Sel? = null,
 )
 
 /** How to recognise a screen: all `must` selectors present, none of `mustNot`. [wait] marks a progress screen. */
