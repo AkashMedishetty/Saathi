@@ -92,6 +92,17 @@ class Guide(
     /** Our own taps/scrolls also produce events; don't mistake them for the person taking over. */
     @Volatile private var lastOwnAction = 0L
 
+    // ── Loop control (field test: the planner re-asked every second and wandered into Help). ──
+    private data class Plan(val label: String?, val role: String?, val say: String, val noAct: Boolean)
+    private val planCache = HashMap<Int, Plan>()
+    private val unsureCount = HashMap<Int, Int>()
+    private var plansThisTask = 0
+    private var wallFp = 0
+    @Volatile private var lastTapAt = 0L
+    private var lastActKey: String? = null
+    private var lastActAt = 0L
+    private var sameActCount = 0
+
     // ── Watchdog: no progress for 2 minutes → offer help (once per task). ──
     private var lastProgress = 0L
     private var stuckOffered = false
@@ -129,6 +140,14 @@ class Guide(
         if (IntentRouter.isSos(goalText)) { sos(); return }
         Routines.parse(goalText)?.let { (h, m, g) -> addRoutine(h, m, g); return }
         if (IntentRouter.isRecall(goalText)) { recall(goalText); return }
+        IntentRouter.systemAction(goalText)?.let { action ->
+            stop()
+            svc.performGlobalAction(action)
+            com.saathi.app.DebugLog.i("system", "global action $action for \"$goalText\"")
+            return
+        }
+        if (IntentRouter.isQuestion(svc, goalText)) { answerQuestion(goalText); return }
+        if (tvWatchIntent(goalText)) { watchOnTv(goalText); return }
         if (IntentRouter.isScamCheck(goalText)) { scamCheck(); return }
         if (IntentRouter.isFamilyHelp(goalText)) { askFamily(); return }
         if (IntentRouter.isReadMessages(goalText)) { readMessages(); return }
@@ -151,6 +170,7 @@ class Guide(
         history.clear(); current = null; lastSpokenKey = null; lastSig = 0; warnedSig = 0; lastStepIdx = -1; scrolls = 0
         taskPkgs.clear(); paused = false; pendingLearn = null; adoptPkg = true
         auto = autoMode; autoSteps = 0; autoLastKey = null; autoSameKey = 0
+        planCache.clear(); unsureCount.clear(); plansThisTask = 0; wallFp = 0; lastActKey = null; sameActCount = 0
         lastProgress = SystemClock.uptimeMillis(); stuckOffered = false
         startWatchdog()
 
@@ -162,9 +182,7 @@ class Guide(
             val intent = runCatching { make(svc) }.getOrNull()
             val ok = intent != null && runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
             if (ok) resolvePkg(intent!!)?.let { taskPkgs += it; adoptPkg = false }
-            else hello = say("That app isn't on this phone, so let's do it from here.",
-                "यह ऐप फ़ोन में नहीं है, तो यहीं से करते हैं।",
-                "ఆ యాప్ ఈ ఫోన్‌లో లేదు, ఇక్కడి నుంచే చేద్దాం.").pick(lang)
+            else { missingApp(f); return }
         }
         val n = f?.let { Memory.timesDone(it.id) } ?: 0
         if (auto) hello += " " + say("I'll do each step for you — watch the glow. I'll ask before anything important.",
@@ -210,6 +228,7 @@ class Guide(
      * screen that's already changing, then look again as soon as the screen settles.
      */
     fun onUserTap() {
+        lastTapAt = SystemClock.uptimeMillis()
         if (!active) return
         delayedGlow?.cancel()
         overlay.highlight(null, false)
@@ -287,6 +306,9 @@ class Guide(
         }
         if (current?.warn == true && goal == null) clearVisuals()
 
+        // Keep the card clear of the keyboard.
+        overlay.setImeVisible(runCatching { svc.windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD } }.getOrDefault(false))
+
         // 4. No task → nothing more.
         val g = goal ?: return
         val f = flow
@@ -297,10 +319,30 @@ class Guide(
         if (adoptPkg && screen.pkg.isNotBlank()) { taskPkgs += screen.pkg; adoptPkg = false }
         val stepHere = f?.let { matchStep(it, screen) }
         if (taskPkgs.isNotEmpty() && screen.pkg !in taskPkgs) {
-            if (stepHere != null) taskPkgs += screen.pkg // flows legitimately hop apps (photo picker)
-            else { pause(); return }
+            // Apps hand off all the time: sign-in with Google, the app store, a photo picker, the editor.
+            // If it followed a tap inside the task, or it's a known helper app, it's part of the task.
+            // Only going Home (or switching away on their own) pauses.
+            val sinceTap = SystemClock.uptimeMillis() - maxOf(lastTapAt, lastOwnAction)
+            if (screen.pkg != launcherPkg() && (stepHere != null || sinceTap < 6000 || helperApp(screen.pkg))) {
+                taskPkgs += screen.pkg
+                com.saathi.app.DebugLog.i("adopt", "${screen.pkg} (sinceTap=$sinceTap)")
+            } else { pause(); return }
         }
         if (paused) resume()
+
+        // 6b. Ads / popups: point at the way out. Sign-in / setup walls: explain once, then wait for them.
+        if (stepHere == null) {
+            ScreenKinds.ad(screen)?.let { close ->
+                show(Target(close, say("An ad or popup is in the way. Tap “${close.title}” to close it.", "विज्ञापन बीच में है। बंद करने के लिए “${close.title}” दबाइए।",
+                    "ప్రకటన అడ్డం వచ్చింది. మూసేయడానికి “${close.title}” నొక్కండి.").pick(lang), "ad_${close.title}"))
+                return
+            }
+            ScreenKinds.wall(screen)?.let { w ->
+                val fp = ScreenKinds.fingerprint(screen)
+                if (fp != wallFp) { wallFp = fp; showWall(w, screen) }
+                return
+            }
+        }
 
         if (f != null) {
             // 7. Finished?
@@ -319,11 +361,15 @@ class Guide(
             }
         }
 
-        // 10a. The planner already picked something and it's still here: follow it (it may have moved), don't re-ask.
-        if (!replan) current?.takeIf { it.key.startsWith("plan_") && it.el != null && goal != null }?.let { cur ->
-            val still = screen.elements.firstOrNull { it.label == cur.el!!.label && it.role == cur.el.role }
-            if (still != null) { if (still.bounds != cur.el!!.bounds) show(cur.copy(el = still)); return }
+        // 10a. Planned this exact screen before (and nothing was tapped since)? Reuse it: never re-ask in a loop.
+        val fp = ScreenKinds.fingerprint(screen)
+        if (replan) { planCache.remove(fp); replan = false }
+        planCache[fp]?.let { p ->
+            val el = p.label?.let { l -> screen.elements.firstOrNull { it.label == l && it.role == p.role } }
+            if (el != null) show(Target(el, p.say, "plan_${p.label}", noAct = p.noAct))
+            return
         }
+        if (unsureCount[fp] ?: 0 >= 2 || plansThisTask >= 14) { unsure(fp); return }
 
         // 10. Anything else: the planner (on-device LLM, loaded on first need; keywords while it warms up).
         if (!LlmManager.isReady) LlmManager.loadAsync(svc)
@@ -338,7 +384,10 @@ class Guide(
         while (!lowPower && !LlmManager.isReady && LlmManager.state.value is LlmManager.State.Loading && waited < 8000) { delay(200); waited += 200 }
         val learned = f?.steps?.mapNotNull { Memory.learnedLabel(screen.pkg, it.key) }.orEmpty()
         replan = false
-        val d = try { Planner.decide(f?.llmGoal ?: g, screen, history, lang, learned, allowLlm = !lowPower) } finally { thinking = false; overlay.setAura(false) }
+        plansThisTask++
+        var d = try { Planner.decide(f?.llmGoal ?: g, screen, history, lang, learned, allowLlm = !lowPower, app = AppLauncher.labelOf(svc, screen.pkg)) } finally { thinking = false; overlay.setAura(false) }
+        // Never lead them to Help / About / Privacy / Terms unless they asked for it.
+        d.targetId?.let { screen.byId(it) }?.let { el -> if (ScreenKinds.avoid(el.label, g)) d = d.copy(targetId = null) }
         com.saathi.app.DebugLog.i("plan", "goal=\"${f?.llmGoal ?: g}\" pkg=${screen.pkg} llm=${d.fromLlm} target=${d.targetId?.let { screen.byId(it)?.label?.take(50) }} done=${d.done} noAct=${d.noAct} lowPower=$lowPower")
         if (goal == null) return
         if (settling() > 0 || readScreen()?.signature != screen.signature) {
@@ -347,8 +396,17 @@ class Guide(
         if (d.done) { f?.let { complete(it) } ?: finish(d.say) }
         else {
             val el = d.targetId?.let { screen.byId(it) }
-            if (f != null && el != null) f.steps.getOrNull(lastStepIdx + 1)?.let { pendingLearn = Triple(screen.pkg, it.key, el.title) }
-            show(Target(el, d.say, "plan_${el?.label ?: "scroll"}", noAct = d.noAct, scroll = el == null))
+            if (el != null) {
+                if (f != null) f.steps.getOrNull(lastStepIdx + 1)?.let { pendingLearn = Triple(screen.pkg, it.key, el.title) }
+                // Speak what's actually written on the button, not the model's paraphrase (it invented "Options").
+                val text = if (lang == Lang.EN && d.fromLlm && d.say.contains(el.title.take(12), ignoreCase = true)) d.say else Planner.tapSay(el.title, lang)
+                planCache[fp] = Plan(el.label, el.role, text, d.noAct)
+                show(Target(el, text, "plan_${el.label}", noAct = d.noAct))
+            } else {
+                unsureCount[fp] = (unsureCount[fp] ?: 0) + 1
+                if (screen.scrollable() != null && (unsureCount[fp] ?: 0) == 1) show(Target(null, d.say, "plan_scroll_$fp", scroll = true))
+                else unsure(fp)
+            }
         }
         if (pending) { pending = false; lastSig = 0; schedule(300, force = true) }
     }
@@ -543,6 +601,16 @@ class Guide(
 
     private fun act(t: Target, fresh: Screen?, el: UiElement?) {
         lastOwnAction = SystemClock.uptimeMillis()
+        if (t.key == lastActKey && lastOwnAction - lastActAt < 6000) sameActCount++ else sameActCount = 0
+        lastActKey = t.key; lastActAt = lastOwnAction
+        if (sameActCount >= 2) {
+            // Pressed the same thing three times and nothing changed: stop pressing, tell them.
+            stopAuto()
+            speaker.say(say("That button isn't responding. Let's try something else — say it another way, or tap Back.",
+                "यह बटन काम नहीं कर रहा। कुछ और करते हैं — दूसरे तरीक़े से कहिए, या वापस दबाइए।",
+                "ఈ బటన్ పనిచేయట్లేదు. వేరే విధంగా చెప్పండి, లేదా వెనక్కి నొక్కండి.").pick(lang), lang)
+            return
+        }
         com.saathi.app.DebugLog.i("act", "key=${t.key} target=\"${el?.label?.take(60)}\" role=${el?.role} auto=$auto fill=${t.fill != null}")
         if (el == null) {
             // A scroll hint: "Do it" scrolls for them.
@@ -591,6 +659,7 @@ class Guide(
     }
 
     private fun finish(text: String) {
+        goal?.let { Conversation.remember(it, text) }
         com.saathi.app.DebugLog.i("finish", "\"${text.take(120)}\" goal=\"$goal\"")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
         goal = null; flow = null; current = null; paused = false; taskPkgs.clear()
@@ -746,6 +815,109 @@ class Guide(
         overlay.showCard(t, Overlay.Mode.INFO)
         speaker.say(t, lang)
     }
+
+    // ───────────────────────── field-test fixes ─────────────────────────
+
+    /** Nothing sensible to tap here: say so and offer the ways out, instead of wandering. */
+    private fun unsure(fp: Int) {
+        if (current?.key == "unsure_$fp") return
+        stopAuto()
+        val t = say("I'm not sure what to tap here for “${goal?.take(40)}”. Tell me in other words, go back, or ask family.",
+            "यहाँ “${goal?.take(40)}” के लिए क्या दबाना है, मुझे पक्का नहीं पता। दूसरे शब्दों में बताइए, वापस जाइए, या परिवार से पूछिए।",
+            "ఇక్కడ “${goal?.take(40)}” కోసం ఏం నొక్కాలో నాకు ఖచ్చితంగా తెలియదు. వేరే మాటల్లో చెప్పండి, వెనక్కి వెళ్ళండి, లేదా కుటుంబాన్ని అడగండి.").pick(lang)
+        com.saathi.app.DebugLog.i("unsure", "fp=$fp plans=$plansThisTask")
+        current = Target(null, t, "unsure_$fp")
+        lastSpokenKey = current?.key
+        overlay.highlight(null, false)
+        overlay.showCard(t, Overlay.Mode.LOST)
+        speaker.say(t, lang)
+    }
+
+    /** Sign-in / first-run screens: only the person (or family) should do these. Explain once, point at the button. */
+    private fun showWall(w: ScreenKinds.Wall, screen: Screen) {
+        stopAuto()
+        val app = AppLauncher.labelOf(svc, screen.pkg)
+        val t = if (w.setup) say("$app isn't set up on this phone yet. It needs your phone number and a code by SMS — best done together with family. I'll wait.",
+                "$app अभी इस फ़ोन पर चालू नहीं है। इसके लिए आपका नंबर और SMS कोड चाहिए — परिवार के साथ कीजिए। मैं इंतज़ार करूँगा।",
+                "$app ఇంకా ఈ ఫోన్‌లో సెట్ కాలేదు. దీనికి మీ నంబర్, SMS కోడ్ కావాలి — కుటుంబంతో కలిసి చేయండి. నేను వేచి ఉంటాను.").pick(lang)
+            else say("$app needs you to sign in first. Only you should type your password. Tap “${w.button?.title ?: "Sign in"}”.",
+                "$app में पहले साइन इन करना होगा। पासवर्ड सिर्फ़ आप लिखिए। “${w.button?.title ?: "Sign in"}” दबाइए।",
+                "$app లో ముందు సైన్ ఇన్ చేయాలి. పాస్‌వర్డ్ మీరే టైప్ చేయండి. “${w.button?.title ?: "Sign in"}” నొక్కండి.").pick(lang)
+        com.saathi.app.DebugLog.i("wall", "${screen.pkg} setup=${w.setup} button=${w.button?.title}")
+        show(Target(if (w.setup) null else w.button, t, "wall_${screen.pkg}", noAct = w.setup))
+    }
+
+    /** The task's app isn't installed: offer the Play Store (their choice), never wander elsewhere. */
+    private fun missingApp(f: Flow) {
+        val pkg = f.appPkg
+        val name = pkg?.let { KNOWN_APPS[it] } ?: say("That app", "वह ऐप", "ఆ యాప్").pick(lang)
+        goal = null; flow = null; taskPkgs.clear(); watchdog?.cancel()
+        val t = say("$name isn't on this phone.${if (pkg != null) " Shall I open the Play Store so you can get it?" else ""}",
+            "$name इस फ़ोन में नहीं है।${if (pkg != null) " Play Store खोलूँ ताकि आप इसे ले सकें?" else ""}",
+            "$name ఈ ఫోన్‌లో లేదు.${if (pkg != null) " దాన్ని పొందడానికి Play Store తెరవనా?" else ""}").pick(lang)
+        com.saathi.app.DebugLog.i("missing", "app=$pkg flow=${f.id}")
+        current = Target(null, t, "missing")
+        if (pkg != null) overlay.showCard(t, Overlay.Mode.ASK, onContinue = {
+            overlay.hideCard()
+            runCatching { svc.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$pkg")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }) else overlay.showCard(t, Overlay.Mode.DONE)
+        speaker.say(t, lang)
+    }
+
+    private val KNOWN_APPS = mapOf("com.whatsapp" to "WhatsApp", "com.google.android.youtube" to "YouTube", "com.netflix.mediaclient" to "Netflix",
+        "in.startv.hotstar" to "JioHotstar", "cris.org.in.prs.ima" to "IRCTC Rail Connect", "com.google.android.apps.maps" to "Google Maps",
+        "com.google.android.apps.photos" to "Google Photos", "com.google.android.apps.nbu.paisa.user" to "Google Pay", "com.phonepe.app" to "PhonePe")
+
+    /** A question or chit-chat: answer out loud (the Clicky lesson), no screen navigation. */
+    fun answerQuestion(q: String) {
+        stop()
+        lang = Prefs.lang(svc)
+        if (!LlmManager.isReady) LlmManager.loadAsync(svc)
+        scope.launch {
+            overlay.setAura(true)
+            overlay.showCard(say("Let me think…", "सोच रहा हूँ…", "ఆలోచిస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
+            var waited = 0
+            while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && waited < 9000) { delay(200); waited += 200 }
+            val a = Conversation.answer(q, lang, Prefs.name(svc))
+            overlay.setAura(false)
+            Conversation.remember(q, a)
+            com.saathi.app.DebugLog.i("answer", "q=\"$q\" a=\"${a.take(200)}\"")
+            val howTo = Regex("(?i)^how (to|do|can)|recipe|कैसे|ఎలా").containsMatchIn(q) && !IntentRouter.isGreeting(q)
+            current = Target(null, a, "answer")
+            if (howTo) overlay.showCard(a + "\n\n" + say("Shall I find a video?", "वीडियो ढूँढूँ?", "వీడియో వెతకనా?").pick(lang), Overlay.Mode.ASK, onContinue = {
+                overlay.hideCard(); start("play ${SlotExtractor.searchPhrase(q)} on YouTube")
+            }) else overlay.showCard(a, Overlay.Mode.DONE)
+            speaker.say(if (howTo) a + " " + say("Shall I find a video?", "वीडियो ढूँढूँ?", "వీడియో వెతకనా?").pick(lang) else a, lang)
+            hideJob?.cancel(); hideJob = scope.launch { delay(25_000); if (goal == null && current?.key == "answer") overlay.hideCard() }
+        }
+    }
+
+    private fun tvWatchIntent(g: String): Boolean {
+        val tv = Regex("(?i)\\b(on|in) (the |my )?tv\\b|टीवी पर|టీవీలో|టీవీ లో").containsMatchIn(g)
+        val watch = Regex("(?i)watch|play|movie|film|serial|netflix|youtube|hotstar|prime|देख|चला|लगा|చూడ|పెట్టు").containsMatchIn(g)
+        return tv && watch
+    }
+
+    /** "Play X on Netflix on the TV": wake the TV's home screen over IR, then coach the arrows on the big remote. */
+    private fun watchOnTv(g: String) {
+        stop()
+        val sent = IrRemote.send(svc, IrRemote.Key.HOME)
+        val app = Regex("(?i)netflix|youtube|hotstar|prime").find(g)?.value?.replaceFirstChar { it.uppercase() } ?: "the app"
+        val t = say("${if (sent) "I've opened your TV's home screen. " else ""}On the remote, use the arrows to reach $app, then press OK. Say “TV go right” or “TV OK” and I'll press them for you.",
+            "${if (sent) "मैंने टीवी का होम खोल दिया है। " else ""}रिमोट पर तीर से $app तक जाइए, फिर OK दबाइए। “टीवी दाएँ” या “टीवी OK” कहिए, मैं दबा दूँगा।",
+            "${if (sent) "టీవీ హోమ్ తెరిచాను. " else ""}రిమోట్‌లో బాణాలతో $app కి వెళ్ళి OK నొక్కండి. “టీవీ కుడి” లేదా “టీవీ OK” అనండి, నేను నొక్కుతాను.").pick(lang)
+        runCatching { svc.startActivity(Intent(svc, com.saathi.app.ui.RemoteActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        speaker.say(t, lang)
+        Conversation.remember(g, t)
+    }
+
+    private fun launcherPkg(): String? = runCatching {
+        svc.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)?.activityInfo?.packageName
+    }.getOrNull()
+
+    /** Apps that tasks legitimately hop into: sign-in, browser tabs, the store, pickers, camera, payment sheets. */
+    private fun helperApp(pkg: String) = Regex("gms|chrome|browser|vending|appstore|packageinstaller|documentsui|photopicker|camera|gallery|" +
+        "providers|webview|auth|login|paisa|phonepe|paytm|npci|contacts|dialer|incallui|telecom").containsMatchIn(pkg)
 
     // ───────────────────────── watchdog ─────────────────────────
 

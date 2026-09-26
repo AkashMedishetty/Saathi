@@ -136,6 +136,11 @@ class ReadActivity : AppCompatActivity() {
         top.addView(torchBtn, LinearLayout.LayoutParams(dp(56), dp(56)))
         root.addView(top, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
 
+        // One camera for everything: read a paper, a medicine strip, or "how do I use this?".
+        modes = hbox().apply { gravity = Gravity.CENTER; setPadding(dp(12), dp(122), dp(12), 0) }
+        renderModes()
+        root.addView(modes, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+
         // Bottom: magnifier + shutter
         val bottom = vbox(24, 0).apply { gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(24), 0, dp(24), dp(40)) }
         val zoomRow = hbox()
@@ -173,6 +178,15 @@ class ReadActivity : AppCompatActivity() {
         val sc = ScrollView(this).apply { addView(sheet) }
         root.addView(sc, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply { setMargins(dp(10), dp(120), dp(10), dp(12)) })
         setContentView(root)
+    }
+
+    private lateinit var modes: LinearLayout
+
+    private fun renderModes() {
+        modes.removeAllViews()
+        listOf(MODE_READ to s("Read", "पढ़ो", "చదువు"), MODE_MEDICINE to s("Medicine", "दवा", "మందు"), MODE_OBJECT to s("How to use", "कैसे चलाएँ", "ఎలా వాడాలి")).forEachIndexed { i, (m, label) ->
+            modes.add(chip(label, m == mode) { mode = m; renderModes(); speaker?.say(label, lang) }, top = if (i == 0) 0 else 8)
+        }
     }
 
     private fun roundIcon(icon: Int, label: String, onClick: () -> Unit): View = FrameLayout(this).apply {
@@ -254,6 +268,8 @@ class ReadActivity : AppCompatActivity() {
             return
         }
 
+        // A medicine strip in "Read" mode? Treat it as one (the person shouldn't have to pick the right mode).
+        if (mode == MODE_READ && Regex("(?i)\\b\\d+\\s?mg\\b|tablets?\\s+i\\.?p|\\bcapsules?\\b|\\bI\\.P\\.|\\bRx\\b").containsMatchIn(plain)) mode = MODE_MEDICINE
         if (mode == MODE_MEDICINE) { medicine(lines.map { it.text to (it.boundingBox?.height() ?: 0) }); return }
 
         // 1) FastVLM on the NPU looks at the photo. 2) else Gemma explains the OCR text. 3) else read it out.

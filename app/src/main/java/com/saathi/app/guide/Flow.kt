@@ -36,6 +36,8 @@ class Flow(
     val quiet: Boolean = false,
     /** Extra work when the task completes (e.g. Saathi's own spoken medicine reminder). */
     val onDone: ((Context) -> Unit)? = null,
+    /** The app this task needs; if it's missing we offer the Play Store instead of wandering. */
+    val appPkg: String? = null,
 )
 
 fun rx(vararg p: String) = p.map { Regex(it, RegexOption.IGNORE_CASE) }

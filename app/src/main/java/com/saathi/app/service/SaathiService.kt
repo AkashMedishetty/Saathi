@@ -72,12 +72,6 @@ class SaathiService : AccessibilityService() {
         instance = this
         o.setBubbleVisible(!ownUiOpen)
 
-        // The system accessibility button / shortcut: talk to Saathi from anywhere.
-        runCatching {
-            accessibilityButtonController.registerAccessibilityButtonCallback(object : AccessibilityButtonController.AccessibilityButtonCallback() {
-                override fun onClicked(controller: AccessibilityButtonController) = openAsk(listen = true)
-            })
-        }
         registerDebugTrigger()
         guide.offerResume()
         Log.i(TAG, "service connected")

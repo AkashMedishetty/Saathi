@@ -70,7 +70,7 @@ object Travel {
             s3("Booked! Your PNR is on the screen. I'll keep a note.", "टिकट बुक हो गया! PNR स्क्रीन पर है।", "టికెట్ బుక్ అయింది! PNR స్క్రీన్ మీద ఉంది."),
             s3("Let's book a Tatkal ticket${to?.let { " to $it" } ?: ""}. $window", "चलिए तत्काल टिकट बुक करते हैं${to?.let { " — $it" } ?: ""}। AC तत्काल 10 बजे, स्लीपर 11 बजे खुलता है।",
                 "తత్కాల్ టికెట్ బుక్ చేద్దాం${to?.let { " — $it" } ?: ""}. AC తత్కాల్ 10కి, స్లీపర్ 11కి తెరుస్తుంది."),
-            teach = true, llmGoal = "book a Tatkal train ticket${to?.let { " to $it" } ?: ""} on IRCTC")
+            teach = true, llmGoal = "book a Tatkal train ticket${to?.let { " to $it" } ?: ""} on IRCTC", appPkg = IRCTC)
     }
 
     /** A one-line status of the Tatkal windows right now. */

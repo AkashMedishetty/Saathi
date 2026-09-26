@@ -37,26 +37,33 @@ class VoiceInput(private val ctx: Context) {
     /** One way of listening. The recogniser app does any networking, never Saathi. */
     private data class Try(val onDevice: Boolean, val tag: String, val offline: Boolean)
 
+    private fun prefs() = ctx.getSharedPreferences("saathi", Context.MODE_PRIVATE)
+
     /**
-     * On-device first, then the default recogniser preferring offline, then as-is. English also tries en-US,
-     * because many phones only ship an en-US offline pack (the iQOO had no en-IN pack: error 12).
+     * Field test: on-device packs for en-IN / te-IN weren't installed (errors 12/13), and switching recognisers every
+     * 150 ms made Google's service drop us (error 11). So: start with what worked last time for this language, try
+     * each way once with a proper pause between, and let the caller fall back to Google's own voice popup.
      */
     private fun plan(lang: Lang): List<Try> {
-        val tags = if (lang == Lang.EN) listOf("en-IN", "en-US") else listOf(lang.tag)
         val od = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx)
-        return buildList {
-            if (od) tags.forEach { add(Try(true, it, true)) }
-            tags.forEach { add(Try(false, it, true)) }
+        val all = buildList {
+            if (od) add(Try(true, lang.tag, true))
             add(Try(false, lang.tag, false))
+            if (lang == Lang.EN) add(Try(false, "en-US", false))
         }
+        val good = prefs().getString("stt_ok_${lang.name}", null)
+        return all.sortedByDescending { it.toString() == good }
     }
 
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    /** True when every inline way failed: the caller should open the system voice popup instead. */
+    var exhausted = false; private set
 
     fun start(lang: Lang, l: Listener, attempt: Int = 0) {
         stop()
+        exhausted = false
         val tries = plan(lang)
-        val t = tries.getOrNull(attempt) ?: run { l.onFinal(null); return }
+        val t = tries.getOrNull(attempt) ?: run { exhausted = true; l.onFinal(null); return }
         val onDevice = t.onDevice
         val r = runCatching {
             if (onDevice) SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx) else SpeechRecognizer.createSpeechRecognizer(ctx)
@@ -74,6 +81,7 @@ class VoiceInput(private val ctx: Context) {
             }
             override fun onResults(b: Bundle?) {
                 listening = false
+                prefs().edit().putString("stt_ok_${lang.name}", t.toString()).apply()
                 com.saathi.app.DebugLog.i("voice", "heard \"${b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: lastPartial}\" via $t")
                 l.onFinal(b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.takeIf { it.isNotBlank() } ?: lastPartial.ifBlank { null })
             }
@@ -81,8 +89,11 @@ class VoiceInput(private val ctx: Context) {
                 listening = false
                 Log.w("Saathi", "speech error $error (try $attempt: $t)")
                 com.saathi.app.DebugLog.i("voice", "error $error try=$attempt $t partial=${lastPartial.isNotBlank()}")
-                // Never restart inside the dying recogniser's callback (gives error 11): post it.
-                if (attempt + 1 < tries.size && lastPartial.isBlank() && error in RETRYABLE) { main.postDelayed({ start(lang, l, attempt + 1) }, 150); return }
+                // Never restart inside the dying recogniser's callback (gives error 11): post it, with a real pause.
+                if (lastPartial.isBlank() && error in RETRYABLE) {
+                    if (attempt + 1 < tries.size) { main.postDelayed({ start(lang, l, attempt + 1) }, 450); return }
+                    exhausted = true
+                }
                 if (lastPartial.isNotBlank()) l.onFinal(lastPartial) else l.onFinal(null)
             }
             override fun onEvent(eventType: Int, params: Bundle?) {}

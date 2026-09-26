@@ -129,6 +129,15 @@ class Overlay(
 
     fun setMoving(moving: Boolean) = glow.setMoving(moving)
 
+    private var imeVisible = false
+
+    /** Keyboard up: the card moves to the top so it never covers what they're typing (field test, YouTube search). */
+    fun setImeVisible(v: Boolean) {
+        if (v == imeVisible) return
+        imeVisible = v
+        if (cardShown) place(animateIn = false, moved = true)
+    }
+
     /** Lock screen: hide glow + card without forgetting them. */
     fun setHidden(h: Boolean) {
         val v = if (h) View.INVISIBLE else View.VISIBLE
@@ -274,6 +283,7 @@ class Overlay(
         val cardH = (if (card.height > 0) card.height else ctx.dp(170)) + ctx.dp(40)
         fun covers(top: Boolean) = ty != null && (if (top) ty < ctx.dp(46) + cardH else ty > screenH - cardH)
         val wantTop = when {
+            imeVisible -> true
             animateIn || moved -> if (covers(preferTop)) !preferTop else preferTop
             covers(cardAtTop) -> !cardAtTop
             else -> cardAtTop

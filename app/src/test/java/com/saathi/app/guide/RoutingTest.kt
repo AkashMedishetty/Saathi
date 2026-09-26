@@ -113,6 +113,19 @@ class RoutingTest {
         assertEquals("दिल्ली", Travel.stations("दिल्ली का तत्काल टिकट बुक करो").second)
     }
 
+    @Test fun questionsAreAnsweredNotNavigated() {
+        assert(IntentRouter.isQuestion(null, "how to make cookies"))
+        assert(IntentRouter.isQuestion(null, "హలో"))
+        assert(IntentRouter.isQuestion(null, "what is the capital of India?"))
+        assert(!IntentRouter.isQuestion(null, "how to send a photo on whatsapp"))
+        assert(!IntentRouter.isQuestion(null, "make the text bigger"))
+        assertEquals(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS, IntentRouter.systemAction("open notification bar"))
+        assert(ScreenKinds.avoid("Help Center", "play a movie")); assert(!ScreenKinds.avoid("Help", "open help"))
+        val wa = Screen("com.whatsapp", listOf(UiElement(1, "AGREE AND CONTINUE", "button", android.graphics.Rect(), true, false, false, false, null)),
+            "Welcome to WhatsApp\nAGREE AND CONTINUE")
+        assertEquals(true, ScreenKinds.wall(wa)?.setup)
+    }
+
     @Test fun irPatternsAreStandard() {
         val p = IrRemote.pattern(0x20DF10EFL, samsung = false)
         assertEquals(9000, p[0]); assertEquals(4500, p[1]); assertEquals(67, p.size)

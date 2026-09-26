@@ -56,6 +56,7 @@ class AskActivity : AppCompatActivity(), VoiceInput.Listener {
         Memory.init(this)
         voice = VoiceInput(this)
         lang = Prefs.lang(this)
+        com.saathi.app.llm.LlmManager.loadAsync(this) // warm the brain while they speak
         build()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) { override fun handleOnBackPressed() = close() })
         intent.getStringExtra(EXTRA_TEXT)?.let { deliver(it); return }
@@ -121,6 +122,11 @@ class AskActivity : AppCompatActivity(), VoiceInput.Listener {
             FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
         kb.pressable { showTyping() }
         actions.addView(kb, LinearLayout.LayoutParams(dp(64), dp(64)).apply { marginStart = dp(10) })
+        val cam = FrameLayout(this).apply { background = rounded(C.PAPER_2, dpf(32)); contentDescription = say("Show me with the camera", "कैमरे से दिखाइए", "కెమెరాతో చూపించండి").pick(lang) }
+        cam.addView(android.widget.ImageView(this).apply { setImageResource(R.drawable.ic_photo_camera); imageTintList = android.content.res.ColorStateList.valueOf(C.PINE_DEEP) },
+            FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
+        cam.pressable { voice.stop(); startActivity(Intent(this, ReadActivity::class.java)); finish() }
+        actions.addView(cam, LinearLayout.LayoutParams(dp(64), dp(64)).apply { marginStart = dp(10) })
         sheet.add(actions, 20)
 
         typeRow = hbox().apply { visibility = View.GONE }
@@ -188,8 +194,27 @@ class AskActivity : AppCompatActivity(), VoiceInput.Listener {
 
     override fun onPartial(text: String) { transcript.text = text }
     override fun onLevel(level: Float) { orb.setLevel(level); aura.setLevel(level) }
+    private val sysVoice = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+        asking = false
+        val heard = r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (!heard.isNullOrBlank()) { transcript.text = heard; sheet.postDelayed({ deliver(heard) }, 350) }
+        else transcript.text = say("I didn't catch that. Tap the light and try again, or type.", "सुनाई नहीं दिया। फिर से छूकर बोलिए, या लिखिए।", "వినబడలేదు. మళ్ళీ తాకి చెప్పండి, లేదా టైప్ చేయండి.").pick(lang)
+    }
+
+    /** Last resort: Google's own voice popup (reliable everywhere; the recogniser app does the listening). */
+    private fun systemVoice(): Boolean {
+        val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, lang.tag)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, say("Speak now", "अब बोलिए", "ఇప్పుడు మాట్లాడండి").pick(lang))
+        if (i.resolveActivity(packageManager) == null) return false
+        asking = true
+        return runCatching { sysVoice.launch(i) }.isSuccess
+    }
+
     override fun onFinal(text: String?) {
         setSpeakLabel(false)
+        if (text.isNullOrBlank() && voice.exhausted && systemVoice()) return
         if (text.isNullOrBlank()) {
             transcript.text = say("I didn't catch that. Tap the light and try again.", "सुनाई नहीं दिया। रोशनी छूकर फिर बोलिए।", "వినబడలేదు. వెలుగును తాకి మళ్ళీ చెప్పండి.").pick(lang)
             return

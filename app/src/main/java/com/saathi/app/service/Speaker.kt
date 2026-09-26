@@ -32,7 +32,20 @@ class Speaker(private val ctx: Context) : TextToSpeech.OnInitListener {
         tts.setSpeechRate(Prefs.speechRate(ctx))
         val r = tts.setLanguage(lang.locale)
         if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(Locale.forLanguageTag("en-IN"))
+        bestVoice(lang)?.let { if (tts.voice != it) tts.voice = it }
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "saathi")
+    }
+
+    private val chosen = HashMap<Lang, android.speech.tts.Voice?>()
+
+    /** The most natural installed offline voice for the language (never a network voice: text stays on the phone). */
+    private fun bestVoice(lang: Lang): android.speech.tts.Voice? = chosen.getOrPut(lang) {
+        runCatching {
+            tts.voices?.filter { v -> v.locale.language == lang.locale.language && !v.isNetworkConnectionRequired &&
+                v.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true }
+                ?.sortedWith(compareByDescending<android.speech.tts.Voice> { it.locale.country == lang.locale.country }.thenByDescending { it.quality }.thenBy { it.latency })
+                ?.firstOrNull()
+        }.getOrNull()
     }
 
     fun supports(lang: Lang) = ready && tts.isLanguageAvailable(lang.locale) >= TextToSpeech.LANG_AVAILABLE

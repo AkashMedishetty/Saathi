@@ -35,6 +35,9 @@ object Planner {
         "- Choose items whose words match the goal. Never choose ads, 'Sponsored', 'Install', or anything about paying,\n" +
         "  OTP, PIN or passwords unless the goal clearly asks for it.\n" +
         "- If what they need is not on this screen (maybe further down), reply TAP: -1.\n" +
+        "- If the screen asks them to sign in, log in or set up the app, reply TAP: -1 (they must do that themselves).\n" +
+        "- Never choose Help, About, Privacy, Terms, Feedback, Learn more or Accessibility unless the goal is about them.\n" +
+        "- Don't repeat something already tapped unless the screen clearly needs it again.\n" +
         "Reply with exactly two lines and nothing else:\n" +
         "TAP: <number>\n" +
         "SAY: <one short, warm sentence telling them what to tap, under 15 words>\n" +
@@ -52,9 +55,12 @@ object Planner {
         "(?i)\\bpay\\b|pay ₹|send money|transfer|upi pin|\\bpin\\b|otp|password|install|uninstall|delete|remove account|" +
             "factory reset|erase|screen ?shar|remote|anydesk|teamviewer|quicksupport|allow access|grant|buy|purchase|subscribe")
 
-    fun buildUser(goal: String, screen: Screen, history: List<String>, learned: List<String>): String = buildString {
+    fun buildUser(goal: String, screen: Screen, history: List<String>, learned: List<String>, app: String = ""): String = buildString {
         append(SHOTS)
-        append("Now\nGoal: ").append(goal).append('\n')
+        val talk = Conversation.recent().takeLast(3)
+        if (talk.isNotEmpty()) append("Recent conversation:\n").append(talk.joinToString("\n") { (u, a) -> "- they said \"${u.take(80)}\", Saathi said \"${a.take(80)}\"" }).append('\n')
+        append("Now\nApp open: ").append(app.ifBlank { screen.pkg }).append('\n')
+        append("Goal: ").append(goal).append('\n')
         if (history.isNotEmpty()) append("Already tapped: ").append(history.takeLast(4).joinToString(", ")).append('\n')
         if (learned.isNotEmpty()) append("On this phone, these names were right before: ").append(learned.take(4).joinToString(", ")).append('\n')
         append("Screen:\n").append(screen.forPrompt()).append('\n')
@@ -62,9 +68,9 @@ object Planner {
 
     fun isRisky(label: String) = RISKY.containsMatchIn(label)
 
-    suspend fun decide(goal: String, screen: Screen, history: List<String>, lang: Lang, learned: List<String> = emptyList(), allowLlm: Boolean = true): Decision {
+    suspend fun decide(goal: String, screen: Screen, history: List<String>, lang: Lang, learned: List<String> = emptyList(), allowLlm: Boolean = true, app: String = ""): Decision {
         // Banking / UPI screens never go to the model at all: keywords and scripts only. Low battery: keywords only.
-        val raw = if (allowLlm && LlmManager.isReady && !isMoneyApp(screen.pkg)) LlmManager.generate(SYSTEM, buildUser(goal, screen, history, learned)) else null
+        val raw = if (allowLlm && LlmManager.isReady && !isMoneyApp(screen.pkg)) LlmManager.generate(SYSTEM, buildUser(goal, screen, history, learned, app)) else null
         val d = raw?.let { parse(it, screen, lang) } ?: heuristic(goal, screen, lang)
         return guard(d, screen, lang)
     }

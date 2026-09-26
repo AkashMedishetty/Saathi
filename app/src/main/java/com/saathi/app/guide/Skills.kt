@@ -111,7 +111,8 @@ object Skills {
                 searchSteps(q, s3("Tap the video you like. The picture shows what it is.", "जो वीडियो पसंद हो उसे दबाइए। तस्वीर से पता चलता है।", "నచ్చిన వీడియోను నొక్కండి. బొమ్మ చూస్తే తెలుస్తుంది.")),
                 { sc -> sc.elements.any { Regex("^(Pause|Play) video|^Minimi[sz]e|Enter fullscreen|^Full screen", RegexOption.IGNORE_CASE).containsMatchIn(it.label) } },
                 s3("Enjoy! Tap the video once to see the pause and full-screen buttons.", "आनंद लीजिए! रोकने के लिए वीडियो को एक बार छुइए।", "ఆనందించండి! ఆపడానికి వీడియోను ఒకసారి తాకండి."),
-                s3("Let's find \"$q\" on YouTube.", "YouTube पर \"$q\" ढूँढते हैं।", "YouTube లో \"$q\" వెతుకుదాం."), teach = true, llmGoal = "play $q on YouTube")
+                s3("Let's find \"$q\" on YouTube.", "YouTube पर \"$q\" ढूँढते हैं।", "YouTube లో \"$q\" వెతుకుదాం."), teach = true, llmGoal = "play $q on YouTube",
+                appPkg = "com.google.android.youtube")
         },
 
         Skill("tv", Cat.WATCH, R.drawable.ic_tv, s3("TV remote", "टीवी रिमोट", "టీవీ రిమోట్"),
@@ -159,7 +160,7 @@ object Skills {
                 { sc -> Regex("^Pause|Skip intro|Audio & Subtitles|Episodes", RegexOption.IGNORE_CASE).let { r -> sc.elements.any { r.containsMatchIn(it.label) } } },
                 s3("It's playing. Enjoy!", "चल गया। आनंद लीजिए!", "ప్లే అవుతోంది. ఆనందించండి!"),
                 s3("Opening ${AppLauncher.labelOf(ctx, pkg)}.", "${AppLauncher.labelOf(ctx, pkg)} खोल रहा हूँ।", "${AppLauncher.labelOf(ctx, pkg)} తెరుస్తున్నాను."),
-                teach = true, llmGoal = s.raw)
+                teach = true, llmGoal = s.raw, appPkg = pkg)
         },
 
         // ───────────── EVERYDAY ─────────────
@@ -193,7 +194,8 @@ object Skills {
                 ),
                 { sc -> Regex("Exit navigation|^Re-center|Re-centre", RegexOption.IGNORE_CASE).containsMatchIn(sc.allText) },
                 s3("You're on your way. Follow the voice. Safe travels!", "चल पड़िए, आवाज़ के हिसाब से चलिए। शुभ यात्रा!", "బయలుదేరండి, వాయిస్ ప్రకారం వెళ్ళండి. శుభ ప్రయాణం!"),
-                s3("Finding the way to $place.", "$place का रास्ता ढूँढ रहा हूँ।", "$place కి దారి వెతుకుతున్నాను."), llmGoal = "get directions to $place")
+                s3("Finding the way to $place.", "$place का रास्ता ढूँढ रहा हूँ।", "$place కి దారి వెతుకుతున్నాను."), llmGoal = "get directions to $place",
+                appPkg = "com.google.android.apps.maps")
         },
 
         Skill("camera", Cat.DAILY, R.drawable.ic_photo_camera, s3("Take a photo", "फोटो खींचें", "ఫోటో తీయండి"),
@@ -315,7 +317,19 @@ object Skills {
 
         Skill("wifi", Cat.FIX, R.drawable.ic_wifi, s3("Turn on Wi-Fi", "Wi-Fi चालू करें", "Wi-Fi ఆన్ చేయండి"),
             listOf("wifi", "wi-fi", "wi fi", "वाईफाई", "वाई-फाई", "वाई फाई", "వైఫై", "వై-ఫై"),
-            s3("Turn on Wi-Fi", "वाईफाई चालू करो", "వైఫై ఆన్ చేయి")) { _, _ -> CoreFlows.wifi() },
+            s3("Turn on Wi-Fi", "वाईफाई चालू करो", "వైఫై ఆన్ చేయి")) { _, s ->
+            if (wantsOff(s.raw)) toggleFlow("wifi", Intent(Settings.ACTION_WIFI_SETTINGS), "Wi-?Fi|WLAN|Use Wi", NONE, NONE, off = true) else CoreFlows.wifi() },
+
+        Skill("dark_mode", Cat.FIX, R.drawable.ic_light_mode, s3("Dark screen / light screen", "डार्क मोड", "డార్క్ మోడ్"),
+            listOf("dark mode", "dark theme", "night mode", "light mode", "डार्क मोड", "డార్క్ మోడ్"),
+            s3("Turn on dark mode", "डार्क मोड चालू करो", "డార్క్ మోడ్ ఆన్ చేయి")) { _, s ->
+            val off = wantsOff(s.raw) || Regex("(?i)light mode|लाइट|లైట్").containsMatchIn(s.raw)
+            Flow("dark_mode", { Intent(Settings.ACTION_DISPLAY_SETTINGS) },
+                listOf(Step("mode", if (off) rx("^Light mode", "^Light$") else rx("^Dark mode$", "^Dark theme", "^Dark$"),
+                    if (off) s3("Tap Light mode.", "'Light mode' दबाइए।", "'Light mode' నొక్కండి.") else s3("Tap Dark mode.", "'Dark mode' दबाइए।", "'Dark mode' నొక్కండి."))),
+                null, s3("Done!", "हो गया!", "అయింది!"), s3("Opening display settings.", "डिस्प्ले सेटिंग खोल रहा हूँ।", "డిస్‌ప్లే సెట్టింగ్స్ తెరుస్తున్నాను."),
+                llmGoal = if (off) "turn on light mode" else "turn on dark mode")
+        },
 
         Skill("internet", Cat.FIX, R.drawable.ic_signal_cellular_alt, s3("Internet not working", "इंटरनेट नहीं चल रहा", "ఇంటర్నెట్ పనిచేయట్లేదు"),
             listOf("internet", "net not", "no internet", "mobile data", "इंटरनेट", "नेट नहीं", "ఇంటర్నెట్", "నెట్ రావట్లేదు"),
@@ -331,18 +345,18 @@ object Skills {
 
         Skill("bluetooth", Cat.FIX, R.drawable.ic_bluetooth, s3("Connect earphones (Bluetooth)", "ब्लूटूथ चालू करें", "బ్లూటూత్ ఆన్ చేయండి"),
             listOf("bluetooth", "earphone", "earbuds", "headphone", "ब्लूटूथ", "ईयरफ़ोन", "బ్లూటూత్", "ఇయర్‌ఫోన్"),
-            s3("Connect my earphones", "ब्लूटूथ चालू करो", "బ్లూటూత్ ఆన్ చేయి")) { _, _ ->
+            s3("Connect my earphones", "ब्लूटूथ चालू करो", "బ్లూటూత్ ఆన్ చేయి")) { _, s ->
             toggleFlow("bluetooth", Intent(Settings.ACTION_BLUETOOTH_SETTINGS), "Bluetooth|Use Bluetooth",
                 s3("Tap the Bluetooth switch to turn it on.", "ब्लूटूथ का स्विच दबाकर चालू कीजिए।", "బ్లూటూత్ స్విచ్ నొక్కి ఆన్ చేయండి."),
-                s3("Bluetooth is on. Now tap your earphones' name to connect.", "ब्लूटूथ चालू है। अब अपने ईयरफ़ोन का नाम दबाइए।", "బ్లూటూత్ ఆన్. ఇప్పుడు మీ ఇయర్‌ఫోన్ పేరు నొక్కండి."))
+                s3("Bluetooth is on. Now tap your earphones' name to connect.", "ब्लूटूथ चालू है। अब अपने ईयरफ़ोन का नाम दबाइए।", "బ్లూటూత్ ఆన్. ఇప్పుడు మీ ఇయర్‌ఫోన్ పేరు నొక్కండి."), off = wantsOff(s.raw))
         },
 
         Skill("battery", Cat.FIX, R.drawable.ic_battery_saver, s3("Battery runs out fast", "बैटरी जल्दी ख़त्म होती है", "బ్యాటరీ త్వరగా అయిపోతోంది"),
             listOf("battery", "charge", "power saving", "बैटरी", "चार्ज", "బ్యాటరీ", "ఛార్జ్"),
-            s3("Save battery", "बैटरी बचाओ", "బ్యాటరీ ఆదా చేయి")) { _, _ ->
+            s3("Save battery", "बैटरी बचाओ", "బ్యాటరీ ఆదా చేయి")) { _, s ->
             toggleFlow("battery", Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS), "Battery saver|Power saving|Use Battery Saver|Low power",
                 s3("Turn on the battery saver switch.", "बैटरी सेवर का स्विच चालू कीजिए।", "బ్యాటరీ సేవర్ స్విచ్ ఆన్ చేయండి."),
-                s3("Battery saver is on. Your charge will last longer.", "बैटरी सेवर चालू। अब चार्ज ज़्यादा चलेगा।", "బ్యాటరీ సేవర్ ఆన్. ఛార్జ్ ఎక్కువసేపు ఉంటుంది."))
+                s3("Battery saver is on. Your charge will last longer.", "बैटरी सेवर चालू। अब चार्ज ज़्यादा चलेगा।", "బ్యాటరీ సేవర్ ఆన్. ఛార్జ్ ఎక్కువసేపు ఉంటుంది."), off = wantsOff(s.raw))
         },
 
         Skill("brightness", Cat.FIX, R.drawable.ic_light_mode, s3("Screen too dark or bright", "स्क्रीन की रोशनी", "స్క్రీన్ వెలుతురు"),
@@ -359,11 +373,13 @@ object Skills {
         Skill("storage", Cat.FIX, R.drawable.ic_cleaning_services, s3("Phone storage full", "फ़ोन की जगह भर गई", "ఫోన్ స్టోరేజ్ నిండింది"),
             listOf("storage", "space", "memory full", "phone full", "phone is slow", "clean", "जगह", "स्टोरेज", "मेमोरी", "స్టోరేజ్", "స్థలం"),
             s3("My phone storage is full", "फ़ोन की जगह भर गई", "స్టోరేజ్ నిండిపోయింది")) { ctx, _ ->
-            val files = AppLauncher.isInstalled(ctx, "com.google.android.apps.nbu.files")
+            // vivo/iQOO phones: i Manager does the cleaning; others: Files by Google, else Settings › Storage.
+            val cleaner = AppLauncher.first(ctx, "com.vivo.imanager", "com.iqoo.secure", "com.google.android.apps.nbu.files")
             Flow("storage",
-                { c -> if (files) AppLauncher.launch(c, "com.google.android.apps.nbu.files") else Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS) },
+                { c -> AppLauncher.launch(c, cleaner) ?: Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS) },
                 listOf(
-                    Step("clean", rx("^Clean$", "^Free up space", "^Clean up", "^Cleanup"), s3("Tap Clean.", "'Clean' दबाइए।", "'Clean' నొక్కండి."),
+                    Step("clean", rx("^Clean$", "^Free up space", "^Clean up", "^Cleanup", "^Space clean", "^Storage clean", "^One-tap clean", "^Optimi[sz]e", "^Clean now"),
+                        s3("Tap Clean up.", "'Clean up' दबाइए।", "'Clean up' నొక్కండి."),
                         tip = s3("It finds junk files and copies you don't need.", "यह बेकार फ़ाइलें और दोहरी फोटो ढूँढता है।", "ఇది అనవసర ఫైళ్ళు, డూప్లికేట్లు వెతుకుతుంది.")),
                     Step("junk", rx("^Junk files", "Clean .* junk", "^Confirm and free up", "^Free up"), s3("Tap to clear the junk files. Your photos are safe.", "बेकार फ़ाइलें हटाइए। आपकी फोटो सुरक्षित हैं।", "జంక్ ఫైళ్ళు తొలగించండి. మీ ఫోటోలు సురక్షితం.")),
                 ),
@@ -445,7 +461,7 @@ object Skills {
             else s3("Message sent to $who!", "$who को संदेश चला गया!", "$who కి సందేశం వెళ్ళింది!"),
             if (video) s3("Let's video call $who on WhatsApp.", "WhatsApp पर $who को वीडियो कॉल करते हैं।", "WhatsApp లో $who కి వీడియో కాల్ చేద్దాం.")
             else s3("Let's send $who a WhatsApp message.", "$who को WhatsApp संदेश भेजते हैं।", "$who కి WhatsApp సందేశం పంపుదాం."),
-            llmGoal = s.raw)
+            llmGoal = s.raw, appPkg = "com.whatsapp")
     }
 
     private fun whatsappBackup() = Flow("wa_backup", { AppLauncher.launch(it, "com.whatsapp") },
@@ -461,11 +477,16 @@ object Skills {
         s3("WhatsApp backup started!", "WhatsApp बैकअप शुरू हो गया!", "WhatsApp బ్యాకప్ మొదలైంది!"),
         s3("Let's back up your WhatsApp chats.", "चलिए WhatsApp का बैकअप लेते हैं।", "WhatsApp బ్యాకప్ తీసుకుందాం."), teach = true, llmGoal = "back up WhatsApp chats")
 
-    private fun toggleFlow(id: String, intent: Intent, label: String, stepSay: Say, done: Say): Flow {
+    /** On/off both work: "turn off Bluetooth" waits for the switch to be OFF. */
+    fun wantsOff(raw: String) = Regex("(?i)\\b(off|disable|stop)\\b|बंद|ऑफ|ఆఫ్|ఆపు").containsMatchIn(raw)
+
+    private fun toggleFlow(id: String, intent: Intent, label: String, stepSay: Say, done: Say, off: Boolean = false): Flow {
         val r = Regex(label, RegexOption.IGNORE_CASE)
-        return Flow(id, { intent }, listOf(Step("toggle", listOf(r), stepSay, role = "switch")),
-            { sc -> sc.elements.any { it.role == "switch" && it.checked && r.containsMatchIn(it.label) } },
-            done, s3("Opening settings for you.", "आपके लिए सेटिंग खोल रहा हूँ।", "మీ కోసం సెట్టింగ్స్ తెరుస్తున్నాను."), llmGoal = "turn on $id")
+        val name = label.substringBefore('|')
+        return Flow(id, { intent }, listOf(Step("toggle", listOf(r), if (!off) stepSay else s3("Tap the $name switch to turn it off.", "$name का स्विच दबाकर बंद कीजिए।", "$name స్విచ్ నొక్కి ఆఫ్ చేయండి."), role = "switch")),
+            { sc -> sc.elements.any { it.role == "switch" && it.checked != off && r.containsMatchIn(it.label) } },
+            if (!off) done else s3("$name is off.", "$name बंद हो गया।", "$name ఆఫ్ అయింది."),
+            s3("Opening settings for you.", "आपके लिए सेटिंग खोल रहा हूँ।", "మీ కోసం సెట్టింగ్స్ తెరుస్తున్నాను."), llmGoal = "turn ${if (off) "off" else "on"} $name")
     }
 
     /** SET_ALARM opens the Clock app prefilled; the person confirms (needs the SET_ALARM permission, trap #16). */
@@ -487,7 +508,7 @@ object Skills {
     private fun editLesson(ctx: Context, video: Boolean): Flow {
         val pkg = AppLauncher.first(ctx, "com.google.android.apps.photos", "com.vivo.gallery", "com.android.gallery3d")
         val steps = mutableListOf(
-            Step("open", if (video) rx("^Video", "^Videos$") else rx("^Photo", "^Image", "^Picture"),
+            Step("open", if (video) rx("^Video taken", "^Video,", "^Video ·") else rx("^Photo taken", "^Photo,", "^Photo ·", "^Image taken", "^Portrait photo"),
                 if (video) s3("Tap any video.", "कोई भी वीडियो दबाइए।", "ఏదైనా వీడియో నొక్కండి.") else s3("Tap any photo you like.", "कोई भी फोटो दबाइए।", "నచ్చిన ఫోటో నొక్కండి."),
                 tip = s3("Editing never spoils your original. We'll save a copy.", "असली फोटो ख़राब नहीं होगी, हम कॉपी सेव करेंगे।", "అసలు ఫోటో పాడవదు, కాపీ సేవ్ చేస్తాం.")),
             Step("edit", rx("^Edit$", "^Edit "), s3("Tap Edit at the bottom.", "नीचे 'Edit' दबाइए।", "కింద 'Edit' నొక్కండి."),

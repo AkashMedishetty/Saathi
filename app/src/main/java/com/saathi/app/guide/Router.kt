@@ -63,6 +63,38 @@ object IntentRouter {
         Regex("^(good morning|what'?s today|what is today|today'?s plan|my day)\\W*$").matches(g) || g.has("आज क्या है", "आज का दिन", "సుప్రభాతం", "ఈరోజు ఏమిటి")
     }
 
+    fun isGreeting(goal: String) = Regex("(?i)^\\W*(hi|hello|hey|hlo|namaste|namaskar|namaskaram|good (morning|afternoon|evening|night)|thank you|thanks|how are you|" +
+        "नमस्ते|नमस्कार|हैलो|धन्यवाद|शुक्रिया|आप कैसे हैं|హలో|హాయ్|నమస్కారం|ధన్యవాదాలు|బాగున్నారా)\\W*(saathi|साथी|సాథీ)?\\W*$").matches(goal.trim())
+
+    private val PHONE_WORDS = Regex("(?i)phone|mobile|app\\b|screen|setting|button|whatsapp|call|message|wifi|wi-fi|bluetooth|youtube|netflix|hotstar|tv\\b|" +
+        "photo|camera|alarm|remind|torch|volume|internet|battery|storage|ticket|irctc|upi|pay|notification|keyboard|font|letters|" +
+        "फ़ोन|फोन|ऐप|स्क्रीन|सेटिंग|व्हाट्सएप|कॉल|मैसेज|वीडियो|फोटो|कैमरा|अलार्म|टीवी|ఫోన్|యాప్|స్క్రీన్|సెట్టింగ్|వాట్సాప్|కాల్|మెసేజ్|వీడియో|ఫోటో|టీవీ")
+    private val QUESTION = Regex("(?i)^\\W*(how|what|why|who|when|where|which|can you|could you|tell me|explain|is it|should i|do you|are you|what's|whats)\\b|\\?\\s*$|" +
+        "^(क्या|कैसे|क्यों|कौन|कब|कहाँ|मुझे बताओ)|(क्या है|कैसे बनाते|कैसे करते)|^(ఏమిటి|ఎలా|ఎందుకు|ఎవరు|ఎప్పుడు|ఎక్కడ)|(ఎలా చేయాలి|ఏమిటి)")
+
+    /** A question or chit-chat to answer out loud, not a phone task to navigate. */
+    fun isQuestion(ctx: Context?, goal: String): Boolean {
+        if (isGreeting(goal)) return true
+        if (!QUESTION.containsMatchIn(goal.trim())) return false
+        if (PHONE_WORDS.containsMatchIn(goal)) return false
+        if (Skills.match(goal) != null) return false
+        return ctx == null || AppLauncher.findInGoal(ctx, goal) == null
+    }
+
+    /** Things the system can just do (no guidance needed). */
+    fun systemAction(goal: String): Int? {
+        val g = goal.lowercase()
+        return when {
+            Regex("notification|नोटिफिकेशन|सूचनाएँ|నోటిఫికేషన్").containsMatchIn(g) -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS
+            Regex("quick settings|control cent(er|re)|क्विक सेटिंग").containsMatchIn(g) -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS
+            Regex("recent apps|open apps|all apps open|हाल के ऐप").containsMatchIn(g) -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS
+            Regex("^(go )?back$|^वापस( जाओ)?$|^వెనక్కి( వెళ్ళు)?$").containsMatchIn(g.trim()) -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK
+            Regex("lock (the )?(phone|screen)|फ़ोन लॉक|ఫోన్ లాక్").containsMatchIn(g) -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN
+            Regex("screenshot|स्क्रीनशॉट|స్క్రీన్‌షాట్").containsMatchIn(g) -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT
+            else -> null
+        }
+    }
+
     fun isScamCheck(goal: String) = goal.lowercase().has("scam", "fraud", "is this safe", "धोखा", "ठगी", "మోసం")
 
     fun route(ctx: Context, goal: String): Flow? {
