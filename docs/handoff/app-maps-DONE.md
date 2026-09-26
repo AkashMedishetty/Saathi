@@ -4,10 +4,10 @@ Package `com.saathi.app.maps`:
 - pure Kotlin, no Android types;
 - one file per app in `maps/apps/`, and `SystemApps.kt` for Phone, Messages, Clock, Instagram and Camera.
 
-**15 apps, 44 routes.** Tests in `app/src/test/java/com/saathi/app/maps/` (63 tests) read the real dumps in
+**15 apps, 44 routes.** Tests in `app/src/test/java/com/saathi/app/maps/` (64 tests) read the real dumps in
 `fixtures/trees/` wherever one exists. Committed app by app.
 
-**Final gate:** `./gradlew testDebugUnitTest assembleDebug` passes, with 1071 tests and 0 failures, and the merged
+**Final gate:** `./gradlew testDebugUnitTest assembleDebug` passes, with 1072 tests and 0 failures, and the merged
 manifest has no INTERNET permission. No new dependencies, and no files outside `maps/`.
 
 ## Status
@@ -132,6 +132,11 @@ when (val d = AppMaps.next(route, pkg, nodes, reached, slots)) {
   engine logic and the route order, **not** that the labels match this phone. First job on the phone: capture one
   dump per new screen with `scripts/capture-tree.sh` into `fixtures/trees/<app>/`. The tests pick them up, and a
   wrong label shows as a failing assert, not a wrong glow.
+
+## Field fixes folded in
+- 22:34 (your `Guide.kt` fix ae22412): a Short's Like button on YouTube Home ended `yt_search` at once. The engine
+  now also guards it. `yt_search` is done only after the last step was reached, and not while the tab bar is showing.
+  `yt_watch` requires the tab bar to be gone. A regression test covers both.
 
 ## Not reliable yet
 - **No dump at all:**

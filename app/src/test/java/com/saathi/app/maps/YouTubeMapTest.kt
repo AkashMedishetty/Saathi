@@ -154,4 +154,18 @@ class YouTubeMapTest {
         assertTrue(t.rowText(row).startsWith("hanuman chalisa fast"))
         assertNotNull(AppMaps.find(listOf(Sel(resId = "text", slot = "query", slotExact = true)), yt("search_typed"), mapOf("query" to "Hanuman  Chalisa FAST")))
     }
+
+    /** Field bug (phone, 22:34): a Short's Like button on Home ended the search route before anything happened. */
+    @Test fun aShortsLikeButtonOnHomeIsNotDone() {
+        val home = yt("home") + Fixtures.tree("   Button t=null d=like this video along with 12K other people id=null CF ri=null acts= Rect(1200, 1500 - 1400, 1700)")
+        val d = AppMaps.next(search, pkg, home, 0, q)
+        assertTrue("$d", d is Decision.Glow && d.step == 0)
+        assertEquals("yt_home", AppMaps.screenOf(pkg, home, q))
+        // A real watch page after the result was tapped: done.
+        val watch = Fixtures.tree("FrameLayout t=null d=null id=null  ri=null acts= Rect(0, 0 - 1440, 3168)",
+            "  Button t=null d=like this video along with 12K other people id=null CF ri=null acts= Rect(100, 1500 - 400, 1650)",
+            "  Button t=null d=Share id=null CF ri=null acts= Rect(420, 1500 - 700, 1650)")
+        assertEquals(Decision.Done, AppMaps.next(search, pkg, watch, 4, q))
+        assertTrue(AppMaps.next(search, pkg, watch, 0, q) !is Decision.Done)
+    }
 }

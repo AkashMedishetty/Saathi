@@ -57,7 +57,8 @@ object YouTubeMap {
             // Results for what we asked, vs results for something else (needs a new search).
             ScreenDef("yt_results_for", listOf(QUERY_BAR.copy(slot = "query"), Sel(resId = "results"))),
             ScreenDef("yt_results", listOf(QUERY_BAR, Sel(resId = "results"))),
-            ScreenDef("yt_watch", listOf(LIKE), mustNot = listOf(SEARCH_BOX)),
+            // The watch page hides the bottom tab bar; a Like button next to the tab bar is a Short on Home.
+            ScreenDef("yt_watch", listOf(LIKE), mustNot = listOf(SEARCH_BOX, TAB_HOME)),
             ScreenDef("yt_share", listOf(lbl("^(Share|Share to|Send to)$"), lbl("^(WhatsApp|Copy link)$", clickable = true)),
                 mustNot = listOf(SEARCH_BOX)),
         ),
@@ -97,7 +98,9 @@ object YouTubeMap {
                         scrollHint = say("Slowly scroll down to the first video.", "धीरे से नीचे पहले वीडियो तक स्क्रॉल कीजिए।",
                             "నెమ్మదిగా మొదటి వీడియో వరకు కిందకు స్క్రోల్ చేయండి.")),
                 ),
-                done = listOf(LIKE),
+                // Done = on a watch page after the result was tapped. Shorts on the Home tab also have a Like button
+                // (found on the phone), so the Like button alone is not enough: the last step must be reached too.
+                done = listOf(LIKE), doneNot = listOf(TAB_HOME, SEARCH_BOX), doneNeedsLastStep = true,
                 doneSay = say("It's playing. Enjoy!", "चल रहा है। आनंद लीजिए!", "ప్లే అవుతోంది. ఆనందించండి!"),
                 next = listOf(say("Want me to show you how to like it or share it with family?",
                     "क्या इसे लाइक करना या परिवार को भेजना सिखाऊँ?", "దీన్ని లైక్ చేయడం లేదా కుటుంబానికి పంపడం చూపించనా?")),
