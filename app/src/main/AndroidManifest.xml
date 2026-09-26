@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <queries>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
@@ -52,6 +54,11 @@
             android:taskAffinity="com.saathi.ask"
             android:theme="@style/Theme.Saathi.Sheet"
             android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.ReadActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
         <activity
             android:name=".ui.SetupActivity"

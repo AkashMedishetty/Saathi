@@ -184,6 +184,26 @@ object Skills {
                 s3("Opening the camera.", "कैमरा खोल रहा हूँ।", "కెమెరా తెరుస్తున్నాను."), teach = true)
         },
 
+        Skill("read_this", Cat.DAILY, R.drawable.ic_document_scanner, s3("Read this for me", "मेरे लिए पढ़ो", "నా కోసం చదువు"),
+            listOf("read this", "read it", "read the", "what does this say", "what is written", "magnifier", "zoom in", "can't see", "बड़ा करके दिखाओ",
+                "पढ़ो", "पढ़कर सुनाओ", "क्या लिखा है", "చదువు", "చదివి వినిపించు", "ఏం రాసి ఉంది"),
+            s3("Read this letter for me", "यह काग़ज़ पढ़कर सुनाओ", "ఈ కాగితం చదివి వినిపించు")) { _, _ ->
+            Flow("read_this", null, emptyList(), null, NONE, NONE, action = { ctx ->
+                ctx.startActivity(Intent(ctx, com.saathi.app.ui.ReadActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                s3("Opening the reader.", "पढ़ने वाला कैमरा खोल रहा हूँ।", "చదివే కెమెరా తెరుస్తున్నాను.")
+            }, quiet = true)
+        },
+
+        Skill("scan_medicine", Cat.DAILY, R.drawable.ic_medication_liquid, s3("Medicine strip → reminder", "दवा का पत्ता → याद", "మందుల స్ట్రిప్ → గుర్తు"),
+            listOf("medicine strip", "scan medicine", "scan my medicine", "scan the medicine", "tablet strip", "read my medicine", "दवा का पत्ता", "दवा स्कैन", "మందుల స్ట్రిప్", "మందు స్కాన్"),
+            s3("Scan my medicine strip", "दवा का पत्ता स्कैन करो", "మందుల స్ట్రిప్ స్కాన్ చేయి")) { _, _ ->
+            Flow("scan_medicine", null, emptyList(), null, NONE, NONE, action = { ctx ->
+                ctx.startActivity(Intent(ctx, com.saathi.app.ui.ReadActivity::class.java)
+                    .putExtra(com.saathi.app.ui.ReadActivity.EXTRA_MODE, com.saathi.app.ui.ReadActivity.MODE_MEDICINE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                s3("Show me the medicine strip.", "दवा का पत्ता दिखाइए।", "మందుల స్ట్రిప్ చూపించండి.")
+            }, quiet = true)
+        },
+
         Skill("torch", Cat.DAILY, R.drawable.ic_flashlight_on, s3("Torch on / off", "टॉर्च चालू / बंद", "టార్చ్ ఆన్ / ఆఫ్"),
             listOf("torch", "flashlight", "flash light", "टॉर्च", "टार्च", "बत्ती", "టార్చ్", "లైట్"),
             s3("Turn on the torch", "टॉर्च जलाओ", "టార్చ్ ఆన్ చేయి")) { _, s ->

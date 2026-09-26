@@ -110,6 +110,7 @@ class Guide(
         f?.action?.let { act ->
             val done = act(svc).pick(lang)
             Memory.completed(f.id)
+            if (f.quiet) { stop(); return } // the screen it opened speaks for itself
             finish(done)
             return
         }

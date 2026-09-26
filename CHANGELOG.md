@@ -37,3 +37,7 @@
   to the registered family contact on WhatsApp (SMS fallback); Saathi never sends; unit-tested. Voice: "ask my son for help",
   "बेटे से पूछो". **Caregiver first-run setup**: welcome + language, name + voice speed preview, family contact (locked
   later behind the screen lock), helper + mic checklist.
+- 13:18 **Read this + magnifier + medicine strip** (camera): CameraX preview, torch, magnifier zoom, offline ML Kit OCR
+  (Latin + Devanagari), **FastVLM-0.5B on the Hexagon NPU explains the photo (1.8 s on the iQOO)**, Gemma/text fallback,
+  scam wording check on paper. Medicine mode: biggest printed line = name → "Is it X?" → Morning/Afternoon/Night → the guide
+  sets a daily alarm + Today reminder. APK permissions re-checked: still no INTERNET.

@@ -32,6 +32,8 @@ class Flow(
     val action: ((Context) -> Say)? = null,
     /** Saved to memory on completion, e.g. "Take BP medicine · 8:00 AM daily". */
     val memo: String? = null,
+    /** Instant skills that open one of Saathi's own screens: just speak, no card on top of it. */
+    val quiet: Boolean = false,
 )
 
 fun rx(vararg p: String) = p.map { Regex(it, RegexOption.IGNORE_CASE) }

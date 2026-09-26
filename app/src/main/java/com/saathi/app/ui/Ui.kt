@@ -31,7 +31,14 @@ fun Context.vbox(padH: Int = 0, padV: Int = 0) = LinearLayout(this).apply {
 fun Context.hbox() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
 
 fun LinearLayout.add(v: View, top: Int = 0, w: Int = ViewGroup.LayoutParams.MATCH_PARENT, h: Int = ViewGroup.LayoutParams.WRAP_CONTENT, weight: Float = 0f): View {
-    addView(v, LinearLayout.LayoutParams(if (weight > 0f && orientation == LinearLayout.HORIZONTAL) 0 else w, h, weight).apply {
+    // Horizontal rows: weighted children take the rest; others wrap (a MATCH_PARENT sibling would eat it all, trap #20).
+    val width = when {
+        orientation != LinearLayout.HORIZONTAL -> w
+        weight > 0f -> 0
+        w == ViewGroup.LayoutParams.MATCH_PARENT -> ViewGroup.LayoutParams.WRAP_CONTENT
+        else -> w
+    }
+    addView(v, LinearLayout.LayoutParams(width, h, weight).apply {
         if (orientation == LinearLayout.VERTICAL) topMargin = context.dp(top) else marginStart = context.dp(top)
     })
     return v

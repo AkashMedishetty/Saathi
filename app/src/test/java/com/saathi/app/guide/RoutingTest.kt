@@ -56,6 +56,10 @@ class RoutingTest {
         "make the screen brighter" to "brightness",
         "take me to the home screen" to "home",
         "होम स्क्रीन पर ले चलो" to "home",
+        "read this letter for me" to "read_this",
+        "यह काग़ज़ पढ़कर सुनाओ" to "read_this",
+        "scan my medicine strip" to "scan_medicine",
+        "दवा का पत्ता स्कैन करो" to "scan_medicine",
     )
 
     @Test fun everyPhraseRoutesToTheRightSkill() {
