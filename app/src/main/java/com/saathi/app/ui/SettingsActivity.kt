@@ -177,6 +177,10 @@ class SettingsActivity : AppCompatActivity() {
         page.add(rt, 10)
 
         // ── Taught by family (record once, guide forever) ──
+        section(page, s("My details", "मेरी जानकारी", "నా వివరాలు"))
+        page.add(row(R.drawable.ic_person, s("My details for forms", "फ़ॉर्म के लिए मेरी जानकारी", "ఫారాల కోసం నా వివరాలు"),
+            s("Name, address, date of birth · stays on this phone", "नाम, पता, जन्मतिथि · इसी फ़ोन में रहती है", "పేరు, చిరునామా, పుట్టిన తేదీ · ఈ ఫోన్‌లోనే ఉంటుంది")) {
+            ProfileActivity.start(this) }, 10)
         section(page, s("Things I was taught", "मुझे सिखाई गई चीज़ें", "నాకు నేర్పినవి"))
         val tb = surface()
         val recipes = com.saathi.app.guide.Recipes.all(this)

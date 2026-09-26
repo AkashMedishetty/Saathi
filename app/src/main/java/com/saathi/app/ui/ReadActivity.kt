@@ -179,9 +179,14 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
         root.addView(top, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
 
         // One camera for everything: read a paper, a medicine strip, or "how do I use this?".
-        modes = hbox().apply { gravity = Gravity.CENTER; setPadding(dp(12), dp(122), dp(12), 0) }
+        modes = hbox().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), 0, dp(12), 0) }
         renderModes()
-        root.addView(modes, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        // Four chips don't fit every screen: the row scrolls sideways.
+        val modesScroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false; setPadding(0, dp(122), 0, 0); clipToPadding = false
+            addView(modes)
+        }
+        root.addView(modesScroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
 
         // Bottom: magnifier + shutter
         val bottom = vbox(24, 0).apply { gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(24), 0, dp(24), dp(40)) }
@@ -229,6 +234,9 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
         listOf(MODE_READ to s("Read", "पढ़ो", "చదువు"), MODE_MEDICINE to s("Medicine", "दवा", "మందు"), MODE_OBJECT to s("How to use", "कैसे चलाएँ", "ఎలా వాడాలి")).forEachIndexed { i, (m, label) ->
             modes.add(chip(label, m == mode) { mode = m; renderModes(); speaker?.say(label, lang) }, top = if (i == 0) 0 else 8)
         }
+        // A paper form has its own guided screen (FormActivity: box by box, what to write).
+        val formLabel = s("Fill a form", "फ़ॉर्म भरो", "ఫారం నింపు")
+        modes.add(chip(formLabel, false) { speaker?.say(formLabel, lang); FormActivity.start(this); finish() }, top = 8)
     }
 
     private fun roundIcon(icon: Int, label: String, onClick: () -> Unit): View = FrameLayout(this).apply {

@@ -111,6 +111,9 @@ object IntentRouter {
     /** Starts like a real question ("what / why / how …", or ends with "?"), not a command like "make the text bigger". */
     fun phrasedAsQuestion(g: String) = QUESTION.containsMatchIn(g.trim())
 
+    /** "Help me fill this form" / "फ़ॉर्म भरो" / "ఫారం నింపు". */
+    fun isFormHelp(g: String) = Regex("(?i)\\bfill (in )?(this|the|a|my)?\\s*(form|application)|\\bform (fill|filling)|help me with (this|the) form|फ़ॉर्म भर|फॉर्म भर|फार्म भर|ఫారం నింప|ఫారమ్ నింప|ఫామ్ నింప").containsMatchIn(g)
+
     /** "Teach me …", "how do I …", "show me how …": learning, so no shortcuts. */
     fun wantsToLearn(g: String) = Regex("(?i)\\b(teach me|show me how|how (do|can|should) i|how to|help me learn|i want to learn)\\b|सिखा|कैसे करते|नेर्प|నేర్ప|ఎలా చేయాలి|ఎలా వాడాలి").containsMatchIn(g)
 

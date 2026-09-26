@@ -78,6 +78,9 @@ class Guide(
     private var lastFrontPkg: String? = null
     /** Practice run ("Let me try"): Saathi names the step but waits; the glow comes only if they're stuck. */
     private var practice = false
+    /** Online form walk-through (forms.OnlineForm): one field at a time, in screen order. */
+    private var form: List<com.saathi.app.forms.FillPlan>? = null
+    private var formI = 0
     private var prevExternalPkg: String? = null
     /** Settings task: the person opens Settings themselves (trap #45: vivo switches Saathi off if Saathi opens it). */
     private var needSettings = false
@@ -192,6 +195,7 @@ class Guide(
         if (IntentRouter.isBriefing(goalText)) { briefing(); return }
         if (IntentRouter.isObjectHelp(goalText)) { begin(goalText, Skills.byId("learn_app")?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
         IntentRouter.cameraRead(goalText)?.let { id -> begin(goalText, Skills.byId(id)?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
+        if (IntentRouter.isFormHelp(goalText)) { formHelp(); return }
         IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         IntentRouter.phoneHowTo(svc, goalText)?.let { begin(goalText, it, autoMode); return }
         if (IntentRouter.isQuestion(svc, goalText)) { respond(goalText); return }
@@ -512,6 +516,7 @@ class Guide(
         // 2. Read; nothing changed → nothing to do.
         val screen = readScreen() ?: run { if (active) schedule(600, force = true); return }
         if (screen.pkg == svc.packageName) return
+        updateIme() // a keyboard opening doesn't change the app's tree, so check it before the "nothing changed" exit
         if (screen.signature == lastSig) return
         lastSig = screen.signature
         lang = Prefs.lang(svc)
@@ -532,9 +537,8 @@ class Guide(
         // An on-screen scam warning goes when that screen goes; message warnings stay until the person dismisses them.
         if (current?.warn == true && goal == null && current?.key?.startsWith("scam_") == true) clearVisuals()
 
-        // Keep the card clear of the keyboard.
-        // Keyboard + the box being typed in: the card must cover neither.
-        runCatching {
+        // (Keyboard handling moved to updateIme(), which runs on every tick.)
+        if (false) runCatching {
             val ime = svc.windows.firstOrNull { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
             val imeTop = ime?.let { w -> android.graphics.Rect().also { w.getBoundsInScreen(it) }.top }
             val focus = if (ime != null) svc.rootInActiveWindow?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
@@ -542,6 +546,14 @@ class Guide(
             overlay.setImeVisible(ime != null, imeTop, focus)
         }
 
+        // Online form walk-through: move on once the current box has something in it.
+        form?.let { plan ->
+            val cur = plan.getOrNull(formI) ?: return
+            val filled = com.saathi.app.forms.FormNodes.fields(svc.rootInActiveWindow).firstOrNull { it.first.box == cur.node.box }
+                ?.second?.let { n -> val t = n.text?.toString().orEmpty(); t.isNotBlank() && t != n.hintText?.toString() } == true
+            if (filled) { formI++; showFormStep() }
+            return
+        }
         // 4. No task → nothing more.
         val g = goal ?: return
         val f = flow
@@ -910,6 +922,7 @@ class Guide(
 
     /** The card's primary button / "do it" by voice. In auto mode it means "let me do it myself" (pause auto). */
     fun doItForMe() {
+        form?.let { plan -> fillFormField(plan); return }
         val t = current ?: return
         if (awaitingConfirm) { awaitingConfirm = false; approvedKey = t.key; performStep(t); return } // one-use approval
         if (auto) {
@@ -1073,7 +1086,7 @@ class Guide(
         goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
-        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false; needApp = null; learn = false
+        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false; needApp = null; learn = false; form = null
         delayedGlow?.cancel()
         Memory.clearTask()
         clearVisuals()
@@ -1321,6 +1334,65 @@ class Guide(
         "com.google.android.apps.photos" to "Google Photos", "com.google.android.apps.nbu.paisa.user" to "Google Pay", "com.phonepe.app" to "PhonePe")
 
     /** A question or chit-chat: answer out loud (the Clicky lesson), no screen navigation. */
+    /** Keyboard + the box being typed in: the card must cover neither. */
+    private fun updateIme() = runCatching {
+        val ime = svc.windows.firstOrNull { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+        val imeTop = ime?.let { w -> android.graphics.Rect().also { w.getBoundsInScreen(it) }.top }
+        val focus = if (ime != null) svc.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+            ?.let { n -> android.graphics.Rect().also { n.getBoundsInScreen(it) } } else null
+        overlay.setImeVisible(ime != null, imeTop, focus)
+    }
+
+    /** "Help me fill this form": a form on screen → guide it box by box; otherwise the paper-form camera. */
+    fun formHelp() {
+        lang = Prefs.lang(svc)
+        // The page's own boxes only: never a browser's address / search bar.
+        val fields = com.saathi.app.forms.FormNodes.fields(svc.rootInActiveWindow).filterNot { (f, n) ->
+            Regex("(?i)url_bar|omnibox|location_bar|search_box|search_src_text").containsMatchIn(n.viewIdResourceName ?: "") ||
+                Regex("(?i)connection is secure|search or type|search google|address bar|type url").containsMatchIn("${f.label} ${f.hint}")
+        }
+        if (fields.size < 2) { com.saathi.app.DebugLog.i("form", "paper form → camera"); com.saathi.app.ui.FormActivity.start(svc); return }
+        val plan = com.saathi.app.forms.OnlineForm.plan(fields.map { it.first }, com.saathi.app.forms.FormProfile.load(svc))
+        com.saathi.app.DebugLog.i("form", "online form: ${plan.size} boxes")
+        stop()
+        goal = "fill this form"; form = plan; formI = 0
+        taskPkgs += (svc.rootInActiveWindow?.packageName?.toString() ?: "")
+        speaker.say(say("I'll show you this form one box at a time. I never press Submit.", "मैं यह फ़ॉर्म एक-एक डिब्बा दिखाऊँगा। Submit मैं कभी नहीं दबाता।",
+            "ఈ ఫారం ఒక్కో బాక్స్ చూపిస్తాను. Submit నేను ఎప్పుడూ నొక్కను.").pick(lang), lang)
+        showFormStep()
+    }
+
+    private fun showFormStep() {
+        val plan = form ?: return
+        val p = plan.getOrNull(formI) ?: run {
+            form = null
+            finish(say("That's every box. Read it once more, then press Submit yourself.", "सारे डिब्बे हो गए। एक बार फिर पढ़िए, फिर Submit ख़ुद दबाइए।",
+                "అన్ని బాక్స్‌లు అయ్యాయి. ఒకసారి మళ్ళీ చదివి, Submit మీరే నొక్కండి.").pick(lang))
+            return
+        }
+        val b = p.node.box
+        val el = UiElement(-1, p.node.label ?: p.node.hint ?: "box", "input", android.graphics.Rect(b.l, b.t, b.r, b.b), true, p.node.password, false, false, null)
+        show(Target(el, p.say.pick(lang), "form_$formI", fill = p.value, noAct = p.sensitive || p.value == null, progress = (formI + 1) to plan.size))
+    }
+
+    /** "Do it" on a form box: type the saved value (never a secret; the policy checks it again), then the next box. */
+    private fun fillFormField(plan: List<com.saathi.app.forms.FillPlan>) {
+        val p = plan.getOrNull(formI) ?: return
+        if (p.sensitive || p.value == null) { speaker.say(say("Please type this one yourself.", "यह आप ख़ुद लिखिए।", "ఇది మీరే టైప్ చేయండి.").pick(lang), lang); return }
+        val pair = com.saathi.app.forms.FormNodes.fields(svc.rootInActiveWindow).firstOrNull { it.first.box == p.node.box } ?: return
+        val node = pair.second
+        val v = com.saathi.app.policy.ActionPolicy.check(com.saathi.app.policy.ActionRequest(com.saathi.app.policy.Kind.TYPE,
+            svc.rootInActiveWindow?.packageName?.toString() ?: "", p.node.label ?: p.node.hint, "input", node.isPassword, p.value, "",
+            com.saathi.app.policy.Mode.DO_IT_ONCE, prevExternalPkg))
+        if (v !is com.saathi.app.policy.Verdict.Allow) { speaker.say(say("Please type this one yourself.", "यह आप ख़ुद लिखिए।", "ఇది మీరే టైప్ చేయండి.").pick(lang), lang); return }
+        lastOwnAction = SystemClock.uptimeMillis()
+        node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, p.value) })
+        com.saathi.app.DebugLog.i("form", "filled box ${formI + 1} (${p.key})")
+        formI++
+        scope.launch { delay(450); showFormStep() }
+    }
+
     /**
      * "Video call my son": WhatsApp or a normal phone video call? Ask, unless they named WhatsApp, or WhatsApp isn't
      * installed / set up on this phone (then the phone's own video call). Saathi never presses Call itself.
@@ -1659,6 +1731,7 @@ class Guide(
         if (IntentRouter.isBriefing(g)) return "briefing"
         if (IntentRouter.isObjectHelp(g)) return "skill:learn_app"
         IntentRouter.cameraRead(g)?.let { return "skill:$it" }
+        if (IntentRouter.isFormHelp(g)) return "form"
         IntentRouter.settingsTask(g)?.let { return "skill:${it.id}" }
         IntentRouter.phoneHowTo(svc, g)?.let { return "skill:${it.id}" }
         if (IntentRouter.isQuestion(svc, g)) return "question"
