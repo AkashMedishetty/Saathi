@@ -48,6 +48,8 @@ class Guide(
 
     private companion object {
         val SPOKEN_YES = Regex("(?i)^\\W*(yes|yes please|yeah|yep|ok|okay|sure|please do|go ahead|haan|haan ji|han|ha|ji|हाँ|हां|हाँ जी|जी|जी हाँ|ठीक है|అవును|సరే|ఓకే|అలాగే)\\W*$")
+        val LOST_WORDS = Regex("(?i)\\b(where am i|i'?m lost|i am lost|i got lost|confused|what (is|'s) this (page|screen)|which (page|screen) is this|how do i get back)\\b|" +
+            "कहाँ हूँ|कहां हूं|खो गया|खो गई|समझ नहीं आ रहा|यह कौन सा पेज|ఎక్కడ ఉన్నాను|తప్పిపోయాను|అర్థం కావట్లేదు|ఇది ఏ పేజీ")
         val SPOKEN_NO = Regex("(?i)^\\W*(no|no thanks|not now|nahi|nahin|नहीं|नहीं जी|अभी नहीं|వద్దు|లేదు|ఇప్పుడు వద్దు)\\W*$")
         /** "my liked videos", "मेरी प्लेलिस्ट", "నా వీడియోలు": the person's own things inside an app, not a search. */
         val OWN_THINGS = Regex("(?i)\\b(my|mine)\\s+(own\\s+)?(liked|saved|downloaded|downloads|playlists?|library|history|watch later|uploads?|videos|account|profile|orders?|bookings?|trips?|rides?)\\b|" +
@@ -170,6 +172,8 @@ class Guide(
         }
         // While watching / listening: "pause", "next", "louder", "close this app" work any time, mid-task or not.
         if (mediaCommand(text)) return
+        // "Where am I?" / "I'm lost": the app and page, what we were doing, and the ways back. Any app, any time.
+        if (LOST_WORDS.containsMatchIn(text)) { whereAmI(); return }
         // A card is waiting for an answer ("Shall I open the Play Store?", "WhatsApp or Phone?"): a spoken reply answers
         // it (field: "yes" became a brand-new goal called "yes", so the question dead-ended).
         if (overlay.pickChoice(t)) return
@@ -695,11 +699,8 @@ class Guide(
                     val say = when (v) { is com.saathi.app.policy.LoopVerdict.Repeating -> v.say; is com.saathi.app.policy.LoopVerdict.OutOfSteps -> v.say; else -> null }!!
                     com.saathi.app.DebugLog.i("loop", "${v::class.simpleName} in ${screen.pkg}")
                     loop = null; stopAuto()
-                    val t = say.pick(lang)
-                    current = Target(null, t, "loop"); lastSpokenKey = current?.key
-                    overlay.highlight(null, false)
-                    overlay.showCard(t, Overlay.Mode.LOST)
-                    speaker.say(t, lang)
+                    // Going round in circles: say where they are and offer the ways back (not just "ask family").
+                    whereAmI(lead = say.pick(lang) + " ")
                     return
                 }
                 else -> {}
@@ -1448,6 +1449,90 @@ class Guide(
     }
 
     // ───────────────────────── field-test fixes ─────────────────────────
+
+    /** A page the app maps know, in plain words ("the search results page"), from its screen id's last part. */
+    private fun knownPage(pkg: String, root: AccessibilityNodeInfo?): Say? {
+        val id = runCatching { com.saathi.app.maps.AppMaps.screenOf(pkg, MapBridge.read(root).nodes) }.getOrNull() ?: return null
+        val w = id.substringAfter('_')
+        return when {
+            w == "home" || w.startsWith("home") || w == "grid" || w == "list" -> say("the main page", "मुख्य पेज", "ప్రధాన పేజీ")
+            w.startsWith("results") -> say("the search results page", "खोज के नतीजों वाला पेज", "వెతికిన ఫలితాల పేజీ")
+            w.startsWith("search") || w == "typing" -> say("the search page", "खोज वाला पेज", "వెతికే పేజీ")
+            w == "watch" || w == "now_playing" || w == "viewer" -> say("the page that's playing it", "चलने वाला पेज", "ప్లే అవుతున్న పేజీ")
+            w == "playlist" -> say("a playlist page", "एक प्लेलिस्ट पेज", "ఒక ప్లేలిస్ట్ పేజీ")
+            w.startsWith("chat") || w == "thread" -> say("a chat", "एक चैट", "ఒక చాట్")
+            w == "subs" -> say("the subscriptions page", "सब्सक्रिप्शन पेज", "సబ్‌స్క్రిప్షన్ల పేజీ")
+            w == "history" -> say("the history page", "हिस्ट्री पेज", "హిస్టరీ పేజీ")
+            w.startsWith("settings") || w == "page" -> say("a settings page", "एक सेटिंग पेज", "ఒక సెట్టింగ్ పేజీ")
+            w == "details" -> say("the app's page in the store", "स्टोर में ऐप का पेज", "స్టోర్‌లో యాప్ పేజీ")
+            w == "editor" || w == "crop" -> say("the editing page", "एडिट करने वाला पेज", "ఎడిట్ చేసే పేజీ")
+            else -> null
+        }
+    }
+
+    /** The page's name: the biggest short text near the top that isn't the app's own name (toolbar titles). */
+    private fun pageTitle(screen: Screen, app: String): String? {
+        val h = android.content.res.Resources.getSystem().displayMetrics.heightPixels
+        return screen.elements.filter { e ->
+            e.bounds.top in 1..(h * 0.22f).toInt() && e.bounds.height() >= 40 && e.title.length in 2..40 &&
+                !e.title.equals(app, true) && e.role != "input" &&
+                // Never a view id turned into words ("scrollable list"): only what's written on screen.
+                e.node?.viewIdResourceName?.substringAfter('/')?.replace('_', ' ')?.equals(e.title, true) != true &&
+                !Regex("(?i)^(back|navigate up|more|more options|search|menu|close|\\d{1,2}:\\d{2}.*)$").matches(e.title)
+        }.maxByOrNull { it.bounds.height() * 10 - it.bounds.top / 100 }?.title
+    }
+
+    /**
+     * "Where am I?" / "I'm lost" (or Saathi sees them going round in circles): the app and the page, what we were
+     * doing and its next step, and one tap back: Continue / Back during a task, Back / Start of the app otherwise.
+     */
+    fun whereAmI(lead: String = "") {
+        lang = Prefs.lang(svc)
+        val root = appRoot()
+        val screen = root?.let { ScreenReader.read(it) }
+        val pkg = screen?.pkg.orEmpty()
+        if (screen == null || pkg.isBlank() || pkg == launcherPkg()) {
+            finish(lead + say("You're on the home screen, where all your apps are. Tell me what you'd like to do.",
+                "आप होम स्क्रीन पर हैं, जहाँ सारे ऐप हैं। बताइए क्या करना है।", "మీరు హోమ్ స్క్రీన్‌లో ఉన్నారు, అన్ని యాప్‌లు ఇక్కడే. ఏం చేయాలో చెప్పండి.").pick(lang))
+            return
+        }
+        val app = AppLauncher.labelOf(svc, pkg)
+        val known = knownPage(pkg, root)?.pick(lang)
+        val title = if (known == null) pageTitle(screen, app) else null
+        val here = (when {
+            known != null -> say("You're in $app, on $known.", "आप $app में हैं, $known पर।", "మీరు $app లో, $known లో ఉన్నారు.")
+            title != null -> say("You're in $app, on the “$title” page.", "आप $app में हैं, “$title” पेज पर।", "మీరు $app లో, “$title” పేజీలో ఉన్నారు.")
+            else -> say("You're in $app.", "आप $app में हैं।", "మీరు $app లో ఉన్నారు.")
+        }).pick(lang)
+        val g = goal
+        val step = current?.takeIf { g != null && it.el != null }?.text
+        val doing = if (g != null) say(" We were doing “${g.take(50)}”.", " हम “${g.take(50)}” कर रहे थे।", " మనం “${g.take(50)}” చేస్తున్నాం.").pick(lang) +
+            (step?.let { " " + say("Next: ", "अगला: ", "తర్వాత: ").pick(lang) + it } ?: "") else ""
+        val text = lead + here + doing
+        com.saathi.app.DebugLog.i("where", "$pkg page=${known ?: "\"$title\""} goal=${g != null}")
+        if (g != null) { setAside = true; autoJob?.cancel() }
+        hideJob?.cancel()
+        current = Target(null, text, "where_$pkg"); lastSpokenKey = current?.key
+        overlay.highlight(null, false)
+        val back = Triple(say("Go back", "पीछे जाएँ", "వెనక్కి").pick(lang), com.saathi.app.R.drawable.ic_arrow_back, {
+            svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+            if (goal != null) { setAside = false; lastSpokenKey = null; lastSig = 0; replan = true; schedule(700, force = true) } else overlay.hideCard()
+        })
+        // Wandered into another app (an ad opened the Play Store…): the first button takes them back to the task's app.
+        val taskApp = (mapRoute?.pkg ?: flow?.appPkg ?: taskPkgs.firstOrNull())?.takeIf { it != pkg && AppLauncher.isInstalled(svc, it) }
+        val cont = if (taskApp != null) {
+            val name = AppLauncher.labelOf(svc, taskApp)
+            name.take(12)   // the button is just the app's name (with the play icon): "Back to YouTube" didn't fit
+        } else say("Continue", "जारी रखें", "కొనసాగించు").pick(lang)
+        if (g != null) overlay.showChoice(text, Triple(cont, com.saathi.app.R.drawable.ic_play_circle, {
+            taskApp?.let { AppLauncher.launch(svc, it)?.let { i -> runCatching { svc.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }
+            setAside = false; lastSpokenKey = null; lastSig = 0; replan = true; schedule(if (taskApp != null) 900 else 0, force = true) }), back)
+        else overlay.showChoice(text, back, Triple(say("App start", "शुरू से", "మొదటి నుంచి").pick(lang), com.saathi.app.R.drawable.ic_home, {
+            overlay.hideCard()
+            AppLauncher.launch(svc, pkg)?.let { i -> runCatching { svc.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) } }
+        }))
+        speaker.say(text, lang)
+    }
 
     /** Nothing sensible to tap here: say so and offer the ways out, instead of wandering. */
     private fun unsure(fp: Int) {
