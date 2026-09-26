@@ -216,3 +216,41 @@ object InstagramMap {
         ),
     )
 }
+
+/**
+ * Camera (vivo com.android.camera; Google com.google.android.GoogleCamera). NO dump: shutter / switch labels as the
+ * existing camera skill uses them. Unverified.
+ */
+object CameraMap {
+    const val PKG = "com.android.camera"
+
+    private val SHUTTER = lbl("^(Shutter|Take photo|Take picture|Capture|Shutter button|Take a photo|Photo)$", clickable = true)
+    private val SWITCH = lbl("^(Switch to front camera|Switch camera|Flip camera|Front camera)$", clickable = true)
+
+    val map = AppMap(
+        pkg = PKG, name = "Camera", alsoPkgs = listOf("com.google.android.GoogleCamera", "com.vivo.camera"),
+        screens = listOf(
+            ScreenDef("cam_viewfinder", listOf(SHUTTER)),
+            // After switching, the button offers the way back: the front camera is on.
+            ScreenDef("cam_front", listOf(SHUTTER, lbl("^Switch to (rear|back) camera$", clickable = true))),
+        ),
+        routes = listOf(
+            Route(id = "camera_photo", pkg = PKG, goals = goals("take a (photo|picture|pic)", "(फोटो|फ़ोटो|तस्वीर) (खींचो|लो)", "ఫోటో తీయి"),
+                avoid = listOf(rx("selfie|सेल्फी|సెల్ఫీ|send|share|भेज|పంపు")),
+                slots = emptyList(),
+                steps = listOf(MapStep("cam_viewfinder", listOf(SHUTTER), say("Hold the phone still. Tap the big round button.", "फ़ोन स्थिर रखिए। बड़ा गोल बटन दबाइए।",
+                    "ఫోన్ కదలకుండా పట్టుకోండి. పెద్ద గుండ్రటి బటన్ నొక్కండి."))),
+                done = emptyList(),
+                doneSay = say("Photo taken. It's in your Photos.", "फोटो खिंच गई। यह Photos में है।", "ఫోటో తీశారు. ఇది Photos లో ఉంది.")),
+            Route(id = "camera_selfie", pkg = PKG, goals = goals("selfie", "(photo|picture) of (me|myself)", "सेल्फी", "సెల్ఫీ"),
+                slots = emptyList(),
+                steps = listOf(
+                    MapStep("cam_viewfinder", listOf(SWITCH), say("Tap the turning arrows to see yourself.", "ख़ुद को देखने के लिए घूमते तीर दबाइए।",
+                        "మిమ్మల్ని మీరు చూడటానికి తిరిగే బాణాలు నొక్కండి.")),
+                    MapStep("cam_front", listOf(SHUTTER), say("Smile! Tap the big round button.", "मुस्कुराइए! बड़ा गोल बटन दबाइए।", "నవ్వండి! పెద్ద గుండ్రటి బటన్ నొక్కండి.")),
+                ),
+                done = emptyList(),
+                doneSay = say("Nice selfie!", "बढ़िया सेल्फी!", "చక్కని సెల్ఫీ!")),
+        ),
+    )
+}
