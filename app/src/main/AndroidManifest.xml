@@ -71,6 +71,16 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
+        <!-- Form helper: paper-form camera walk-through, and "My details" (opens behind the screen lock). -->
+        <activity
+            android:name=".ui.FormActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".ui.ProfileActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <activity android:name=".ui.SchoolActivity" android:exported="false" />
         <activity android:name=".ui.SosActivity" android:exported="false" android:showWhenLocked="true" />
 
