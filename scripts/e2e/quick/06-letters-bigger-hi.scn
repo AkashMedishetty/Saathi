@@ -1,0 +1,7 @@
+name: Quick: Settings bigger letters HI
+start-activity android.settings.SETTINGS
+expect focus "com.android.settings" within 5
+say HI अक्षर बड़े करो
+expect show key=(open_search|type|result|display|font|slider|map_settings_font_[012]) within 10
+screenshot font-guide
+expect enabled

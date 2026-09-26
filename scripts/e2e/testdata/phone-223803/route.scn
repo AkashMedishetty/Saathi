@@ -1,0 +1,4 @@
+name: Actual phone trace proves goal delivery and map routing only
+expect log "\[goal\].*search for old telugu songs on youtube" within 1
+expect log "\[map\] route yt_search" within 1
+expect enabled

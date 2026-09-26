@@ -1,0 +1,6 @@
+name: Own liked videos route without search
+# Demo fix 7. Checks own-library routing rather than an unrelated search results screen.
+say EN show my liked videos on youtube
+expect log "\[route\] own things" within 12
+expect not log "\[map\] route yt_search" for 3
+expect enabled

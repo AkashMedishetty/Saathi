@@ -1,0 +1,4 @@
+name: Quick: Learn Spotify entry
+say EN teach me how to use Spotify
+expect show key=(open_app|find_app) within 10
+expect enabled

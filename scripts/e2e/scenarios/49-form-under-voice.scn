@@ -1,0 +1,9 @@
+name: Form helper reads Chrome underneath voice sheet
+# Demo fix 8. Network needed. Requires a nonempty field-count log from integration; this is not proof of layout or correct field contents.
+open-url https://httpbin.org/forms/post
+expect focus "com.android.chrome" within 12
+say EN help me fill this form
+expect log "\[form\] online form: [1-9][0-9]* boxes" within 15
+expect focus "com.android.chrome" within 5
+screenshot form-fields
+expect enabled

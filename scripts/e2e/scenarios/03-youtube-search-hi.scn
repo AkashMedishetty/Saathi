@@ -2,13 +2,13 @@ name: YouTube search and playback (HI)
 apps: com.google.android.youtube
 # A7/B10/B11. Checks the suggestion (go) path; no arbitrary first-video coordinates.
 say HI यूट्यूब पर पुराने तेलुगु गाने खोजो
-expect show key=search within 15
+expect show key=(search|map_yt_search_[01]) within 15
 tap-glow
-expect show key=type within 10
+expect show key=(type|map_yt_search_2) within 10
 doit
-expect show key=go within 12
+expect show key=(go|map_yt_search_3) within 12
 tap-glow
-expect show key=pick within 15
+expect show key=(pick|map_yt_search_4) within 15
 tap-glow
 expect log "\[finish\]|\[show\] key=ad_" within 20
 expect enabled

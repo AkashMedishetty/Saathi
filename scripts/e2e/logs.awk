@@ -10,7 +10,7 @@ function stamp(line, a,n,h,base) {
  return -1
 }
 {
- sub(/\r$/, ""); line=$0
+ sub(/\r$/, ""); line=$0; sub(/^[ \t]+/, "", line)
  if (line !~ /(SaathiLog|E2E)[ \t]*:/) next
  t=stamp(line)
  if (t<0) { print "missing timestamp on relevant log line " NR > "/dev/stderr"; bad=1; next }

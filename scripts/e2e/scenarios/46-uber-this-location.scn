@@ -1,0 +1,7 @@
+name: Cab request stays on current screen
+# Demo fix 6. Routing-only assertion. Actual cab planning requires a logged-in chat with a shared location; no booking is made.
+say EN open WhatsApp
+expect focus "com.whatsapp" within 12
+say EN book an uber to this location
+expect log "\[route\] about this screen" within 12
+expect enabled

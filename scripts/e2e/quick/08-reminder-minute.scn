@@ -1,0 +1,5 @@
+name: Quick: One-minute reminder fires
+say EN remind me in 1 minute to stretch gently
+expect log "\[reminder\] set" within 5
+expect log "\[routine\] due .*stretch gently" within 75
+expect enabled
