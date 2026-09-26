@@ -1,0 +1,9 @@
+name: Mid-task question preserves task
+# Demo fix 3. Spoken yes should resume the prior glow; no new request resets the task.
+say EN search for old telugu songs on youtube
+expect show key=(search|map_yt_search_[01]) within 15
+say EN what is this button?
+expect log "\[aside\] mid-task question" within 12
+say EN yes
+expect show key=(search|map_yt_search_[01]) within 15
+expect enabled

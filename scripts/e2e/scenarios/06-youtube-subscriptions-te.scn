@@ -2,7 +2,7 @@ name: YouTube subscriptions (TE)
 apps: com.google.android.youtube
 # A8/B1. Requires an authenticated YouTube profile.
 say TE నా యూట్యూబ్ సబ్‌స్క్రిప్షన్లు తెరువు
-expect show key=(subscriptions|subs) within 15
+expect show key=(subscriptions|subs|map_yt_subscriptions_0) within 15
 tap-glow
 expect log "\[finish\]" within 15
 expect enabled

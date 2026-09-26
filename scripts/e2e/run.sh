@@ -4,13 +4,17 @@ set -u
 set -o pipefail
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT=$(CDPATH= cd -- "$DIR/../.." && pwd)
-DRY= OUTPUT= SCENARIOS="$DIR/scenarios" PATTERN='*' PHONE_CHOICE=
+DRY= OUTPUT= SCENARIOS="$DIR/scenarios" PATTERN='*' PHONE_CHOICE= QUICK=0 LIST=0
+SUITE_START=$SECONDS
+. "$DIR/command.sh"
 usage() {
   cat <<'HELP'
-Usage: scripts/e2e/run.sh [pattern] [--dry-run LOGFILE] [--output DIR]
+Usage: scripts/e2e/run.sh [--quick] [pattern] [--dry-run LOGFILE] [--output DIR]
        [--scenarios DIR] [--phone-choice X,Y]
 Pattern is a shell glob matched against scenario filenames/stems, not a regex.
 --dry-run never invokes adb or sources device environment scripts.
+--quick selects eight demos; execution stops at 210s, transport/evidence by 235s.
+--list validates and prints selected names without device access.
 Replay logs need timestamped E2E: enabled=0|1, focus=..., end annotations for those checks.
 --phone-choice is an operator-calibrated centre of the SECOND choice button, from a current screenshot.
 Only Claude/Akash run live mode. Recovery, if needed: scripts/enable-service.sh (not automatic).
@@ -22,11 +26,14 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || { usage >&2; exit 2; }
       case "$1" in --dry-run) DRY=$2;; --output) OUTPUT=$2;; --scenarios) SCENARIOS=$2;; --phone-choice) PHONE_CHOICE=$2;; esac
       shift 2;;
+    --list) LIST=1; shift;;
+    --quick) QUICK=1; shift;;
     --help|-h) usage; exit 0;;
     --*) printf 'Unknown option: %s\n' "$1" >&2; exit 2;;
     *) PATTERN=$1; shift;;
   esac
 done
+[ "$QUICK" -eq 0 ] || SCENARIOS="$DIR/quick"
 [ -d "$SCENARIOS" ] || { echo 'Scenario directory is missing' >&2; exit 2; }
 if [ -n "$PHONE_CHOICE" ] && ! printf '%s\n' "$PHONE_CHOICE" | grep -Eq '^[0-9]{1,5},[0-9]{1,5}$'; then
   echo 'Phone choice must be X,Y from a current screenshot' >&2; exit 2
@@ -66,6 +73,7 @@ for file in "$SCENARIOS"/*.scn; do
   SELECTED+=("$base")
 done
 [ "${#SELECTED[@]}" -gt 0 ] || { echo 'No matching scenarios' >&2; exit 2; }
+if [ "$LIST" -eq 1 ]; then printf '%s\n' "${SELECTED[@]}"; exit 0; fi
 if [ -n "$DRY" ]; then
   awk -f "$DIR/logs.awk" "$DRY" > "$OUTPUT/replay.tsv" || exit 2
 else
@@ -73,25 +81,20 @@ else
   . "$ROOT/scripts/env.sh"
   command -v adb >/dev/null || { echo 'adb unavailable' >&2; exit 2; }
 fi
-DEVICE_PID= WATCH_PID=
-cleanup() {
-  [ -z "$DEVICE_PID" ] || kill "$DEVICE_PID" 2>/dev/null || :
-  [ -z "$WATCH_PID" ] || kill "$WATCH_PID" 2>/dev/null || :
-}
-trap 'cleanup; exit 130' INT TERM
-trap cleanup EXIT
-# Every device command is bounded. stdout remains available to the caller; errors are retained.
+# Cleanup does not navigate or reset apps; navigation occurs only after each case is audited.
+trap 'exit 130' INT TERM
+# The bounded helper isolates wait status from watchdog status and closes stdin to adb.
 device() {
+  local limit status
   [ -z "$DRY" ] || { echo 'Internal error: device call in dry-run' >&2; return 99; }
-  adb "$@" > "$OUTPUT/command.out" 2> "$OUTPUT/command.err" & DEVICE_PID=$!
-  ( sleep 20; kill "$DEVICE_PID" 2>/dev/null ) & WATCH_PID=$!
-  wait "$DEVICE_PID"; rc=$?
-  kill "$WATCH_PID" 2>/dev/null || :; wait "$WATCH_PID" 2>/dev/null || :
-  DEVICE_PID= WATCH_PID=
-  cat "$OUTPUT/command.out"
-  if [ "$rc" -ne 0 ]; then cat "$OUTPUT/command.err" >&2; fi
-  return "$rc"
+  limit=20
+  if [ "$QUICK" -eq 1 ]; then
+    limit=$(quick_command_limit "$((SECONDS - SUITE_START))") || { echo 'Quick suite deadline reached' >&2; return 124; }
+  fi
+  if bounded_command "$limit" "$OUTPUT/command.out" "$OUTPUT/command.err" adb "$@"; then status=0; else status=$?; fi
+  return "$status"
 }
+quick_expired() { [ "$QUICK" -eq 1 ] && [ -z "$DRY" ] && [ $((SECONDS - SUITE_START)) -ge 210 ]; }
 quote_goal() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 broadcast() { device shell am broadcast -a com.saathi.GOAL -p com.saathi.app "$@" >/dev/null; }
 now() { if [ -n "$DRY" ]; then printf '%s\n' "$NOW"; else echo $(( ($(date +%s) - START) * 1000 )); fi; }
@@ -103,11 +106,12 @@ refresh() {
   { printf '%s.000 I E2E: end\n' "$START"; cat "$CASE/logcat.log"; } | awk -f "$DIR/logs.awk" | awk -F '\t' '$2=="log"' > "$CASE/logs.tsv"
 }
 health_enabled() {
+  HEALTH_REASON=
   if [ -n "$DRY" ]; then
     value=$(awk -F '\t' -v t="$NOW" '$2=="enabled" && $1<=t {v=$3} END {print v}' "$CASE/events.tsv")
     [ "$value" = 1 ]
   else
-    services=$(device shell settings get secure enabled_accessibility_services) || return 1
+    services=$(device shell settings get secure enabled_accessibility_services) || { HEALTH_REASON='Could not query Saathi enabled state'; return 2; }
     if printf '%s\n' "$services" | tr ':\r' '\n\n' | grep -Eq '^com\.saathi\.app/(com\.saathi\.app\.service\.SaathiService|\.service\.SaathiService)$'; then meta 'enabled=1'; return 0; fi
     meta 'enabled=0'; return 1
   fi
@@ -117,7 +121,7 @@ mark_action() {
   if [ -n "$DRY" ]; then
     CURSOR=$(awk -F '\t' -v t="$NOW" '$1<=t {n=NR} END {print n+0}' "$CASE/logs.tsv")
   else CURSOR=$(wc -l < "$CASE/logs.tsv" | tr -d ' '); fi
-  LAST_SHOW=
+  LAST_SHOW= LAST_CHOICE=
 }
 advance() { # dry-run time cannot extend beyond recorded observation
   target=$1
@@ -129,6 +133,7 @@ advance() { # dry-run time cannot extend beyond recorded observation
 check_log() {
   expr=$1; duration=$2; negative=$3; deadline=$(( $(now) + duration * 1000 ))
   while :; do
+    quick_expired && { REASON='Quick suite execution budget exhausted'; return 1; }
     refresh || { REASON='Could not read logcat'; return 1; }
     horizon=$(now); [ -z "$DRY" ] || horizon=$deadline
     [ "$horizon" -le "$deadline" ] || horizon=$deadline
@@ -137,6 +142,8 @@ check_log() {
       line=$(printf '%s\n' "$hit" | cut -f1); when=$(printf '%s\n' "$hit" | cut -f2)
       if [ "$negative" = yes ]; then REASON="Forbidden log matched: $expr"; [ -z "$DRY" ] || NOW=$when; return 1; fi
       CURSOR=$line; [ -z "$DRY" ] || NOW=$when
+      LAST_CHOICE=$(printf '%s\n' "$hit" | cut -f4-)
+      case "$LAST_CHOICE" in '[choice] choose_video:'*) :;; *) LAST_CHOICE=;; esac
       LAST_SHOW=$(printf '%s\n' "$hit" | cut -f4-)
       case "$LAST_SHOW" in '[show]'*) :;; *) LAST_SHOW=;; esac
       return 0
@@ -163,6 +170,7 @@ check_focus() {
     REASON="No focus evidence matching: $expr"; return 1
   fi
   while :; do
+    quick_expired && { REASON='Quick suite execution budget exhausted'; return 1; }
     focus=$(device shell dumpsys window | grep 'mCurrentFocus' | head -1) || { REASON='Could not read focus'; return 1; }
     meta "focus=$focus"
     if [ "$(now)" -le "$deadline" ] && printf '%s\n' "$focus" | grep -Eq -e "$expr"; then return 0; fi
@@ -184,12 +192,17 @@ fresh_target() {
 manual_safe() {
   [ -n "$LAST_SHOW" ] || { REASON='No fresh show target; refusing stale tap'; return 1; }
   fresh_target || return 1
-  if printf '%s\n' "$LAST_SHOW" | grep -Eiq 'key=(send|pay|call|video|install|uninstall|delete|buy|book|submit|grant|allow)( |$)|el="(send|pay|call|dial|install|uninstall|delete|buy|submit|allow|भेज|भुगतान|कॉल|इंस्टॉल|పంపు|కాల్|ఇన్‌స్టాల్)|noAct=true'; then
-    REASON='Refusing a consequential or noAct target'; return 1
+  if printf '%s\n' "$LAST_SHOW" | grep -Eiq 'key=(.*_)?(send|pay|call|video|install|uninstall|delete|buy|book|submit|grant|allow)( |$)|el="(send|pay|call|dial|install|uninstall|delete|buy|submit|allow|भेज|भुगतान|कॉल|इंस्टॉल|పంపు|కాల్|ఇన్‌స్టాల్)'; then
+    REASON='Refusing a consequential target'; return 1
+  fi
+  if printf '%s\n' "$LAST_SHOW" | grep -q 'noAct=true'; then
+    if [ "${1:-}" != human ] || ! printf '%s\n' "$LAST_SHOW" | grep -Eq 'key=(.*open_search|.*search|.*result|map_settings_(ringtone|font)_[02]) .*pkg=com.android.settings'; then
+      REASON='Refusing a noAct target'; return 1
+    fi
   fi
 }
 tap_glow() {
-  manual_safe || return 1
+  manual_safe human || return 1
   coords=$(printf '%s\n' "$LAST_SHOW" | sed -n 's/.*bounds=\[\([0-9][0-9]*\),\([0-9][0-9]*\)\]\[\([0-9][0-9]*\),\([0-9][0-9]*\)\].*/\1 \2 \3 \4/p')
   [ -n "$coords" ] || { REASON='Missing or malformed glow bounds'; return 1; }
   set -- $coords
@@ -220,11 +233,18 @@ run_step() {
       [ -n "$DRY" ] || broadcast --es lang "$language" --es goal "$(quote_goal "$text")";;
     eval) mark_action || return 1; [ -n "$DRY" ] || broadcast --es cmd eval --es goal "$(quote_goal "$arg")";;
     home|back) mark_action || return 1; [ -n "$DRY" ] || device shell input keyevent "KEYCODE_$(printf '%s' "$op" | tr 'a-z' 'A-Z')" >/dev/null;;
+    open-url) mark_action || return 1; [ -n "$DRY" ] || device shell am start -a android.intent.action.VIEW -d "$arg" -p com.android.chrome >/dev/null;;
     start-activity) mark_action || return 1; [ -n "$DRY" ] || device shell am start -a "$arg" >/dev/null;;
     tap-choice)
       [ -n "$PHONE_CHOICE" ] || { REASON='Phone choice needs --phone-choice X,Y calibrated from screenshot'; return 1; }
-      case "$LAST_SHOW" in '[show] key=choose_video '*) :;; *) REASON='No fresh choose_video card'; return 1;; esac
-      fresh_target || return 1
+      if [ -n "$LAST_CHOICE" ]; then
+        refresh || return 1
+        latest_choice=$(awk -F '\t' -v t="${NOW:-0}" -v dry="$DRY" '(dry=="" || $1<=t) && $3 ~ /^\[(choice|show)\]/ {v=$3} END {print v}' "$CASE/logs.tsv")
+        [ "$latest_choice" = "$LAST_CHOICE" ] || { REASON='Choice card changed'; return 1; }
+      else
+        case "$LAST_SHOW" in '[show] key=choose_video '*) :;; *) REASON='No fresh choose_video card'; return 1;; esac
+        fresh_target || return 1
+      fi
       printf 'tap-choice phone %s\n' "$PHONE_CHOICE" >> "$CASE/actions.txt"
       screenshot phone-choice-before || return 1
       mark_action || return 1
@@ -235,32 +255,39 @@ run_step() {
 printf '# E2E %s\n\n| Result | Scenario | Seconds | Reason |\n| --- | --- | ---: | --- |\n' "${DRY:+saved-log replay}" > "$OUTPUT/summary.md"
 PASS=0; FAIL=0
 for base in "${SELECTED[@]}"; do
+  if quick_expired; then
+    mkdir -p "$OUTPUT/$base"
+    printf 'status=❌\nfailing_step=not run\nreason=Quick suite execution budget exhausted\n' > "$OUTPUT/$base/result.txt"
+    printf '| ❌ | %s | 0 | Not run: quick suite execution budget exhausted |\n' "$base" >> "$OUTPUT/summary.md"
+    FAIL=$((FAIL+1)); continue
+  fi
   CASE="$OUTPUT/$base"; mkdir -p "$CASE"; : > "$CASE/meta.log"; : > "$CASE/actions.txt"
-  REASON= CURSOR=0 NOW=0 LAST_SHOW=; START=$(date +%s); failed=0; step=reset
+  REASON= CURSOR=0 NOW=0 LAST_SHOW= LAST_CHOICE=; START=$(date +%s); failed=0; step=reset
   if [ -n "$DRY" ]; then
     cp "$OUTPUT/replay.tsv" "$CASE/events.tsv"
     awk -F '\t' '$2=="log"' "$CASE/events.tsv" > "$CASE/logs.tsv"
     END_MS=$(awk -F '\t' 'BEGIN {m=0} $1>m {m=$1} END {print m}' "$CASE/events.tsv")
   else
-    health_enabled || { REASON='Saathi switched off before reset'; failed=1; }
+    health_enabled || { REASON='Saathi switched off before scenario'; failed=1; }
     if [ "$failed" -eq 0 ]; then
-      broadcast --es cmd stop && device shell input keyevent KEYCODE_HOME >/dev/null || { REASON='Reset failed'; failed=1; }
-      apps=$(awk -F '\t' '$2=="apps" {print $3}' "$PLAN/$base.tsv")
-      for app in $apps; do device shell am force-stop "$app" >/dev/null || { REASON='App reset failed'; failed=1; }; done
       device logcat -c || { REASON='Log reset failed'; failed=1; }
-      START=$(date +%s); : > "$CASE/meta.log"; health_enabled || { REASON='Saathi switched off during reset'; failed=1; }
+      START=$(date +%s); : > "$CASE/meta.log"
+      health_enabled || { REASON='Saathi switched off before scenario'; failed=1; }
     fi
   fi
   if [ "$failed" -eq 0 ]; then
     while IFS="$(printf '\t')" read -r ln op arg sec; do
       step="$ln: $op $arg"
+      quick_expired && { REASON='Quick suite execution budget exhausted'; failed=1; break; }
+      printf '%s\t%s\n' "$(now)" "$step" >> "$CASE/steps.log"
       if ! run_step "$op" "$arg" "${sec:-0}"; then
         [ -n "$REASON" ] || REASON="Command failed: $op"
         failed=1; break
       fi
+      printf '%s\tPASS %s\n' "$(now)" "$step" >> "$CASE/steps.log"
     done < "$PLAN/$base.tsv"
   fi
-  refresh || { REASON='Final log capture failed'; failed=1; }
+  refresh || { [ "$failed" -ne 0 ] || { REASON='Final log capture failed'; failed=1; step='final capture'; }; }
   if grep -Eiq '\[(crash|fatal)\]|FATAL EXCEPTION' "$CASE/logs.tsv"; then REASON='Crash in scenario log'; failed=1; step='post-scenario log audit'; fi
   if grep -Eq '\[service\] destroyed' "$CASE/logs.tsv"; then REASON='Saathi switched off: service destroyed'; failed=1; step='post-scenario health'; fi
   if [ -n "$DRY" ]; then
@@ -268,12 +295,25 @@ for base in "${SELECTED[@]}"; do
     set -- $last_enabled
     if [ "$#" -ne 2 ] || [ "$2" != 1 ] || [ "$1" -lt "$NOW" ]; then REASON='Saathi switched off (or missing final enabled evidence)'; failed=1; step='post-scenario health'; fi
   else
-    health_enabled || { REASON='Saathi switched off'; failed=1; step='post-scenario health'; }
+    health_enabled || { REASON=${HEALTH_REASON:-'Saathi switched off'}; failed=1; step='post-scenario health'; }
     screenshot final || { REASON='Screenshot capture failed'; failed=1; }
     meta end
     cat "$CASE/logcat.log" "$CASE/meta.log" | LC_ALL=C sort -s -n -k1,1 > "$CASE/replay.log"
   fi
   [ -z "$DRY" ] || screenshot final
+  # No HOME/force-stop occurs until checks + final evidence above have finished.
+  if [ -z "$DRY" ] && ! quick_expired; then
+    printf '%s\tcleanup after checks\n' "$(now)" >> "$CASE/steps.log"
+    if ! broadcast --es cmd stop || ! device shell input keyevent KEYCODE_HOME >/dev/null; then
+      [ "$failed" -ne 0 ] || { REASON='Post-scenario cleanup failed'; failed=1; step=cleanup; }
+    fi
+    apps=$(awk -F '\t' '$2=="apps" {print $3}' "$PLAN/$base.tsv")
+    for app in $apps; do
+      if ! device shell am force-stop "$app" >/dev/null; then
+        [ "$failed" -ne 0 ] || { REASON='Post-scenario app cleanup failed'; failed=1; step=cleanup; }
+      fi
+    done
+  fi
   tail -15 "$CASE/logs.tsv" > "$CASE/last15.log"
   elapsed=$(( $(now) / 1000 ))
   if [ "$failed" -eq 0 ]; then status='✅'; PASS=$((PASS+1)); REASON=PASS; step=none

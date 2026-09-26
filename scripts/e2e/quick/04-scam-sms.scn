@@ -1,0 +1,4 @@
+name: Quick: SMS scam warning
+cmd scam_sms
+expect log "\[alert\] shield kyc CAUTION" within 5
+expect enabled

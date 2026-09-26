@@ -1,0 +1,8 @@
+name: Spoken recording and save commands
+# Demo fix 4. Exercises recording/save command routing, not replay quality. If no captured steps means no save, this correctly fails; do not invent a saved trace.
+say EN watch me: open my YouTube subscriptions
+expect log "\[teach\] recording" within 12
+wait 2
+say EN done teaching
+expect log "\[teach\] saved" within 12
+expect enabled

@@ -1,0 +1,6 @@
+name: Screenshot continues to photo sharing
+# Demo fix 5. Creates a real screenshot on an operator-run phone. Stops before Send.
+say EN take a screenshot and send it to Akash on WhatsApp
+expect log "\[goal\].*send this photo" within 20
+expect show key=.*(attach|gallery|photo|search|wall_.*) within 20
+expect enabled

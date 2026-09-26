@@ -15,6 +15,7 @@ function quoted(s) { return s ~ /^".*"$/ }
  if (s ~ /^(tap-glow|doit|back|home)$/) { emit(s,"-",""); next }
  if (s == "tap-choice phone") { emit("tap-choice","phone",""); next }
  if (s ~ /^wait /) { n=substr(s,6); if (!seconds(n)) error("wait requires integer seconds 0..300"); else emit("wait","-",n); next }
+ if (s == "open-url https://httpbin.org/forms/post") { emit("open-url","https://httpbin.org/forms/post",""); next }
  if (s == "start-activity android.settings.SETTINGS") { emit("start-activity","android.settings.SETTINGS",""); next }
  if (s ~ /^screenshot [A-Za-z0-9][A-Za-z0-9_-]*$/) { emit("screenshot",substr(s,12),""); next }
  if (s == "expect enabled") { emit("enabled","-",""); next }

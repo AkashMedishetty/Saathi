@@ -1,0 +1,5 @@
+name: Quick: Video-call choice
+say EN video call my son
+expect log "\[choice\] choose_video|\[show\] key=choose_video" within 10
+screenshot video-choice
+expect enabled

@@ -1,0 +1,8 @@
+name: Video choice accepts spoken WhatsApp
+# Demo fix 2. Requires WhatsApp available and its choice enabled. No call is placed.
+say EN video call my son
+expect log "\[choice\] choose_video|\[show\] key=choose_video" within 15
+say EN WhatsApp
+expect focus "com.whatsapp" within 12
+expect show key=(wall_.*|search|type|pick|video|map_wa_video_call_[0-4]) within 15
+expect enabled

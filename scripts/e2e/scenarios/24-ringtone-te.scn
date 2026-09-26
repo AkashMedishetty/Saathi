@@ -3,9 +3,9 @@ name: Settings ringtone search (TE)
 start-activity android.settings.SETTINGS
 expect focus "com.android.settings" within 8
 say TE నా రింగ్‌టోన్ మార్చు
-expect show key=open_search within 15
+expect show key=(open_search|map_settings_ringtone_0) within 15
 tap-glow
-expect show key=type within 10
+expect show key=(type|map_settings_ringtone_1) within 10
 doit
-expect show key=result within 12
+expect show key=(result|map_settings_ringtone_2) within 12
 expect enabled

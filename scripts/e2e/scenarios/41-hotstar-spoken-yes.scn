@@ -1,0 +1,8 @@
+name: Hotstar install card accepts spoken yes
+# Demo fix 1. Hotstar absent. Reply is a normal goal broadcast; no Install tap.
+say EN watch my serial on Hotstar
+expect log "\[missing\] app=in.startv.hotstar" within 15
+say EN yes
+expect focus "com.android.vending" within 12
+expect show key=.*install within 15
+expect enabled

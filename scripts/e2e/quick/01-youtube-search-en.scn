@@ -1,0 +1,10 @@
+name: Quick: YouTube search EN
+say EN search for old telugu songs on youtube
+expect show key=(search|map_yt_search_[01]) within 10
+tap-glow
+expect show key=(type|map_yt_search_2) within 8
+doit
+expect show key=(go|map_yt_search_3) within 10
+tap-glow
+expect show key=(pick|map_yt_search_4) within 8
+expect enabled

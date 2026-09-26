@@ -1,0 +1,4 @@
+name: Quick: APK STOP warning
+cmd scam_apk
+expect log "\[alert\] shield apk STOP" within 5
+expect enabled

@@ -44,3 +44,25 @@ These are executable assertions, not recorded phone successes. Preconditions are
 | 38 | Ten requests without resetting apps | D1. Exactly ten requests; no internal reset/force-stop. No terminal communication tap. |
 | 39 | HOME and BACK during guidance | D2. Pause log required on HOME; BACK asserts health only, overlay placement needs visual review. |
 | 40 | Learn-section reading lesson entry | School Week 3 read_this phrase; only reader entry is asserted. |
+
+## Demo-fix regressions
+
+| ID | Scenario | Assertion |
+| --- | --- | --- |
+| 41 | Hotstar spoken yes | Missing-app card → ordinary `say EN yes` → Play Store focus and Install glow. |
+| 42 | Spoken WhatsApp choice | Choice event → ordinary WhatsApp reply → app focus and guidance/wall. |
+| 43 | Mid-task aside | `[aside] mid-task question`, then spoken yes and resumed search glow. |
+| 44 | Teach-once voice commands | `[teach] recording` then `[teach] saved`; dispatch only, not proof of a nonempty saved recipe. |
+| 45 | Liked videos | `[route] own things`; rejects a new YouTube search route. |
+| 46 | Uber this location | Current WhatsApp focus then `[route] about this screen`; no booking. |
+| 47 | Telugu message | The specified Telugu sentence reaches type/Send guidance; no send tap. |
+| 48 | Screenshot/share handoff | Follow-up photo-sharing goal and next guide target; no Send tap. |
+| 49 | Form under voice sheet | Chrome form, nonzero online box count and retained Chrome focus. |
+
+Demo-fix step 9 (dragging and text clipping) remains a manual visual check. It cannot be established by log matching.
+
+## Quick set (separate directory)
+
+Exactly eight: YouTube search EN; video-choice card; Hotstar missing → spoken yes → Install; scam SMS; scam APK;
+Settings bigger letters HI; learn Spotify; one-minute reminder. No calibrated coordinates needed. The quick
+YouTube check stops at the results glow; it does not assert video playback. See README for the 210/235-second budgets.
