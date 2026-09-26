@@ -90,6 +90,24 @@ class GoalsTest {
         "यह ऐप हटाओ" to "playstore_uninstall",
     ))
 
+    @Test fun spotify() = check(listOf(
+        "play kishore kumar on spotify" to "spotify_play",
+        "play old songs on spotify" to "spotify_play",
+        "spotify pe lata mangeshkar" to "spotify_play",
+        "स्पॉटिफाई पर भजन चलाओ" to "spotify_play",
+        "స్పాటిఫై లో ఘంటసాల పాటలు" to "spotify_play",
+        "open my playlist" to "spotify_playlist",
+        "मेरी प्लेलिस्ट चलाओ" to "spotify_playlist",
+        "like this song" to "spotify_like",
+        "यह गाना लाइक करो" to "spotify_like",
+        "turn on shuffle" to "spotify_shuffle",
+        "గానాలు షఫుల్ చేయి" to "spotify_shuffle",
+        "download my playlist" to "spotify_download",
+        "listen offline" to "spotify_download",
+        "प्लेलिस्ट डाउनलोड करो" to "spotify_download",
+        "download spotify" to "playstore_install",
+    ))
+
     @Test fun noCrossMatches() = check(listOf(
         "video call my son" to null,
         "बेटे को वीडियो कॉल करो" to null,

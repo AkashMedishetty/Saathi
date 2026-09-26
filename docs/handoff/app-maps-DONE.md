@@ -11,6 +11,7 @@ is updated with each commit.
 | Settings (vivo + AOSP search page) | ringtone · font size · brightness · wallpaper · Wi-Fi · Bluetooth · dark mode · language · screen timeout · storage · any other setting (the person's words) | **No dump of Settings exists.** Tests use hand-built trees shaped like what Saathi saw on this phone. Every route = search bar → type → the result row (never the history chip) → Done on the result page |
 | Google Photos | open latest · crop (→ Save copy) · brightness (Adjust → Brightness → slider → Save copy) · share to WhatsApp | **No dump.** Hand-built trees from Photos' labels. "Save copy" is only offered after the crop/brightness step (`needsReached`) |
 | Play Store | install X (search → type → the listing by the **known developer**, never an ad or look-alike → **Install: risky, glow only** → Wait while installing → Open → `next`: "Want me to show you how to use X?") · update all · uninstall X (risky ×2) | **No dump.** Hand-built trees. When the app hands over (the foreground package becomes the new app after the Open glow), treat it as done: say `doneSay`, offer `next`, start your learn-app guide |
+| Spotify | play X (Search → box → type → the result naming X, never an ad) · open a playlist · like a song · shuffle · download a playlist (says Premium is needed) | **No dump.** Hand-built trees from Spotify's labels |
 
 **Checkpoint 1 (engine + YouTube + Settings + Photos): done.** Full suite `testDebugUnitTest assembleDebug` passes
 (1036 tests, 0 failures); merged manifest has no INTERNET.

@@ -93,8 +93,8 @@ object PlayStoreMap {
                 id = "playstore_install", pkg = PKG,
                 goals = goals("(install|download) (the |a |new )?.+", "get (the |a |new )?.+ app", "(new|an?) app (for|to)", "play ?store", "google play",
                     ".+ (इंस्टॉल|डाउनलोड)", "ऐप (डालो|चाहिए|इंस्टॉल)", ".+ (ఇన్‌స్టాల్|డౌన్‌లోడ్)", "యాప్ (వేయి|కావాలి)"),
-                avoid = listOf(rx("uninstall|remove|delete|update|अनइंस्टॉल|हटाओ|अपडेट|తొలగించు|అప్‌డేట్|download (the |this |a )?(video|song|photo|document|playlist)|" +
-                    "(video|song|photo|गाना|फोटो|वीडियो|పాట|ఫోటో).*(download|डाउनलोड|డౌన్‌లోడ్)")),
+                avoid = listOf(rx("uninstall|remove|delete|update|अनइंस्टॉल|हटाओ|अपडेट|తొలగించు|అప్‌డేట్|download (the |this |a |my )?(video|song|photo|document|playlist|album)|" +
+                    "(video|song|photo|playlist|album|गाना|फोटो|वीडियो|प्लेलिस्ट|పాట|ఫోటో|ప్లేలిస్ట్).*(download|डाउनलोड|డౌన్‌లోడ్)|offline")),
                 slots = listOf("app", "developer"),
                 steps = listOf(
                     START_SEARCH, TYPE, PICK,
