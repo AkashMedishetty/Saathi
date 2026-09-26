@@ -513,8 +513,9 @@ class Guide(
                     "ముందు Settings తెరవండి: Settings ఐకాన్, బూడిద రంగు గేర్, నొక్కండి.").pick(lang)
             }
             val ok = intent != null && (inSettingsAlready || askToOpen || learnOpen || runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
-                // Practice starts from the app's first screen, not wherever it was left.
-                (if (practice) Intent.FLAG_ACTIVITY_CLEAR_TASK else 0))) }.isSuccess)
+                // Practice and app-map routes start from the app's first screen, not wherever it was left (field: YouTube
+                // reopened on an old playlist page, WhatsApp on someone else's chat). Launcher intents only.
+                (if (practice || (f?.id?.startsWith("map_") == true && intent.action == Intent.ACTION_MAIN)) Intent.FLAG_ACTIVITY_CLEAR_TASK else 0))) }.isSuccess)
             if (inSettingsAlready) com.saathi.app.DebugLog.i("begin", "already in Settings: guiding from this screen")
             if (askToOpen) com.saathi.app.DebugLog.i("begin", "asking them to open Settings (Saathi never opens it)")
             if (ok) resolvePkg(intent!!)?.let { taskPkgs += it; adoptPkg = false }
