@@ -58,3 +58,15 @@ Never `gradlew clean`. **Disk is nearly full**: delete finished worktrees' `app/
 4. After Akash logs in: the WhatsApp / Instagram / Uber flows. Capture fixtures with `scripts/capture-tree.sh`.
 5. Tile leftovers: "Turn the TV volume up" → watch; "Back up my WhatsApp chats" → message.
 6. The 09:30 demo script: side-by-side "Assistant vs Saathi" (`docs/PLAN-DEMO2.md` §2).
+
+## Update ~23:40 (Sat 26 Sep 2026)
+- **Merged Kiro's app maps:** engine + YouTube, Settings, Google Photos, Play Store journey, Spotify, Google Docs,
+  WhatsApp. Integrated via `guide/MapBridge.kt` + `Guide.beginMap` / `mapTick`:
+  - a map route runs before settingsTask/phoneHowTo and before any model;
+  - "done" only after the last step (`doneNeedsLastStep` forced);
+  - Play Store done → "Show me how to use it".
+- **Merged Codex's e2e runner** (`scripts/e2e/run.sh`, 40 scenarios, selftest 63/63), committed on Codex's behalf.
+  Run: `scripts/e2e/run.sh [pattern]`. Codex is back at 01:54: give it the e2e failures to fix.
+- **Regression 3/5/9/10 pass on the phone.** R8 was fixed after the done-guard (YouTube glows Search as step 1).
+- **Next:** run the full `scripts/e2e/run.sh` on the phone; fix the failures. Merge Kiro's remaining maps
+  (Maps/cab, Chrome, Phone, Messages, Instagram, Clock) as they land.
