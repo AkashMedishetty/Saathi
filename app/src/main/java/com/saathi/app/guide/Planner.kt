@@ -93,7 +93,8 @@ object Planner {
         return guard(ground(d, goal, screen, lang), screen, lang)
     }
 
-    private val GENERIC_NAV = Regex("(?i)^(search|more|more options|menu|next|continue|ok|okay|allow|done|save|yes|apply|confirm|settings|open|start|got it|agree)\\b")
+    private val GENERIC_NAV = Regex("(?i)^(search|more|more options|menu|next|continue|ok|okay|allow|done|save|yes|apply|confirm|settings|open|start|got it|agree|" +
+        "use without|skip|no,? thanks|not now|accept|dismiss|close|later|maybe later|while using|only this time|i agree)\\b")
 
     private fun words(t: String) = t.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.length >= 3 && it !in STOP }.toSet()
 
@@ -112,7 +113,7 @@ object Planner {
         if (better != null) return d.copy(targetId = better.id, say = tapSay(better.title, lang))
         val search = screen.elements.firstOrNull { it.enabled && Regex("(?i)^search").containsMatchIn(it.title) }
         if (search != null) return d.copy(targetId = search.id, say = tapSay(search.title, lang))
-        return if (screen.scrollable() != null) Decision(null, scrollSay(lang), done = false, fromLlm = d.fromLlm, action = "scroll") else d
+        return d // nothing better on screen: trust the model (it has the whole task in memory)
     }
 
     suspend fun decide(goal: String, screen: Screen, history: List<String>, lang: Lang, learned: List<String> = emptyList(), allowLlm: Boolean = true, app: String = ""): Decision {

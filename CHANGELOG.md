@@ -61,3 +61,9 @@
   a guess). **Memory**: one live Gemma conversation per task (KV cache, ~0.5 s/turn), conversation memory (6 exchanges),
   long-term memory with a task journal + relevant-fact retrieval; tasks are set aside (not lost) for questions and resumed.
   Verified: "show me my subscriptions" (unscripted) → question mid-task → "continue" → model detects done.
+- 16:30 **Understand → jump → teach.** A 2B model can't click through unknown apps (Chrome: wandered into Ad topics), and
+  people speak vaguely. Gemma now turns requests into a small intent (weather/lookup/watch/music/call/…/question, query,
+  device tv|phone, person); Android intents/deep links jump straight to the right screen; Saathi reads the result screen
+  to answer ("will it rain today" → Google → "20% light rain at 7 PM", in Telugu); the glow teaches only the last tap
+  ("guntur karam movie" → YouTube results → glow on the Guntur Kaaram video). Agent steps capped at 8. App named after
+  "in/on/using" wins; model can't mislabel an app task as a question; flying buddy pointer (Clicky-style arc).

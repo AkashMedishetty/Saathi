@@ -172,6 +172,10 @@ class Guide(
             // Let the model pick the helper (≈0.5 s); keywords only if it can't.
             overlay.showCard(say("Okay…", "ठीक है…", "సరే…").pick(lang), Overlay.Mode.THINKING)
             scope.launch {
+                // 1) Understand the vague request. 2) Jump there with an intent. 3) Only then guide / answer.
+                val u = Understand.parse(goalText)
+                com.saathi.app.DebugLog.i("understand", "\"$goalText\" → $u")
+                if (u != null && handleIntent(goalText, u, autoMode)) return@launch
                 when (val r = IntentRouter.smartRoute(svc, goalText)) {
                     is IntentRouter.Route.Question -> answerQuestion(goalText)
                     is IntentRouter.Route.Skill -> begin(goalText, r.flow, autoMode)
@@ -180,6 +184,71 @@ class Guide(
             return
         }
         begin(goalText, IntentRouter.route(svc, goalText), autoMode)
+    }
+
+    /** Returns true if the intent was handled (deep link / answer / skill); false → fall back to routing + agent. */
+    private suspend fun handleIntent(goalText: String, u: Understand.Intent2, autoMode: Boolean): Boolean {
+        val q = u.query ?: goalText
+        fun skill(id: String, g: String = goalText) = Skills.byId(id)?.build(svc, SlotExtractor.from(g, Prefs.family(svc)))
+        when (u.intent) {
+            "question" -> { answerQuestion(goalText); return true }
+            "weather", "lookup" -> { lookUp(goalText, if (u.intent == "weather" && !q.contains("weather", true)) "$q weather" else q); return true }
+            "watch", "music" -> {
+                if (u.device == "tv") { watchOnTv("$q on tv ${u.app ?: ""}"); return true }
+                val netflix = u.app?.contains("netflix", true) == true
+                val link = (if (netflix) Understand.netflixSearch(svc, q) else null) ?: Understand.youtubeSearch(svc, q) ?: return false
+                val pkg = link.`package`
+                val key = q.split(" ").maxByOrNull { it.length } ?: q
+                begin(goalText, Flow("watch_direct", { link },
+                    // A result title is longer than the query (the search box itself just shows the query).
+                    listOf(Step("pick", listOf(Regex(Regex.escape(key) + ".{12,}", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))), role = "button", say = say(
+                        "Here are the results for “$q”. Tap the one you want — the picture shows what it is.",
+                        "“$q” के नतीजे ये रहे। जो देखना है उसे दबाइए।", "“$q” ఫలితాలు ఇవి. చూడాలనుకున్నది నొక్కండి."))),
+                    { sc -> sc.elements.any { Regex("^(Pause|Play) video|^Minimi[sz]e|Enter fullscreen|^Pause$", RegexOption.IGNORE_CASE).containsMatchIn(it.label) } },
+                    say("Enjoy!", "आनंद लीजिए!", "ఆనందించండి!"),
+                    say("Finding “$q”.", "“$q” ढूँढ रहा हूँ।", "“$q” వెతుకుతున్నాను."), llmGoal = "play $q", appPkg = pkg), autoMode)
+                return true
+            }
+            "call" -> { begin(goalText, skill("call"), autoMode); return true }
+            "video_call" -> { begin(goalText, skill("wa_video", if (u.person != null && !goalText.contains(u.person, true)) "video call ${u.person}" else goalText), autoMode); return true }
+            "message" -> { begin(goalText, skill("wa_message"), autoMode); return true }
+            "photo" -> { begin(goalText, skill("wa_photo"), autoMode); return true }
+            "alarm" -> { begin(goalText, skill("alarm"), autoMode); return true }
+            "directions" -> { begin(goalText, skill("maps", "take me to $q"), autoMode); return true }
+            "setting" -> { begin(goalText, IntentRouter.settingsSearch(goalText) ?: IntentRouter.settingsFlowPublic(q), autoMode); return true }
+            "tv" -> { begin(goalText, skill("tv"), autoMode); return true }
+        }
+        return false
+    }
+
+    /** Live facts: open the search results, then READ them and say the answer (grounded in what's on screen). */
+    private fun lookUp(goalText: String, q: String) {
+        stop()
+        runCatching { svc.startActivity(Understand.webSearch(svc, q).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        overlay.setAura(true)
+        overlay.showCard(say("Looking it up…", "देख रहा हूँ…", "చూస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
+        scope.launch {
+            var text = ""
+            for (i in 0 until 8) { // wait for results to render (up to ~6 s)
+                delay(800)
+                val sc = readScreen() ?: continue
+                if (sc.pkg != svc.packageName && sc.allText.length > 200) { text = sc.allText; if (i >= 2) break }
+            }
+            val a = if (text.isNotBlank() && LlmManager.isReady) LlmManager.generate(
+                "Answer the elderly person's question in 1 or 2 short, warm sentences, using ONLY the search results given. " +
+                    "If the results don't answer it, say you couldn't find it. " +
+                    when (lang) { Lang.EN -> "Answer in English."; Lang.HI -> "Answer in Hindi (Devanagari)."; Lang.TE -> "Answer in Telugu script." },
+                "Question: $goalText\nSearch results:\n${text.take(3000)}")?.takeIf { it.isNotBlank() && it.length < 400 && !com.saathi.app.llm.Templates.garbled(it) }
+            else null
+            overlay.setAura(false)
+            val t = a ?: say("Here are the results. I've opened them for you.", "नतीजे खोल दिए हैं।", "ఫలితాలు తెరిచాను.").pick(lang)
+            com.saathi.app.DebugLog.i("lookup", "q=\"$q\" a=\"${t.take(200)}\"")
+            Conversation.remember(goalText, t)
+            current = Target(null, t, "lookup")
+            overlay.showCard(t, Overlay.Mode.DONE)
+            speaker.say(t, lang)
+            hideJob?.cancel(); hideJob = scope.launch { delay(25_000); if (goal == null) overlay.hideCard() }
+        }
     }
 
     private fun begin(goalText: String, f: Flow?, autoMode: Boolean) {
@@ -388,7 +457,8 @@ class Guide(
             // 9. The next target is probably just off-screen: ask them to scroll (max 3, trap #13).
             if (f.steps.isNotEmpty() && scrolls < 3 && screen.scrollable() != null) {
                 val next = f.steps.getOrNull(lastStepIdx + 1) ?: f.steps.first()
-                val name = next.targets.first().pattern.replace(Regex("[\\^$\\\\()?*+.\\[\\]]"), "").substringBefore('|').trim()
+                val name = next.targets.first().pattern.replace("\\Q", "").replace("\\E", "").replace(Regex("\\{\\d+,?\\d*\\}"), "")
+                    .replace(Regex("[\\^$\\\\()?*+.\\[\\]]"), "").substringBefore('|').trim()
                 val text = if (name.length >= 3) say("Slowly scroll down. Look for \"$name\".", "धीरे से नीचे स्क्रॉल कीजिए। \"$name\" ढूँढिए।", "నెమ్మదిగా కిందకు స్క్రోల్ చేయండి. \"$name\" వెతకండి.").pick(lang)
                 else say("Slowly scroll down to see more.", "धीरे से नीचे स्क्रॉल कीजिए।", "నెమ్మదిగా కిందకు స్క్రోల్ చేయండి.").pick(lang)
                 scrolls++
@@ -405,7 +475,7 @@ class Guide(
             if (el != null) show(Target(el, p.say, "plan_${p.label}", noAct = p.noAct))
             return
         }
-        if (unsureCount[fp] ?: 0 >= 2 || plansThisTask >= 14) { unsure(fp); return }
+        if (unsureCount[fp] ?: 0 >= 2 || plansThisTask >= 8) { unsure(fp); return }
 
         // 10. Anything else: the planner (on-device LLM, loaded on first need; keywords while it warms up).
         if (!LlmManager.isReady) LlmManager.loadAsync(svc)

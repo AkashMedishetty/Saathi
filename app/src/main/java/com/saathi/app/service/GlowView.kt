@@ -105,7 +105,7 @@ class GlowView(ctx: Context) : View(ctx) {
         to = next
         moveAnim?.cancel()
         moveAnim = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = if (from == next) 0 else 420; interpolator = EASE
+            duration = if (from == next) 0 else 560; interpolator = EASE
             addUpdateListener { move = it.animatedValue as Float; invalidate() }
             start()
         }
@@ -240,25 +240,48 @@ class GlowView(ctx: Context) : View(ctx) {
         c.drawRoundRect(RectF(r).apply { inset(-grow, -grow) }, rad + grow, rad + grow, ring)
         ring.shader = null
 
-        if (!warn && !moving && move >= 1f) drawPointer(c, r, a)
+        if (!warn && !moving) drawPointer(c, r, a)
     }
 
-    /** A marigold chip with a hand, bobbing toward the target from below (or above if there's no room). */
+    /** Where the pointer rested last (screen coords of its centre), so it can fly from there to the next target. */
+    private var restX = Float.NaN
+    private var restY = Float.NaN
+    private var flightFromX = Float.NaN
+    private var flightFromY = Float.NaN
+
+    /**
+     * The buddy (the Clicky lesson: a thing that flies to the button says "here" better than words).
+     * A marigold chip with a hand arcs from where it was to the new target, grows mid-flight, then bobs beside it.
+     */
     private fun drawPointer(c: Canvas, r: RectF, a: Float) {
         val size = pad * 5.2f
         val gap = pad * 1.6f
-        val bob = sin(t * 4f) * pad * 0.7f
         val below = r.bottom + gap + size < height * 0.62f
-        val cx = r.centerX()
-        val cy = if (below) r.bottom + gap + size / 2 + bob else r.top - gap - size / 2 - bob
+        val tx = r.centerX()
+        val ty = if (below) r.bottom + gap + size / 2 else r.top - gap - size / 2
+        if (move < 1f) {
+            if (flightFromX.isNaN()) { flightFromX = if (restX.isNaN()) width - pad * 6 else restX; flightFromY = if (restY.isNaN()) height * 0.4f else restY }
+        } else { flightFromX = Float.NaN; flightFromY = Float.NaN }
+        val m = move.coerceIn(0f, 1f)
+        val fx = if (flightFromX.isNaN()) tx else flightFromX
+        val fy = if (flightFromY.isNaN()) ty else flightFromY
+        val lift = sin(m * Math.PI).toFloat() * pad * 14f // arc upwards mid-flight
+        val bob = if (m >= 1f) sin(t * 4f) * pad * 0.7f else 0f
+        val cx = fx + (tx - fx) * m
+        val cy = fy + (ty - fy) * m - lift + (if (below) bob else -bob)
+        val scale = 1f + 0.35f * sin(m * Math.PI).toFloat()
+        if (m >= 1f) { restX = tx; restY = ty }
         chip.color = C.MARIGOLD; chip.alpha = (255 * a).toInt()
         chip.setShadowLayer(pad, 0f, pad * 0.3f, 0x55000000) // HW-accelerated for shapes since API 28
-        c.drawCircle(cx, cy, size / 2, chip)
-        val ins = (size * 0.22f).toInt()
+        val s2 = size * scale
+        c.drawCircle(cx, cy, s2 / 2, chip)
+        val ins = (s2 * 0.22f).toInt()
         hand.alpha = (255 * a).toInt()
-        hand.setBounds((cx - size / 2 + ins).toInt(), (cy - size / 2 + ins).toInt(), (cx + size / 2 - ins).toInt(), (cy + size / 2 - ins).toInt())
+        hand.setBounds((cx - s2 / 2 + ins).toInt(), (cy - s2 / 2 + ins).toInt(), (cx + s2 / 2 - ins).toInt(), (cy + s2 / 2 - ins).toInt())
         c.save()
-        if (!below) c.rotate(180f, cx, cy)
+        // Face the direction of travel while flying; point at the target when resting.
+        val angle = if (m < 1f) Math.toDegrees(kotlin.math.atan2((ty - fy).toDouble(), (tx - fx).toDouble())).toFloat() + 90f else if (below) 0f else 180f
+        c.rotate(angle, cx, cy)
         hand.draw(c)
         c.restore()
     }

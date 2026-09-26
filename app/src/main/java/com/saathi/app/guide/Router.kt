@@ -27,6 +27,18 @@ object AppLauncher {
     /** "open calculator" / "how do I use Instagram" → that app; the longest label match wins. */
     fun findInGoal(ctx: Context, goal: String): App? {
         val g = " ${goal.lowercase()} "
+        // An app named after "in / on / using / open" is the one they mean ("weather … in chrome" → Chrome, not Weather).
+        // Check the words after EVERY such word (the last one usually names the app).
+        val words = g.trim().split(Regex("\\s+"))
+        val apps = installed(ctx).filter { it.pkg != ctx.packageName && it.label.length >= 3 }
+        for (i in words.indices.reversed()) {
+            if (words[i] !in setOf("in", "on", "using", "with", "open", "launch", "start", "से", "में", "पर", "లో")) continue
+            for (n in 3 downTo 1) {
+                val name = words.drop(i + 1).take(n).joinToString(" ").trim('.', ',', '?', '!')
+                if (name.length < 3) continue
+                apps.firstOrNull { it.label.lowercase() == name }?.let { return it }
+            }
+        }
         return installed(ctx)
             .filter { it.pkg != ctx.packageName && it.label.length >= 3 }
             .filter { g.contains(" ${it.label.lowercase()}") || g.contains(it.label.lowercase().replace(" ", "")) }
@@ -98,13 +110,18 @@ object IntentRouter {
                 "or SETTINGS (a phone setting to find or change), or APP (open or use a specific app not in the list), or QUESTION (they want an answer, not a phone action), or OTHER.",
             "Helpers:\n$list\n\nRequest: \"$goal\"\nAnswer:")?.trim()?.split(Regex("[^A-Za-z_]+"))?.firstOrNull { it.isNotBlank() } ?: return Route.Skill(kw)
         com.saathi.app.DebugLog.i("route", "\"$goal\" → model=$out keyword=${kw?.id}")
+        val namedApp = AppLauncher.findInGoal(ctx, goal) != null
         return when {
-            out.equals("QUESTION", true) -> Route.Question
+            // The model may only call it a question if it's phrased as one and names no app.
+            out.equals("QUESTION", true) && !namedApp && isQuestion(ctx, goal) -> Route.Question
+            out.equals("QUESTION", true) -> Route.Skill(kw)
             out.equals("SETTINGS", true) -> Route.Skill(settingsSearch(goal) ?: kw ?: settingsFlow(goal))
             Skills.byId(out) != null -> Route.Skill(Skills.byId(out)!!.build(ctx, SlotExtractor.from(goal, Prefs.family(ctx))))
             else -> Route.Skill(kw)
         }
     }
+
+    fun settingsFlowPublic(goal: String) = settingsFlow(goal)
 
     /** Any phone-setting goal: open Settings search with the goal's key words. */
     private fun settingsFlow(goal: String): Flow {
