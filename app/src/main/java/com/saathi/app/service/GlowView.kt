@@ -125,6 +125,9 @@ class GlowView(ctx: Context) : View(ctx) {
         ensureLoop()
     }
 
+    /** Nothing to draw (no target, no aura, fades finished). */
+    fun idle() = spot < 0.01f && aura < 0.01f && to == null
+
     fun setLevel(level: Float) { auraLevel = auraLevel * 0.6f + level.coerceIn(0f, 1f) * 0.4f }
 
     private fun animSpot(target: Float) {

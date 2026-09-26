@@ -100,19 +100,59 @@ class Overlay(
 
     @SuppressLint("ClickableViewAccessibility")
     fun attach() {
-        add(glow, lp(WLP.MATCH_PARENT, WLP.MATCH_PARENT, false))
-        // 1×1 invisible window that hears about every touch elsewhere (ACTION_OUTSIDE): "the person is busy".
-        add(watcher, lp(1, 1, true).apply {
-            flags = flags or WLP.FLAG_WATCH_OUTSIDE_TOUCH or WLP.FLAG_NOT_TOUCH_MODAL
-            gravity = Gravity.TOP or Gravity.START
-        })
+        // The full-screen glow window is only added while something glows (see ensureGlow): an always-present window
+        // over other apps makes banking/IRCTC apps reject touches as "obscured" (field test).
+        attachWatcher()
         watcher.setOnTouchListener { _, e -> if (e.action == MotionEvent.ACTION_OUTSIDE) onTouchOutside(); false }
         buildCard()
         buildBubble()
     }
 
+    private var glowAttached = false
+    private var watcherAttached = false
+    private var bubbleAttached = true
+    private val idleCheck = Runnable { if (glow.idle()) { runCatching { wm.removeView(glow) }; glowAttached = false } }
+
+    private fun ensureGlow() {
+        glow.removeCallbacks(idleCheck)
+        if (!glowAttached && !steppedBack) glowAttached = add(glow, lp(WLP.MATCH_PARENT, WLP.MATCH_PARENT, false))
+    }
+
+    /** Remove the glow window shortly after it has nothing to show. */
+    private fun releaseGlowSoon() { glow.removeCallbacks(idleCheck); glow.postDelayed(idleCheck, 900) }
+
+    private fun attachWatcher() {
+        if (watcherAttached) return
+        // 1×1 invisible window that hears about every touch elsewhere (ACTION_OUTSIDE): "the person is busy".
+        watcherAttached = add(watcher, lp(1, 1, true).apply {
+            flags = flags or WLP.FLAG_WATCH_OUTSIDE_TOUCH or WLP.FLAG_NOT_TOUCH_MODAL
+            gravity = Gravity.TOP or Gravity.START
+        })
+    }
+
+    /**
+     * Banking / UPI / IRCTC / password screens: Saathi steps back completely. No windows of ours over the app at all
+     * (they reject touches when anything covers them, and it's the safe thing to do). Voice + call alarm still work.
+     */
+    var steppedBack = false; private set
+    fun stepBack(on: Boolean) {
+        if (on == steppedBack) return
+        steppedBack = on
+        if (on) {
+            glow.setTarget(null, false); glow.setAura(false)
+            if (glowAttached) { runCatching { wm.removeView(glow) }; glowAttached = false }
+            if (watcherAttached) { runCatching { wm.removeView(watcher) }; watcherAttached = false }
+            if (bubbleAttached) { runCatching { wm.removeView(bubble) }; bubbleAttached = false }
+            hideCardNow()
+        } else {
+            attachWatcher()
+            bubbleLp?.let { if (!bubbleAttached) bubbleAttached = add(bubble, it) }
+        }
+    }
+
     fun detach() {
         listOf(glow, watcher, bubble).forEach { runCatching { wm.removeView(it) } }
+        glowAttached = false; watcherAttached = false; bubbleAttached = false
         if (cardShown) runCatching { wm.removeView(cardWrap) }
         cardShown = false
     }
@@ -123,7 +163,10 @@ class Overlay(
         glow.dim = Prefs.dim(ctx)
         val m = ctx.resources.displayMetrics
         val clipped = r?.let { Rect(it).apply { if (!intersect(0, 0, m.widthPixels, m.heightPixels)) setEmpty() } }?.takeIf { !it.isEmpty }
+        if (steppedBack) return
+        if (clipped != null) ensureGlow()
         glow.setTarget(clipped, warn)
+        if (clipped == null) releaseGlowSoon()
         r?.let { dodgeBubble(it) }
     }
 
@@ -146,7 +189,10 @@ class Overlay(
 
     /** Listening / thinking: the edge of the screen comes alive, and so do the orbs. */
     fun setAura(on: Boolean) {
+        if (steppedBack) return
+        if (on) ensureGlow()
         glow.setAura(on)
+        if (!on) releaseGlowSoon()
         bubbleOrb.mood = if (on) OrbView.Mood.ACTIVE else OrbView.Mood.IDLE
     }
 
@@ -165,6 +211,7 @@ class Overlay(
         text: String, mode: Mode, targetCenterY: Int? = null, tip: String? = null,
         progress: Pair<Int, Int>? = null, onContinue: (() -> Unit)? = null,
     ) {
+        if (steppedBack && mode != Mode.ALARM) return
         val changed = cardText.text.toString() != text || this.mode != mode
         this.mode = mode
         this.onContinue = onContinue
@@ -310,6 +357,12 @@ class Overlay(
             }.start()
         }
         cardAtTop = wantTop
+    }
+
+    private fun hideCardNow() {
+        if (!cardShown) return
+        cardShown = false
+        runCatching { wm.removeView(cardWrap) }
     }
 
     fun hideCard() {

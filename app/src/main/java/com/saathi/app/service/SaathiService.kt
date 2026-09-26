@@ -89,7 +89,21 @@ class SaathiService : AccessibilityService() {
             if (locked) overlay?.setHidden(true) else { overlay?.setHidden(false); guide.onWindowChanged() }
         }
         if (locked) return
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) checkCallRisk(event.packageName?.toString())
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString()
+            checkCallRisk(pkg)
+            // Money / IRCTC apps: step back completely (no windows over them), say so once per visit.
+            if (pkg != null && pkg != "com.android.systemui" && !pkg.contains("inputmethod")) {
+                val sensitive = CallGuard.isSensitive(pkg)
+                if (sensitive && overlay?.steppedBack == false) {
+                    overlay?.stepBack(true)
+                    com.saathi.app.DebugLog.i("stepback", "on in $pkg")
+                } else if (!sensitive && overlay?.steppedBack == true) {
+                    overlay?.stepBack(false)
+                    com.saathi.app.DebugLog.i("stepback", "off ($pkg)")
+                }
+            }
+        }
         // "Teach Saathi once": while recording, remember the label of everything they tap (never pixels).
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && com.saathi.app.guide.Recipes.recording != null) {
             val label = event.text?.joinToString(" ")?.takeIf { it.isNotBlank() } ?: event.contentDescription?.toString()
