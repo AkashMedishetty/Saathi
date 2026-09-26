@@ -41,3 +41,7 @@
   (Latin + Devanagari), **FastVLM-0.5B on the Hexagon NPU explains the photo (1.8 s on the iQOO)**, Gemma/text fallback,
   scam wording check on paper. Medicine mode: biggest printed line = name → "Is it X?" → Morning/Afternoon/Night → the guide
   sets a daily alarm + Today reminder. APK permissions re-checked: still no INTERNET.
+- 13:20 **Phone School** (4 weeks · 14 lessons, progress from Memory: New → Practising → "You can do this!", next lesson on
+  Home › Today). **TV remote over the iQOO's IR blaster** (Samsung + LG codes, six huge buttons; voice: "TV volume up",
+  "टीवी बंद करो"). **On-call scam alarm** (banking/UPI/remote-access app opened during a call → stop card + speech).
+  Tests: 4 suites green (routing EN/HI/TE, slots, family-help redaction, IR patterns).

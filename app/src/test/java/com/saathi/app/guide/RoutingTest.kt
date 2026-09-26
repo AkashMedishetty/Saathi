@@ -57,6 +57,9 @@ class RoutingTest {
         "take me to the home screen" to "home",
         "होम स्क्रीन पर ले चलो" to "home",
         "read this letter for me" to "read_this",
+        "turn the tv volume up" to "tv",
+        "टीवी बंद करो" to "tv",
+        "open phone school" to "phone_school",
         "यह काग़ज़ पढ़कर सुनाओ" to "read_this",
         "scan my medicine strip" to "scan_medicine",
         "दवा का पत्ता स्कैन करो" to "scan_medicine",
@@ -78,6 +81,13 @@ class RoutingTest {
         assert("GPay" !in bank && "12" !in bank) { bank }
         assert(IntentRouter.isFamilyHelp("ask my son for help"))
         assert(IntentRouter.isFamilyHelp("बेटे से पूछो"))
+    }
+
+    @Test fun irPatternsAreStandard() {
+        val p = IrRemote.pattern(0x20DF10EFL, samsung = false)
+        assertEquals(9000, p[0]); assertEquals(4500, p[1]); assertEquals(67, p.size)
+        assertEquals(IrRemote.Key.VOL_UP, IrRemote.keyFor("tv volume up"))
+        assertEquals(IrRemote.Key.POWER, IrRemote.keyFor("टीवी बंद करो"))
     }
 
     @Test fun slotsPullOutPeopleTimesAndPlaces() {

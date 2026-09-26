@@ -114,6 +114,24 @@ object Skills {
                 s3("Let's find \"$q\" on YouTube.", "YouTube पर \"$q\" ढूँढते हैं।", "YouTube లో \"$q\" వెతుకుదాం."), teach = true, llmGoal = "play $q on YouTube")
         },
 
+        Skill("tv", Cat.WATCH, R.drawable.ic_tv, s3("TV remote", "टीवी रिमोट", "టీవీ రిమోట్"),
+            listOf("tv", "television", "tv remote", "tv volume", "tv off", "tv on", "टीवी", "टीवी की आवाज़", "टीवी बंद", "టీవీ"),
+            s3("Turn the TV volume up", "टीवी की आवाज़ बढ़ाओ", "టీవీ సౌండ్ పెంచు")) { _, s ->
+            val key = IrRemote.keyFor(s.raw)
+            Flow("tv", null, emptyList(), null, NONE, NONE, quiet = key == null, action = { ctx ->
+                if (key != null && IrRemote.send(ctx, key)) when (key) {
+                    IrRemote.Key.POWER -> s3("Done. I pressed the TV power button.", "टीवी का पावर बटन दबा दिया।", "టీవీ పవర్ బటన్ నొక్కాను.")
+                    IrRemote.Key.VOL_UP -> s3("Louder.", "आवाज़ बढ़ा दी।", "సౌండ్ పెంచాను.")
+                    IrRemote.Key.VOL_DOWN -> s3("Softer.", "आवाज़ कम कर दी।", "సౌండ్ తగ్గించాను.")
+                    IrRemote.Key.MUTE -> s3("Muted.", "आवाज़ बंद कर दी।", "మ్యూట్ చేశాను.")
+                    else -> s3("Changed the channel.", "चैनल बदल दिया।", "ఛానెల్ మార్చాను.")
+                } else {
+                    ctx.startActivity(Intent(ctx, com.saathi.app.ui.RemoteActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    s3("Here's your TV remote.", "यह रहा आपका टीवी रिमोट।", "ఇదిగో మీ టీవీ రిమోట్.")
+                }
+            })
+        },
+
         Skill("ott", Cat.WATCH, R.drawable.ic_movie, s3("Watch a movie or serial", "फ़िल्म या सीरियल देखें", "సినిమా లేదా సీరియల్ చూడండి"),
             listOf("netflix", "prime video", "hotstar", "jiohotstar", "zee5", "sonyliv", "movie", "film", "serial", "series", "फ़िल्म", "फिल्म", "सीरियल", "సినిమా", "సీరియల్"),
             s3("Watch my serial on Hotstar", "सीरियल देखना है", "సీరియల్ చూడాలి")) { ctx, s ->
@@ -228,6 +246,15 @@ object Skills {
         },
 
         // ───────────── LEARN ─────────────
+        Skill("phone_school", Cat.LEARN, R.drawable.ic_school, s3("Phone School", "फ़ोन पाठशाला", "ఫోన్ బడి"),
+            listOf("phone school", "lesson", "lessons", "teach me the phone", "पाठशाला", "पाठ", "పాఠం", "బడి"),
+            s3("Open Phone School", "फ़ोन पाठशाला खोलो", "ఫోన్ బడి తెరువు")) { _, _ ->
+            Flow("phone_school", null, emptyList(), null, NONE, NONE, quiet = true, action = { ctx ->
+                ctx.startActivity(Intent(ctx, com.saathi.app.ui.SchoolActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                NONE
+            })
+        },
+
         Skill("learn_photo", Cat.LEARN, R.drawable.ic_brush, s3("Learn photo editing", "फोटो एडिटिंग सीखें", "ఫోటో ఎడిటింగ్ నేర్చుకోండి"),
             listOf("edit photo", "photo edit", "edit a photo", "edit picture", "crop", "photo editing", "फोटो एडिट", "फोटो ठीक", "ఫోటో ఎడిట్"),
             s3("Teach me to edit a photo", "फोटो एडिट करना सिखाओ", "ఫోటో ఎడిట్ చేయడం నేర్పు")) { ctx, _ -> editLesson(ctx, video = false) },

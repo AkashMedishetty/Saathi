@@ -182,6 +182,10 @@ class MainActivity : AppCompatActivity() {
                 run(say("video call $p", "$p को वीडियो कॉल करो", "$p కి వీడియో కాల్ చేయి").pick(lang))
             })
         }
+        SchoolActivity.next()?.let { Skills.byId(it) }?.let { sk ->
+            add(row(R.drawable.ic_school, say("Next lesson: ${sk.title.pick(Lang.EN)}", "अगला पाठ: ${sk.title.pick(Lang.HI)}", "తదుపరి పాఠం: ${sk.title.pick(Lang.TE)}").pick(lang),
+                say("Phone School", "फ़ोन पाठशाला", "ఫోన్ బడి").pick(lang), C.MARIGOLD) { startActivity(Intent(this, SchoolActivity::class.java)) })
+        }
         val n = Memory.totalLearned()
         if (n > 0) add(row(R.drawable.ic_school, say(if (n == 1) "You've learned 1 thing" else "You've learned $n things", "आपने $n चीज़ें सीखीं", "మీరు $n విషయాలు నేర్చుకున్నారు").pick(lang),
             say("Well done! I'll help less as you learn.", "शाबाश! जितना सीखेंगे, मैं उतना कम दिखाऊँगा।", "భలే! మీరు నేర్చుకున్న కొద్దీ నేను తక్కువ చూపిస్తాను.").pick(lang), C.LEAF) { })
