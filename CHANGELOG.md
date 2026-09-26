@@ -45,3 +45,5 @@
   Home › Today). **TV remote over the iQOO's IR blaster** (Samsung + LG codes, six huge buttons; voice: "TV volume up",
   "टीवी बंद करो"). **On-call scam alarm** (banking/UPI/remote-access app opened during a call → stop card + speech).
   Tests: 4 suites green (routing EN/HI/TE, slots, family-help redaction, IR patterns).
+- 13:25 Home polish (segmented EN/हिंदी/తెలుగు control, soft orb halo, status pill). README with architecture, guardrails,
+  build steps and third-party attributions. TTS voices on the iQOO: en-IN, hi-IN, te-IN all available. `demo-reset.sh`.
