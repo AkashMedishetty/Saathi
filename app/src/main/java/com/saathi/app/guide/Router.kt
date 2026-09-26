@@ -56,11 +56,28 @@ object IntentRouter {
     }
 
     fun isRecall(goal: String) = goal.lowercase().has(
-        "what is my", "what's my", "when is my", "when do i", "do you remember", "what did i", "what did i tell", "which tablet", "which medicine",
+        "what is my", "what's my", "when is my", "when do i", "do you remember", "what did i", "what did i tell", "what did i do", "yesterday", "last time", "which tablet", "which medicine",
         "क्या है मेरी", "मेरी दवा क्या", "मेरा क्या", "याद है", "क्या बताया था", "గుర్తుందా", "నా మందు ఏమిటి", "ఏం చెప్పాను")
 
     fun isBriefing(goal: String) = goal.lowercase().trim().let { g ->
         Regex("^(good morning|what'?s today|what is today|today'?s plan|my day)\\W*$").matches(g) || g.has("आज क्या है", "आज का दिन", "సుప్రభాతం", "ఈరోజు ఏమిటి")
+    }
+
+    private val SETTINGS_TOPIC = Regex("(?i)ringtone|ring tone|wallpaper|language|date|time zone|password|screen lock|lock screen|fingerprint|face unlock|" +
+        "notification sound|vibrat|hotspot|mobile data|data usage|location|gps|software update|system update|about phone|keyboard|auto.?rotate|" +
+        "do not disturb|airplane|flight mode|sim|nfc|default app|app permission|eye (protection|comfort)|blue light|night light|reading mode|screen timeout|auto.?lock|रिंगटोन|वॉलपेपर|भाषा|पासवर्ड|रिंगटోన్|రింగ్‌టోన్|వాల్‌పేపర్|భాష|పాస్‌వర్డ్")
+
+    /** Phone-settings goals: open Settings search and type the topic (works on every OEM skin). */
+    fun settingsSearch(goal: String): Flow? {
+        val m = SETTINGS_TOPIC.find(goal) ?: return null
+        val term = m.value.lowercase()
+        return Flow("settings_search", { Intent("android.settings.APP_SEARCH_SETTINGS") },
+            listOf(Step("open_search", rx("^Search settings", "^Search$", "^Search "), say("Tap the search bar at the top.", "ऊपर खोज पट्टी दबाइए।", "పైన వెతుకు పట్టీ నొక్కండి.")),
+                Step("type", rx("Search"), say("Type “$term”. Or tap Do it and I'll type it.", "“$term” लिखिए। या 'आप कर दो' दबाइए।", "“$term” టైప్ చేయండి. లేదా 'మీరే చేయండి' నొక్కండి."),
+                role = "input", fill = term)),
+            null, say("Done!", "हो गया!", "అయింది!"),
+            say("Let's find “$term” in Settings.", "Settings में “$term” ढूँढते हैं।", "Settings లో “$term” వెతుకుదాం."),
+            llmGoal = goal)
     }
 
     fun isGreeting(goal: String) = Regex("(?i)^\\W*(hi|hello|hey|hlo|namaste|namaskar|namaskaram|good (morning|afternoon|evening|night)|thank you|thanks|how are you|" +
@@ -100,6 +117,7 @@ object IntentRouter {
     fun route(ctx: Context, goal: String): Flow? {
         val slots = SlotExtractor.from(goal, Prefs.family(ctx))
         Skills.match(goal)?.let { return it.build(ctx, slots) }
+        settingsSearch(goal)?.let { return it }
         AppLauncher.findInGoal(ctx, goal)?.let { app ->
             val onlyOpen = Regex("(?i)^\\s*(open|start|launch)\\s+.+$|(खोलो|खोल दो|తెరువు|ఓపెన్ చేయి)\\s*$").containsMatchIn(goal)
             return Flow("app_${app.pkg}", { c -> AppLauncher.launch(c, app.pkg) }, emptyList(),

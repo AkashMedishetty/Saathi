@@ -51,3 +51,13 @@
   reminders, briefing, object help + camera "tap here" glow, TV navigation, IRCTC Tatkal guide, expert mode, perf panel,
   lock-screen handling, Indic \p{M} regex fix. Stress test (2 rounds): no crash, no ANR, service stayed bound.
   **Field logging**: on-phone log from 14:00 (`scripts/pull-logs.sh`), laptop capture (`scripts/capture-logs.sh`).
+- 16:15 **Field test round 1 → Clicky-style core.** Diagnosed from the on-phone log: planner re-asked every second (×40
+  loops), wandered into Help/About/Settings›Accessibility (WhatsApp not set up), paused on redirects, questions forced into
+  tasks, voice chain failed (no offline packs, error 11 from fast retries). Fixed: questions/greetings answered out loud with
+  conversation context; sign-in/setup walls + ads recognised; one plan per screen (cache) + "not sure" exit; never
+  Help/About/Terms; redirects adopted; missing app → Play Store offer; system actions (notifications…); card above the
+  keyboard; no duplicate a11y button; voice fallbacks + system popup; best offline TTS voice; one camera (read/medicine/
+  how-to, auto-detect); on/off toggles; Settings search route; containers filtered; grounding check (goal-related item beats
+  a guess). **Memory**: one live Gemma conversation per task (KV cache, ~0.5 s/turn), conversation memory (6 exchanges),
+  long-term memory with a task journal + relevant-fact retrieval; tasks are set aside (not lost) for questions and resumed.
+  Verified: "show me my subscriptions" (unscripted) → question mid-task → "continue" → model detects done.

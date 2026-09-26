@@ -86,5 +86,26 @@ object Memory {
     }
     fun learnedLabel(pkg: String, stepKey: String): String? = obj("labels").optString("$pkg|$stepKey").ifBlank { null }
 
+    // ── Task journal: what they did, when (for "what did I do yesterday?" and for context) ──
+    fun journal(entry: String) {
+        val a = arr("journal")
+        a.put(JSONObject().put("t", entry.take(160)).put("at", System.currentTimeMillis()))
+        while (a.length() > 60) a.remove(0)
+        save()
+    }
+    fun journalEntries(n: Int = 10): List<String> = arr("journal").let { a ->
+        val fmt = java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.US)
+        (maxOf(0, a.length() - n) until a.length()).map { i -> a.getJSONObject(i).let { "${fmt.format(java.util.Date(it.optLong("at")))}: ${it.optString("t")}" } }
+    }
+
+    /** Long-term facts relevant to [query] (keyword overlap), for the model's context. Never the whole memory. */
+    fun relevant(query: String, max: Int = 5): List<String> {
+        val words = query.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.length >= 3 }.toSet()
+        if (words.isEmpty()) return emptyList()
+        val facts = notes() + reminders() + journalEntries(30) + topPeople(5).map { "Person they contact: $it" }
+        return facts.map { f -> f to words.count { f.lowercase().contains(it) } }.filter { it.second > 0 }
+            .sortedByDescending { it.second }.take(max).map { it.first }
+    }
+
     fun forgetAll() { synchronized(this) { cache = JSONObject() }; save() }
 }

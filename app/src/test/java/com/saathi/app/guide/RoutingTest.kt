@@ -126,6 +126,15 @@ class RoutingTest {
         assertEquals(true, ScreenKinds.wall(wa)?.setup)
     }
 
+    @Test fun groundingBeatsGuessing() {
+        fun el(id: Int, l: String) = UiElement(id, l, "button", android.graphics.Rect(), true, false, false, false, null)
+        val sc = Screen("com.android.settings", listOf(el(1, "System update"), el(2, "Display, brightness & eye protection")), "")
+        val d = Planner.ground(Planner.Decision(1, "x", false, true), "turn on the eye protection filter", sc, Lang.EN)
+        assertEquals(2, d.targetId)
+        val sc2 = Screen("com.android.settings", listOf(el(1, "System update"), el(2, "Search settings")), "")
+        assertEquals(2, Planner.ground(Planner.Decision(1, "x", false, true), "eye protection", sc2, Lang.EN).targetId)
+    }
+
     @Test fun irPatternsAreStandard() {
         val p = IrRemote.pattern(0x20DF10EFL, samsung = false)
         assertEquals(9000, p[0]); assertEquals(4500, p[1]); assertEquals(67, p.size)

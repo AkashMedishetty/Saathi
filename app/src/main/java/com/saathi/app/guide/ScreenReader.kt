@@ -133,6 +133,13 @@ object ScreenReader {
                 out += UiElement(out.size + 1, "scrollable list", "text", r, true, false, false, true, s)
             }
         }
-        return Screen(root.packageName?.toString() ?: "", out, all.toString())
+        // Containers aren't targets: a clickable area wrapping 2+ other tappable things (a toolbar, a card, a whole
+        // header) has a merged label like "Settings · Search settings" that lured the planner (field test).
+        val interactive = out.filter { it.role != "text" }
+        val containers = interactive.filter { c ->
+            interactive.count { o -> o !== c && c.bounds.contains(o.bounds) && o.bounds != c.bounds } >= 2
+        }.toSet()
+        val kept = out.filter { it !in containers }.mapIndexed { i, e -> e.copy(id = i + 1) }
+        return Screen(root.packageName?.toString() ?: "", kept, all.toString())
     }
 }

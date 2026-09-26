@@ -102,6 +102,11 @@ class Guide(
     private var lastActKey: String? = null
     private var lastActAt = 0L
     private var sameActCount = 0
+    /** The model's memory for this task: one live conversation, told what happened after each step. */
+    private var taskKey = ""
+    private var lastActionNote: String? = null
+    /** The task is set aside while Saathi answers something else; the loop waits until they continue. */
+    private var setAside = false
 
     // ── Watchdog: no progress for 2 minutes → offer help (once per task). ──
     private var lastProgress = 0L
@@ -122,6 +127,15 @@ class Guide(
             if (rest.length > 3) { start(rest, autoMode = true); return }
             if (active) { enableAuto(); return }
         }
+        // Saathi asked them something ("Which contact?"): their reply refines the same task, it isn't a new one.
+        if (active && current?.key?.startsWith("ask_") == true) {
+            goal = "$goal (${text.trim()})"
+            com.saathi.app.DebugLog.i("ask", "answered: $text → goal=$goal")
+            planCache.clear(); lastSig = 0; replan = true
+            schedule(200, force = true)
+            return
+        }
+        if (active && (paused || setAside) && Regex("(?i)^(continue|yes|go on|resume|जारी|हाँ|हां|కొనసాగించు|అవును)").containsMatchIn(t)) { resumeTask(); return }
         if (active || current != null) when {
             any("do it", "do it for me", "you do it", "कर दो", "आप करो", "तुम करो", "చేయి", "మీరే చేయండి") -> { doItForMe(); return }
             any("again", "repeat", "say again", "फिर से", "दोबारा", "మళ్ళీ") -> { repeat(); return }
@@ -165,12 +179,19 @@ class Guide(
             return
         }
 
+        // No app and no skill, asked from the home screen: there's nothing to guide on. Answer instead of wandering.
+        if (f == null) {
+            val here = svc.rootInActiveWindow?.packageName?.toString()
+            if (here == null || here == launcherPkg() || here == svc.packageName) { answerQuestion(goalText); return }
+        }
+
         goal = goalText
         flow = f
         history.clear(); current = null; lastSpokenKey = null; lastSig = 0; warnedSig = 0; lastStepIdx = -1; scrolls = 0
         taskPkgs.clear(); paused = false; pendingLearn = null; adoptPkg = true
-        auto = autoMode; autoSteps = 0; autoLastKey = null; autoSameKey = 0
+        auto = autoMode; autoSteps = 0; autoLastKey = null; autoSameKey = 0; setAside = false
         planCache.clear(); unsureCount.clear(); plansThisTask = 0; wallFp = 0; lastActKey = null; sameActCount = 0
+        LlmManager.endChat(); taskKey = "task_${SystemClock.uptimeMillis()}"; lastActionNote = null
         lastProgress = SystemClock.uptimeMillis(); stuckOffered = false
         startWatchdog()
 
@@ -229,6 +250,7 @@ class Guide(
      */
     fun onUserTap() {
         lastTapAt = SystemClock.uptimeMillis()
+        current?.el?.let { lastActionNote = "They tapped something (the glowing item was \"${it.title}\")." }
         if (!active) return
         delayedGlow?.cancel()
         overlay.highlight(null, false)
@@ -283,7 +305,7 @@ class Guide(
 
     private suspend fun tick() {
         // 0. Never guide inside Saathi's own screens (trap #10), nor over the lock screen.
-        if (SaathiService.ownUiOpen || svc.isLocked()) return
+        if (SaathiService.ownUiOpen || svc.isLocked() || setAside) return
         // 1. The person is touching or scrolling: wait.
         val wait = settling()
         if (wait > 0) { job = scope.launch { delay(wait + 30); tick() }; return }
@@ -316,7 +338,7 @@ class Guide(
         if (isTransient(screen.pkg)) return
 
         // 6. Right app? Adopt the first real app for open-ended tasks; otherwise pause politely.
-        if (adoptPkg && screen.pkg.isNotBlank()) { taskPkgs += screen.pkg; adoptPkg = false }
+        if (adoptPkg && screen.pkg.isNotBlank() && screen.pkg != launcherPkg()) { taskPkgs += screen.pkg; adoptPkg = false }
         val stepHere = f?.let { matchStep(it, screen) }
         if (taskPkgs.isNotEmpty() && screen.pkg !in taskPkgs) {
             // Apps hand off all the time: sign-in with Google, the app store, a photo picker, the editor.
@@ -385,7 +407,11 @@ class Guide(
         val learned = f?.steps?.mapNotNull { Memory.learnedLabel(screen.pkg, it.key) }.orEmpty()
         replan = false
         plansThisTask++
-        var d = try { Planner.decide(f?.llmGoal ?: g, screen, history, lang, learned, allowLlm = !lowPower, app = AppLauncher.labelOf(svc, screen.pkg)) } finally { thinking = false; overlay.setAura(false) }
+        var d = try {
+            Planner.decideInTask(taskKey, f?.llmGoal ?: g, screen, lastActionNote, lang, AppLauncher.labelOf(svc, screen.pkg), allowLlm = !lowPower,
+                progress = history.toList())
+        } finally { thinking = false; overlay.setAura(false) }
+        lastActionNote = null
         // Never lead them to Help / About / Privacy / Terms unless they asked for it.
         d.targetId?.let { screen.byId(it) }?.let { el -> if (ScreenKinds.avoid(el.label, g)) d = d.copy(targetId = null) }
         com.saathi.app.DebugLog.i("plan", "goal=\"${f?.llmGoal ?: g}\" pkg=${screen.pkg} llm=${d.fromLlm} target=${d.targetId?.let { screen.byId(it)?.label?.take(50) }} done=${d.done} noAct=${d.noAct} lowPower=$lowPower")
@@ -394,14 +420,26 @@ class Guide(
             lastSig = 0; schedule(200, force = true); return // the screen moved while we thought: look again
         }
         if (d.done) { f?.let { complete(it) } ?: finish(d.say) }
-        else {
+        else if (d.action == "back") {
+            show(Target(null, d.say, "plan_back_$fp", fill = "__BACK__"))
+        } else if (d.action == "ask") {
+            // The model needs them to decide: ask out loud, wait for their answer (the Ask sheet adds it to the goal).
+            current = Target(null, d.say, "ask_$fp"); lastSpokenKey = current?.key
+            planCache[fp] = Plan(null, null, d.say, false)
+            overlay.highlight(null, false)
+            overlay.showCard(d.say, Overlay.Mode.INFO)
+            speaker.say(d.say, lang)
+        } else {
             val el = d.targetId?.let { screen.byId(it) }
             if (el != null) {
                 if (f != null) f.steps.getOrNull(lastStepIdx + 1)?.let { pendingLearn = Triple(screen.pkg, it.key, el.title) }
                 // Speak what's actually written on the button, not the model's paraphrase (it invented "Options").
                 val text = if (lang == Lang.EN && d.fromLlm && d.say.contains(el.title.take(12), ignoreCase = true)) d.say else Planner.tapSay(el.title, lang)
                 planCache[fp] = Plan(el.label, el.role, text, d.noAct)
-                show(Target(el, text, "plan_${el.label}", noAct = d.noAct))
+                // A search box: "Do it" types the key words of their request (e.g. "ringtone").
+                val fill = if (el.role == "input" && !el.password) (d.text ?: searchTerm(f?.llmGoal ?: g)) else null
+                show(Target(el, if (fill != null) say("Tap the search box and type “$fill”.", "खोज में “$fill” लिखिए।", "వెతుకులో “$fill” టైప్ చేయండి.").pick(lang) else text,
+                    "plan_${el.label}", fill = fill, noAct = d.noAct))
             } else {
                 unsureCount[fp] = (unsureCount[fp] ?: 0) + 1
                 if (screen.scrollable() != null && (unsureCount[fp] ?: 0) == 1) show(Target(null, d.say, "plan_scroll_$fp", scroll = true))
@@ -471,6 +509,7 @@ class Guide(
         if (newKey) lastProgress = SystemClock.uptimeMillis()
         if (newKey) com.saathi.app.DebugLog.i("show", "key=${t.key} el=\"${t.el?.label?.take(60)}\" role=${t.el?.role} bounds=${t.el?.bounds?.toShortString()} warn=${t.warn} final=${t.final} noAct=${t.noAct} auto=$auto text=\"${t.text.take(120)}\" pkg=${taskPkgs.firstOrNull()}")
         val mode = when {
+            t.fill == "__BACK__" -> Overlay.Mode.STEP
             auto && !t.warn && !t.noAct && (t.el != null || t.scroll) && !t.final -> Overlay.Mode.AUTO
             t.warn -> Overlay.Mode.WARN
             t.final -> Overlay.Mode.FINAL
@@ -564,6 +603,14 @@ class Guide(
         })
     }
 
+    /** Back to the task that a question/message set aside: the model is re-primed with its progress. */
+    fun resumeTask() {
+        if (goal == null) return
+        setAside = false; paused = false; lastSpokenKey = null; lastSig = 0; replan = true
+        taskPkgs.firstOrNull()?.let { AppLauncher.launch(svc, it) }?.let { runCatching { svc.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+        schedule(700, force = true)
+    }
+
     private fun resume() {
         paused = false
         lastSpokenKey = null // re-announce the step we're on
@@ -601,6 +648,12 @@ class Guide(
 
     private fun act(t: Target, fresh: Screen?, el: UiElement?) {
         lastOwnAction = SystemClock.uptimeMillis()
+        lastActionNote = when {
+            t.fill == "__BACK__" -> "I pressed Back for them."
+            el == null -> "I scrolled down for them."
+            t.fill != null -> "I typed \"${t.fill}\" into \"${el.title}\"."
+            else -> "I tapped \"${el.title}\" for them."
+        }
         if (t.key == lastActKey && lastOwnAction - lastActAt < 6000) sameActCount++ else sameActCount = 0
         lastActKey = t.key; lastActAt = lastOwnAction
         if (sameActCount >= 2) {
@@ -612,6 +665,10 @@ class Guide(
             return
         }
         com.saathi.app.DebugLog.i("act", "key=${t.key} target=\"${el?.label?.take(60)}\" role=${el?.role} auto=$auto fill=${t.fill != null}")
+        if (el == null && t.fill == "__BACK__") {
+            svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+            lastSig = 0; replan = true; schedule(600, force = true); return
+        }
         if (el == null) {
             // A scroll hint: "Do it" scrolls for them.
             fresh?.scrollable()?.node?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
@@ -653,12 +710,14 @@ class Guide(
 
     private fun complete(f: Flow) {
         Memory.completed(f.id)
+        goal?.let { Memory.journal("Did: $it") }
         f.memo?.let { Memory.addReminder(it) }
         runCatching { f.onDone?.invoke(svc) }
         finish(f.doneSay.pick(lang))
     }
 
     private fun finish(text: String) {
+        LlmManager.endChat()
         goal?.let { Conversation.remember(it, text) }
         com.saathi.app.DebugLog.i("finish", "\"${text.take(120)}\" goal=\"$goal\"")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
@@ -674,6 +733,9 @@ class Guide(
     }
 
     fun stop() {
+        setAside = false
+        LlmManager.endChat()
+        goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
         goal = null; flow = null; paused = false; taskPkgs.clear()
@@ -870,7 +932,9 @@ class Guide(
 
     /** A question or chit-chat: answer out loud (the Clicky lesson), no screen navigation. */
     fun answerQuestion(q: String) {
-        stop()
+        // A question in the middle of a task sets the task aside (not lost): answer, then offer to continue it.
+        val interrupted = goal
+        if (interrupted != null) { setAside = true; autoJob?.cancel(); overlay.highlight(null, false) } else stop()
         lang = Prefs.lang(svc)
         if (!LlmManager.isReady) LlmManager.loadAsync(svc)
         scope.launch {
@@ -886,7 +950,9 @@ class Guide(
             current = Target(null, a, "answer")
             if (howTo) overlay.showCard(a + "\n\n" + say("Shall I find a video?", "वीडियो ढूँढूँ?", "వీడియో వెతకనా?").pick(lang), Overlay.Mode.ASK, onContinue = {
                 overlay.hideCard(); start("play ${SlotExtractor.searchPhrase(q)} on YouTube")
-            }) else overlay.showCard(a, Overlay.Mode.DONE)
+            }) else if (interrupted != null) overlay.showCard(a + "\n\n" + say("Shall we continue “${interrupted.take(40)}”?", "क्या “${interrupted.take(40)}” जारी रखें?", "“${interrupted.take(40)}” కొనసాగిద్దామా?").pick(lang),
+                Overlay.Mode.PAUSED, onContinue = { resumeTask() })
+            else overlay.showCard(a, Overlay.Mode.DONE)
             speaker.say(if (howTo) a + " " + say("Shall I find a video?", "वीडियो ढूँढूँ?", "వీడియో వెతకనా?").pick(lang) else a, lang)
             hideJob?.cancel(); hideJob = scope.launch { delay(25_000); if (goal == null && current?.key == "answer") overlay.hideCard() }
         }
@@ -909,6 +975,13 @@ class Guide(
         runCatching { svc.startActivity(Intent(svc, com.saathi.app.ui.RemoteActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         speaker.say(t, lang)
         Conversation.remember(g, t)
+    }
+
+    /** "change my ringtone" → "ringtone": the words worth typing into a search box. */
+    private fun searchTerm(goal: String): String? {
+        val stop = setOf("change", "my", "the", "a", "an", "how", "to", "do", "i", "set", "open", "turn", "on", "off", "make", "please", "want", "can", "you", "find", "show", "me", "is", "in")
+        val w = SlotExtractor.searchPhrase(goal).split(Regex("\\s+")).filter { it.length > 2 && it.lowercase() !in stop }
+        return w.takeLast(2).joinToString(" ").ifBlank { null }
     }
 
     private fun launcherPkg(): String? = runCatching {
@@ -947,7 +1020,7 @@ class Guide(
     /** "What's my BP tablet?" → answered only from what they told Saathi (grounded; never invented). */
     fun recall(q: String) {
         lang = Prefs.lang(svc)
-        val facts = Memory.notes() + Memory.reminders() + Routines.all(svc).map { "${it.goal} · ${it.time} daily" } +
+        val facts = Memory.notes() + Memory.reminders() + Memory.journalEntries(30) + Routines.all(svc).map { "${it.goal} · ${it.time} daily" } +
             Prefs.contacts(svc).map { "Family: ${it.name}" }
         val words = q.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.length >= 3 && it !in RECALL_STOP }
         val hits = facts.map { f -> f to words.count { it in f.lowercase() } }.filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }

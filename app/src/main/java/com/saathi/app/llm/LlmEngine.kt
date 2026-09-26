@@ -20,6 +20,9 @@ interface LlmEngine {
     val label: String
     val backend: String
     fun generate(system: String, user: String): String
+    /** Multi-turn: same [key] = same conversation (the model keeps its memory of earlier turns). Default: stateless. */
+    fun chat(key: String, system: String, user: String): String = generate(system, user)
+    fun endChat() {}
     fun close()
 }
 
@@ -54,6 +57,7 @@ class LiteRtEngine(ctx: Context, file: File, override val backend: String, visio
         ask(Contents.of(Content.ImageBytes(jpeg), Content.Text(prompt)), null)
 
     private fun ask(msg: Contents, system: String?): String {
+        endChat() // one conversation at a time on this runtime
         val cfg = ConversationConfig(
             systemInstruction = system?.let { Contents.of(it) },
             samplerConfig = SamplerConfig(topK = 1, topP = 0.95, temperature = 0.1, seed = 7),
@@ -64,7 +68,30 @@ class LiteRtEngine(ctx: Context, file: File, override val backend: String, visio
         }
     }
 
-    override fun close() = engine.close()
+    // ── One live conversation per task: the KV cache keeps the goal and every earlier step. ──
+    private var chatKey: String? = null
+    private var chatConv: com.google.ai.edge.litertlm.Conversation? = null
+    private var chatTurns = 0
+
+    override fun chat(key: String, system: String, user: String): String {
+        if (key != chatKey || chatConv == null || chatTurns >= 10) {
+            endChat()
+            chatConv = engine.createConversation(ConversationConfig(
+                systemInstruction = Contents.of(system),
+                samplerConfig = SamplerConfig(topK = 1, topP = 0.95, temperature = 0.1, seed = 7),
+            ))
+            chatKey = key; chatTurns = 0
+        }
+        chatTurns++
+        val reply = chatConv!!.sendMessage(Contents.of(user))
+        return reply.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
+    }
+
+    val turns get() = chatTurns
+
+    override fun endChat() { runCatching { chatConv?.close() }; chatConv = null; chatKey = null; chatTurns = 0 }
+
+    override fun close() { endChat(); engine.close() }
 }
 
 /** MediaPipe LLM Inference (.task). Guaranteed GPU/CPU path; applies chat templates itself (trap #3). */

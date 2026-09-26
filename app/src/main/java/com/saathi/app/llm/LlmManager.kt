@@ -115,6 +115,25 @@ object LlmManager {
         }
     }
 
+    /** A turn in the task's ongoing conversation. Returns (text, isFirstTurnOfSession). */
+    suspend fun chat(key: String, system: String, user: String): String? = genLock.withLock {
+        val e = engine ?: return@withLock null
+        withContext(Dispatchers.IO) {
+            val t0 = SystemClock.elapsedRealtime()
+            val out = try { e.chat(key, system, user) } catch (t: Throwable) { Log.w(TAG, "chat failed", t); runCatching { e.endChat() }; "" }
+            lastGenMs = SystemClock.elapsedRealtime() - t0
+            touchIdle()
+            com.saathi.app.DebugLog.i("llm", "chat[$key] ${lastGenMs} ms: ${out.take(200)}")
+            Templates.clean(out)
+        }
+    }
+
+    /** Is [key] the conversation currently alive (so we only send what's new)? */
+    fun inChat(key: String) = (engine as? LiteRtEngine)?.let { it.turns in 1..9 && lastChatKey == key } ?: false
+    @Volatile var lastChatKey: String? = null
+
+    fun endChat() { runCatching { engine?.endChat() }; lastChatKey = null }
+
     private fun touchIdle() {
         idleJob?.cancel()
         idleJob = scope.launch {

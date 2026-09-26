@@ -20,35 +20,30 @@ object Planner {
         val fromLlm: Boolean,
         /** Glow it, but never tap it for them. */
         val noAct: Boolean = false,
+        /** tap | type | scroll | back | ask | done */
+        val action: String = "tap",
+        /** For TYPE: what to type. For ASK: the question. */
+        val text: String? = null,
     )
 
-    /** "Knowledge pack": how Android screens work, in the words an elder needs. Kept short for speed. */
+    /**
+     * Model-first: Gemma decides with ONE tool call; our code only validates it and keeps it safe.
+     * (Short on purpose: a 2B model follows a small, clear contract better than a long rule list.)
+     */
     private const val SYSTEM =
-        "You are Saathi, a kind, patient helper for an elderly person in India using an Android phone.\n" +
-        "You see their goal and a numbered list of what is on the screen. Pick the ONE item to tap next.\n" +
-        "How phones work:\n" +
-        "- A magnifying glass or 'Search' finds things. Three dots or 'More options' opens a menu.\n" +
-        "- A gear or 'Settings' changes settings. An arrow at the top left or 'Back'/'Navigate up' goes back.\n" +
-        "- '+' or 'New' creates something. A pencil or 'Edit' changes it. A paper plane or 'Send' sends.\n" +
-        "- To type, pick the input box first. Switches turn things on and off.\n" +
-        "Rules:\n" +
-        "- Choose items whose words match the goal. Never choose ads, 'Sponsored', 'Install', or anything about paying,\n" +
-        "  OTP, PIN or passwords unless the goal clearly asks for it.\n" +
-        "- If what they need is not on this screen (maybe further down), reply TAP: -1.\n" +
-        "- If the screen asks them to sign in, log in or set up the app, reply TAP: -1 (they must do that themselves).\n" +
-        "- Never choose Help, About, Privacy, Terms, Feedback, Learn more or Accessibility unless the goal is about them.\n" +
-        "- Don't repeat something already tapped unless the screen clearly needs it again.\n" +
-        "Reply with exactly two lines and nothing else:\n" +
-        "TAP: <number>\n" +
-        "SAY: <one short, warm sentence telling them what to tap, under 15 words>\n" +
-        "If the goal is already done, reply TAP: 0 and SAY: a short congratulation."
+        "You are Saathi, a patient helper guiding an elderly person through their Android phone, one step at a time.\n" +
+        "You get their goal, the app that is open, what was already done, and a numbered list of what is on the screen.\n" +
+        "Reply with exactly two lines:\n" +
+        "Line 1, one action: TAP <n> | TYPE <n> <text> | SCROLL | BACK | DONE | ASK <short question for the person>\n" +
+        "Line 2: SAY <one short, warm sentence telling them what to do, using the words written on the screen>\n" +
+        "Use DONE when the goal is already achieved. Use ASK if the goal is unclear or they must decide (which person, which item).\n" +
+        "Only they type passwords, PINs and OTPs, and only they sign in: for those, tell them what to do and use DONE if nothing else is needed."
 
-    /** Two worked examples, so a small model gets the format and the judgement right. */
     private const val SHOTS =
-        "Example 1\nGoal: turn on dark mode\nScreen:\n[1] button \"Wi-Fi\"\n[2] button \"Display\"\n[3] button \"Sound\"\n" +
-        "TAP: 2\nSAY: Tap Display, where the screen colours are.\n\n" +
-        "Example 2\nGoal: add a new contact\nScreen:\n[1] button \"Search contacts\"\n[2] button \"Create new contact\"\n[3] text \"Rahul\"\n" +
-        "TAP: 2\nSAY: Tap Create new contact to add someone.\n\n"
+        "Example\nGoal: find the ringtone setting\nApp open: Settings\nScreen:\n[1] button \"Wi-Fi\"\n[2] button \"Sounds & vibration\"\n[3] button \"Display\"\n" +
+        "TAP 2\nSAY Tap Sounds & vibration, where the ringtone is.\n\n" +
+        "Example\nGoal: search for bhajans\nApp open: YouTube\nScreen:\n[1] input \"Search YouTube\"\n[2] button \"Back\"\n" +
+        "TYPE 1 bhajan\nSAY Type bhajan in the search box.\n\n"
 
     /** Labels we will glow but never tap on the person's behalf. */
     private val RISKY = Regex(
@@ -68,6 +63,58 @@ object Planner {
 
     fun isRisky(label: String) = RISKY.containsMatchIn(label)
 
+    /**
+     * The task's ongoing conversation with the model: the first turn carries the goal and examples; each later turn
+     * says what just happened and shows the new screen. The model keeps everything earlier in its memory.
+     */
+    suspend fun decideInTask(taskKey: String, goal: String, screen: Screen, lastAction: String?, lang: Lang, app: String, allowLlm: Boolean,
+                             progress: List<String> = emptyList()): Decision {
+        if (!allowLlm || !LlmManager.isReady || isMoneyApp(screen.pkg)) return guard(heuristic(goal, screen, lang), screen, lang)
+        val first = !LlmManager.inChat(taskKey)
+        val msg = buildString {
+            if (first) {
+                append(SHOTS)
+                val talk = Conversation.recent().takeLast(3)
+                if (talk.isNotEmpty()) append("Recent conversation:\n").append(talk.joinToString("\n") { (u, a) -> "- they said \"${u.take(80)}\", Saathi said \"${a.take(80)}\"" }).append('\n')
+                Memory.relevant(goal).takeIf { it.isNotEmpty() }?.let { append("What you know about them (use if helpful):\n").append(it.joinToString("\n") { f -> "- $f" }).append('\n') }
+                append("Now the real task.\nGoal: ").append(goal).append('\n')
+                // Resumed or re-started conversation: the model still knows what was done so far.
+                if (progress.isNotEmpty()) append("Already done in this task: ").append(progress.takeLast(6).joinToString(" → ")).append('\n')
+            } else {
+                append(lastAction ?: "The screen changed.").append('\n')
+                append("(Goal is still: ").append(goal).append(")\n")
+            }
+            append("App open: ").append(app.ifBlank { screen.pkg }).append('\n')
+            append("Screen:\n").append(screen.forPrompt()).append('\n')
+        }
+        LlmManager.lastChatKey = taskKey
+        val raw = LlmManager.chat(taskKey, SYSTEM, msg)
+        val d = raw?.let { parse(it, screen, lang) } ?: heuristic(goal, screen, lang)
+        return guard(ground(d, goal, screen, lang), screen, lang)
+    }
+
+    private val GENERIC_NAV = Regex("(?i)^(search|more|more options|menu|next|continue|ok|okay|allow|done|save|yes|apply|confirm|settings|open|start|got it|agree)\\b")
+
+    private fun words(t: String) = t.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.length >= 3 && it !in STOP }.toSet()
+
+    /**
+     * Ground truth over guesses (field test: "eye protection" → the model tapped "System update", the top row).
+     * An unrelated pick loses to an on-screen item that shares words with the goal; with nothing related visible,
+     * scroll (or use search) instead of guessing. Generic navigation (Search, More, Next, OK…) stays allowed.
+     */
+    fun ground(d: Decision, goal: String, screen: Screen, lang: Lang): Decision {
+        if (d.action != "tap" && d.action != "type") return d
+        val el = d.targetId?.let { screen.byId(it) } ?: return d
+        val gw = words(goal)
+        if (gw.isEmpty() || words(el.label).any { it in gw } || GENERIC_NAV.containsMatchIn(el.title) || el.role == "input") return d
+        val better = screen.elements.filter { it.role != "text" && it.enabled && !it.password }
+            .map { it to words(it.label).count { w -> w in gw } }.filter { it.second > 0 }.maxByOrNull { it.second }?.first
+        if (better != null) return d.copy(targetId = better.id, say = tapSay(better.title, lang))
+        val search = screen.elements.firstOrNull { it.enabled && Regex("(?i)^search").containsMatchIn(it.title) }
+        if (search != null) return d.copy(targetId = search.id, say = tapSay(search.title, lang))
+        return if (screen.scrollable() != null) Decision(null, scrollSay(lang), done = false, fromLlm = d.fromLlm, action = "scroll") else d
+    }
+
     suspend fun decide(goal: String, screen: Screen, history: List<String>, lang: Lang, learned: List<String> = emptyList(), allowLlm: Boolean = true, app: String = ""): Decision {
         // Banking / UPI screens never go to the model at all: keywords and scripts only. Low battery: keywords only.
         val raw = if (allowLlm && LlmManager.isReady && !isMoneyApp(screen.pkg)) LlmManager.generate(SYSTEM, buildUser(goal, screen, history, learned, app)) else null
@@ -78,15 +125,28 @@ object Planner {
     private val MONEY_PKGS = Regex("paisa|phonepe|paytm|npci|sbi|icici|hdfc|axis|kotak|bank|upi|wallet|pay", RegexOption.IGNORE_CASE)
     fun isMoneyApp(pkg: String) = MONEY_PKGS.containsMatchIn(pkg)
 
-    /** Pure: model text → decision, or null if it isn't usable. */
+    /** Pure: model text → decision, or null if it isn't usable. Accepts the tool format and the old TAP:/SAY: one. */
     fun parse(raw: String, screen: Screen, lang: Lang = Lang.EN): Decision? {
-        val id = Regex("TAP:\\s*(-?\\d+)", RegexOption.IGNORE_CASE).find(raw)?.groupValues?.get(1)?.toIntOrNull() ?: return null
-        val llmSay = Regex("SAY:\\s*\"?([^\"\\n]+)", RegexOption.IGNORE_CASE).find(raw)?.groupValues?.get(1)?.trim()
-            ?.takeIf { lang == Lang.EN && it.length in 4..140 && !Templates.garbled(it) && !it.contains(Regex("https?://|www\\.")) }
-        if (id == 0) return Decision(null, llmSay ?: say("All done!", "हो गया!", "అయిపోయింది!").pick(lang), done = true, fromLlm = true)
-        if (id < 0) return Decision(null, scrollSay(lang), done = false, fromLlm = true)
-        val el = screen.byId(id)?.takeIf { it.role != "text" && it.label.isNotBlank() } ?: return null
-        return Decision(el.id, llmSay ?: tapSay(el.title, lang), done = false, fromLlm = true)
+        val lines = raw.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val sayLine = lines.firstOrNull { it.startsWith("SAY", true) }?.replace(Regex("(?i)^SAY:?\\s*"), "")?.trim('"', ' ')
+        val llmSay = sayLine?.takeIf { lang == Lang.EN && it.length in 4..160 && !Templates.garbled(it) && !it.contains(Regex("https?://|www\\.")) }
+        val act = lines.firstOrNull { Regex("(?i)^(TAP|TYPE|SCROLL|BACK|DONE|ASK)\\b").containsMatchIn(it) } ?: return null
+        val verb = act.substringBefore(' ').substringBefore(':').uppercase()
+        val rest = act.substringAfter(verb, "").trimStart(':', ' ')
+        return when (verb) {
+            "DONE" -> Decision(null, llmSay ?: say("All done!", "हो गया!", "అయిపోయింది!").pick(lang), done = true, fromLlm = true, action = "done")
+            "SCROLL" -> Decision(null, llmSay ?: scrollSay(lang), done = false, fromLlm = true, action = "scroll")
+            "BACK" -> Decision(null, llmSay ?: say("Let's go back one step.", "एक क़दम वापस चलते हैं।", "ఒక అడుగు వెనక్కి వెళ్దాం.").pick(lang), done = false, fromLlm = true, action = "back")
+            "ASK" -> rest.takeIf { it.length > 3 }?.let { q -> Decision(null, if (lang == Lang.EN) q else say("", "कृपया थोड़ा और बताइए।", "దయచేసి ఇంకొంచెం చెప్పండి.").pick(lang), done = false, fromLlm = true, action = "ask", text = q) }
+            else -> {
+                val id = Regex("-?\\d+").find(rest)?.value?.toIntOrNull() ?: return null
+                if (id == 0) return Decision(null, llmSay ?: say("All done!", "हो गया!", "అయిపోయింది!").pick(lang), done = true, fromLlm = true, action = "done")
+                if (id < 0) return Decision(null, scrollSay(lang), done = false, fromLlm = true, action = "scroll")
+                val el = screen.byId(id)?.takeIf { it.role != "text" && it.label.isNotBlank() } ?: return null
+                val typed = if (verb == "TYPE") rest.substringAfter(id.toString()).trim().trim('"').takeIf { it.isNotBlank() && el.role == "input" } else null
+                Decision(el.id, llmSay ?: tapSay(el.title, lang), done = false, fromLlm = true, action = if (typed != null) "type" else "tap", text = typed)
+            }
+        }
     }
 
     /** Hard rules that no model output can bypass. */
@@ -109,7 +169,7 @@ object Planner {
             .maxByOrNull { e -> words.count { it in e.label.lowercase() } }
             ?.takeIf { e -> words.any { it in e.label.lowercase() } }
         if (best != null) return Decision(best.id, tapSay(best.title, lang), done = false, fromLlm = false)
-        return Decision(null, scrollSay(lang), done = false, fromLlm = false)
+        return Decision(null, scrollSay(lang), done = false, fromLlm = false, action = "scroll")
     }
 
     fun tapSay(label: String, lang: Lang) = say(
