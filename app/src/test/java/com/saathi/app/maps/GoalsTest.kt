@@ -108,6 +108,19 @@ class GoalsTest {
         "download spotify" to "playstore_install",
     ))
 
+    @Test fun docs() = check(listOf(
+        "create a new document" to "docs_new",
+        "write a letter" to "docs_new",
+        "नया दस्तावेज़ बनाओ" to "docs_new",
+        "కొత్త డాక్యుమెంట్ తయారు చేయి" to "docs_new",
+        "save it as a word file" to "docs_save_docx",
+        "send the document as docx" to "docs_save_docx",
+        "वर्ड फ़ाइल बनाओ" to "docs_save_docx",
+        "వర్డ్ ఫైల్ గా సేవ్ చేయి" to "docs_save_docx",
+        "open my last document" to "docs_open_recent",
+        "मेरे दस्तावेज़ दिखाओ" to "docs_open_recent",
+    ))
+
     @Test fun noCrossMatches() = check(listOf(
         "video call my son" to null,
         "बेटे को वीडियो कॉल करो" to null,
