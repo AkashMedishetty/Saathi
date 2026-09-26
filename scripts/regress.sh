@@ -26,7 +26,7 @@ if want 3; then reset; goal "play guntur karam movie on my tv"
   check "R3b TV coach → asks about the subscription" "\[coach\] step [0-9]+: Call\(tool=ASK" 40
   goal "yes"; check "R3c TV coach → guides the TV (look/press)" "\[coach\] step [0-9]+: Call\(tool=(LOOK_TV|TV)" 30; fi
 if want 4; then reset; goal "read this letter for me"; sleep 4; adb shell input tap 720 2688
-  check "R4 read this → FastVLM on NPU explained" "\[vision\] [0-9]+ ms" 30; B --es cmd stop; adb shell input keyevent KEYCODE_BACK; fi
+  check "R4 read this → explained on device" "\[vision\] [0-9]+ ms|\[read\] text .*(NPU|Gemma)" 30; B --es cmd stop; adb shell input keyevent KEYCODE_BACK; fi
 if want 5; then reset; B --es cmd scam_sms; check "R5 scam SMS → alert" "\[alert\] message scam" 8; fi
 if want 6; then reset; goal "watch me: open my youtube subscriptions"; sleep 2
   adb shell monkey -p com.google.android.youtube -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 4; adb shell input tap 1008 2920; sleep 2

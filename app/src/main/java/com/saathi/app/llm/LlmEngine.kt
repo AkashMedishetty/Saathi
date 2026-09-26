@@ -153,7 +153,17 @@ object Templates {
     }
 
     /** Byte-level BPE leaking through means the runtime mangled non-ASCII text (trap #5). */
-    fun garbled(s: String) = Regex("Ġ|Ċ|à[°±¤¥]").containsMatchIn(s)
+    fun garbled(s: String) = Regex("Ġ|Ċ|à[°±¤¥]").containsMatchIn(s) || looping(s)
+
+    /** Small models sometimes fall into a loop ("1000 1200 1300 1400 …", the same word again and again). */
+    fun looping(s: String): Boolean {
+        val w = s.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.isNotBlank() }
+        if (w.size < 12) return false
+        val numbers = w.count { it.all(Char::isDigit) }
+        val top = w.groupingBy { it }.eachCount().values.maxOrNull() ?: 0
+        val distinct = w.toSet().size.toDouble() / w.size
+        return numbers > w.size * 0.4 || (top > 6 && top > w.size * 0.25) || distinct < 0.3
+    }
 
     fun clean(raw: String) = raw
         .replace(Regex("<\\|im_end\\|>|<\\|im_start\\|>|<end_of_turn>|<start_of_turn>|</?think>"), "")

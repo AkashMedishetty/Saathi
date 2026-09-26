@@ -327,20 +327,37 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
         if (mode == MODE_READ && Regex("(?i)\\b\\d+\\s?mg\\b|tablets?\\s+i\\.?p|\\bcapsules?\\b|\\bI\\.P\\.|\\bRx\\b").containsMatchIn(plain)) mode = MODE_MEDICINE
         if (mode == MODE_MEDICINE) { medicine(lines.map { it.text to (it.boundingBox?.height() ?: 0) }); return }
 
-        // 1) FastVLM on the NPU looks at the photo. 2) else Gemma explains the OCR text. 3) else read it out.
+        // A paper with real words: explain THOSE words with the text brain (grounded; FastVLM only guesses at small print
+        // and made things up in the field test). Objects / pictures / little text: FastVLM on the NPU, with the words as a hint.
+        // Order for text: Gemma 4 if already loaded → Gemma 3 1B on the NPU (≈1 s) → FastVLM. Loops/garbage are rejected.
         val jpeg = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
-        val vlm = if (mode == MODE_OBJECT) VisionBrain.describe(applicationContext, jpeg,
+        val words = plain.replace(Regex("\\s+"), " ").trim()
+        val textHeavy = mode == MODE_READ && words.length >= 40
+        fun ok(t: String?) = t?.takeIf { it.isNotBlank() && !com.saathi.app.llm.Templates.garbled(it) }
+        val explainSys = "You explain a paper to an elderly person in India in very simple English, in 2 short sentences. " +
+            "Use ONLY what the paper's text says; never invent names, amounts or dates. Bills: the amount and the due date. " +
+            "Letters: who it is from and what they want. Medicine: its name. If it asks for an OTP, PIN, bank details or urgent payment, say it may be a scam."
+        val explainUser = "The paper's text (read by the camera, may have small mistakes):\n${words.take(1500)}"
+        var usedEngine = ""
+        var llm: String? = null
+        if (textHeavy) {
+            if (LlmManager.isReady) llm = ok(LlmManager.generate(explainSys, explainUser))?.also { usedEngine = "${LlmManager.label ?: "Gemma"} · ${LlmManager.lastGenMs} ms" }
+            if (llm == null) {
+                val t0 = android.os.SystemClock.elapsedRealtime()
+                llm = ok(com.saathi.app.llm.FastBrain.generate(applicationContext, explainSys, explainUser))
+                    ?.also { usedEngine = "Gemma 3 1B · Snapdragon NPU · ${android.os.SystemClock.elapsedRealtime() - t0} ms" }
+            }
+            com.saathi.app.DebugLog.i("read", "text ${words.length} chars → ${if (llm != null) usedEngine else "no text brain"}")
+        }
+        val hint = if (words.length >= 6) " Words printed on it: \"${words.take(300)}\"." else ""
+        val vlm = if (llm != null) null else ok(if (mode == MODE_OBJECT) VisionBrain.describe(applicationContext, jpeg,
             "You help an elderly person use everyday things safely. Name the object in the photo, then give 2 or 3 very short, " +
-                "simple steps to use it, based on the buttons or labels you can see. Mention one safety tip if it heats, cuts or uses electricity.")
+                "simple steps to use it, based on the buttons or labels you can see. Mention one safety tip if it heats, cuts or uses electricity.$hint")
         else VisionBrain.describe(applicationContext, jpeg,
             "You help an elderly person. In at most 2 short, simple sentences, say what this paper is and what matters in it. " +
                 "If it is a bill, say the amount and the due date. If it is a medicine, say its name. " +
-                "If it is a letter, say who it is from and what they want. If it looks like a scam, say so clearly.")
-        val llm = if (vlm == null && plain.length > 12) {
-            if (!LlmManager.isReady) LlmManager.load(applicationContext)
-            LlmManager.generate("You explain papers to elderly people in very simple English. 2 or 3 short sentences. " +
-                "Bills: amount and due date. Letters: who from and what they want. Scams: say so.", "The paper says:\n${plain.take(1500)}")
-        } else null
+                "If it is a letter, say who it is from and what they want. If it looks like a scam, say so clearly. Only say what you can see.$hint"))
+        if (vlm != null) usedEngine = "FastVLM · Snapdragon NPU · ${VisionBrain.lastMs} ms"
         val explained = (vlm ?: llm)?.let { firstSentences(it, if (mode == MODE_OBJECT) 4 else 2) }
         aura.setAura(false)
         busy = false
@@ -348,7 +365,7 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
         // or the amount / due date on a bill (read mode). Uses OCR word boxes; nothing is guessed.
         val targets = pointAt(text, explained ?: plain)
         if (targets.second.isNotEmpty()) frozen.show(bmp, targets.second)
-        val engine = when { vlm != null -> "FastVLM · Snapdragon NPU · ${VisionBrain.lastMs} ms"; llm != null -> LlmManager.label ?: ""; else -> "" }
+        val engine = usedEngine
 
         if (explained == null && plain.isBlank()) {
             val t = s("I couldn't see any words. Hold it closer, with more light, and try again.",
