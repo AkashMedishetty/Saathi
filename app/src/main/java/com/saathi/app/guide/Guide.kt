@@ -75,6 +75,11 @@ class Guide(
     /** Packages this task lives in. Anything else (except transient system UI) pauses the task. */
     private val taskPkgs = mutableSetOf<String>()
     private var adoptPkg = false
+    /** Settings task: the person opens Settings themselves (trap #45: vivo switches Saathi off if Saathi opens it). */
+    private var needSettings = false
+    /** Just arrived in Settings: it may reopen on an old sub-page; step back to the main page first (lost-context fix). */
+    private var settingsFresh = false
+    private var settingsBacks = 0
     private var paused = false
     /** The planner stood in for a scripted step: remember its pick, commit once the flow moves past it. */
     private var pendingLearn: Triple<String, String, String>? = null
@@ -326,8 +331,19 @@ class Guide(
             // Already in Settings (they opened it themselves)? Guide from here; don't start Settings again (trap #45).
             val inSettingsAlready = intent != null && resolvePkg(intent) == "com.android.settings" &&
                 runCatching { svc.rootInActiveWindow?.packageName?.toString() }.getOrNull() == "com.android.settings"
-            val ok = intent != null && (inSettingsAlready || runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess)
+            val toSettings = intent != null && resolvePkg(intent) == "com.android.settings"
+            if (toSettings) { settingsFresh = true; settingsBacks = 0 }
+            // Settings: never opened by Saathi. Go Home and teach them to open it (they learn where it lives, too).
+            val askToOpen = toSettings && !inSettingsAlready
+            if (askToOpen) {
+                needSettings = true
+                svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+                hello = say("First, open Settings: tap the Settings icon, the grey gear.", "पहले Settings खोलिए: Settings का आइकन, ग्रे गियर, दबाइए।",
+                    "ముందు Settings తెరవండి: Settings ఐకాన్, బూడిద రంగు గేర్, నొక్కండి.").pick(lang)
+            }
+            val ok = intent != null && (inSettingsAlready || askToOpen || runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess)
             if (inSettingsAlready) com.saathi.app.DebugLog.i("begin", "already in Settings: guiding from this screen")
+            if (askToOpen) com.saathi.app.DebugLog.i("begin", "asking them to open Settings (Saathi never opens it)")
             if (ok) resolvePkg(intent!!)?.let { taskPkgs += it; adoptPkg = false }
             else { missingApp(f); return }
         }
@@ -462,6 +478,36 @@ class Guide(
         val f = flow
         // 5. Keyboard, notification shade, permission dialog: just wait.
         if (isTransient(screen.pkg)) return
+
+        // 5b. Settings tasks: they open Settings themselves; then back out of any old sub-page to the main page.
+        if (needSettings) {
+            if (screen.pkg != "com.android.settings") {
+                // The Settings APP icon, straight from the accessibility tree (labels repeat: the launcher's own
+                // "Settings" button is a thin strip; the app icon is roughly square and may read "Settings, 1 notification(s)").
+                val icon = appIcon("Settings")
+                show(Target(icon, if (icon != null) say("Open Settings: tap the glowing Settings icon.", "Settings खोलिए: चमकते Settings आइकन को दबाइए।", "Settings తెరవండి: మెరుస్తున్న Settings ఐకాన్ నొక్కండి.").pick(lang)
+                    else say("Let's open Settings. Put your finger in the middle of the screen and slide it up, to see all your apps.",
+                        "चलिए Settings खोलते हैं। उँगली स्क्रीन के बीच में रखिए और ऊपर की ओर सरकाइए, सारे ऐप दिखेंगे।",
+                        "Settings తెరుద్దాం. వేలిని స్క్రీన్ మధ్యలో పెట్టి పైకి జరపండి, అన్ని యాప్‌లు కనిపిస్తాయి.").pick(lang),
+                    if (icon != null) "open_settings" else "find_settings", noAct = true))
+                return
+            }
+            needSettings = false
+            com.saathi.app.DebugLog.i("settings", "opened by the person")
+        }
+        if (settingsFresh && screen.pkg == "com.android.settings") {
+            val home = screen.find(listOf(Regex("^Search settings", RegexOption.IGNORE_CASE), Regex("^Search$", RegexOption.IGNORE_CASE))) != null
+            if (home || (f != null && matchStep(f, screen) != null) || settingsBacks >= 5) settingsFresh = false
+            else {
+                settingsBacks++
+                com.saathi.app.DebugLog.i("settings", "old sub-page open → back ($settingsBacks)")
+                lastOwnAction = SystemClock.uptimeMillis()
+                svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+                lastSig = 0
+                schedule(700, force = true)
+                return
+            }
+        }
 
         // 6. Right app? Adopt the first real app for open-ended tasks; otherwise pause politely.
         if (adoptPkg && screen.pkg.isNotBlank() && screen.pkg != launcherPkg()) { taskPkgs += screen.pkg; adoptPkg = false }
@@ -868,7 +914,7 @@ class Guide(
         goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
-        goal = null; flow = null; paused = false; taskPkgs.clear()
+        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false
         delayedGlow?.cancel()
         Memory.clearTask()
         clearVisuals()
@@ -1116,6 +1162,27 @@ class Guide(
 
     private fun launcherPkg(): String? = runCatching {
         svc.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)?.activityInfo?.packageName
+    }.getOrNull()
+
+    /** A launcher app icon by name: icon-shaped (≥100 px, roughly square), largest wins. */
+    private fun appIcon(name: String): UiElement? = runCatching {
+        val rx = Regex("^" + Regex.escape(name) + "(\\s*,.*)?$", RegexOption.IGNORE_CASE)
+        var best: UiElement? = null
+        val q = ArrayDeque<android.view.accessibility.AccessibilityNodeInfo>()
+        svc.rootInActiveWindow?.let { q += it }
+        var seen = 0
+        while (q.isNotEmpty() && seen < 1500) {
+            val n = q.removeFirst(); seen++
+            val label = (n.contentDescription ?: n.text)?.toString()?.trim().orEmpty()
+            if (rx.matches(label)) {
+                val r = android.graphics.Rect(); n.getBoundsInScreen(r)
+                val ok = r.width() >= 100 && r.height() >= 100 && r.width() * 3 >= r.height() && r.height() * 3 >= r.width()
+                if (ok && (best == null || r.width() * r.height() > best!!.bounds.width() * best!!.bounds.height()))
+                    best = UiElement(-1, name, "button", r, true, false, false, false, n)
+            }
+            for (i in 0 until n.childCount) n.getChild(i)?.let { q += it }
+        }
+        best
     }.getOrNull()
 
     /** Apps that tasks legitimately hop into: sign-in, browser tabs, the store, pickers, camera, payment sheets. */
