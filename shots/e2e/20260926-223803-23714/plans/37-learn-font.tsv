@@ -1,0 +1,4 @@
+1	name	Learn-section bigger letters entry	
+3	say	HI अक्षर बड़े करना सिखाओ	
+4	show	(open_settings|open_app|find_app|display|font)	15
+5	enabled	-	

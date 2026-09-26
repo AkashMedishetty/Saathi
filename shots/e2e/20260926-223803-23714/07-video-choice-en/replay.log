@@ -1,0 +1,7 @@
+--------- beginning of main
+1790442900.000 I E2E: enabled=1
+         1790442900.633 23887 23887 I SaathiLog: [goal] "video call my son" lang=EN auto=false locked=false
+         1790442900.640 23887 23887 I SaathiLog: [map] route wa_video_call (WhatsApp)
+         1790442900.680 23887 23887 I SaathiLog: [halo] show null suspended=false
+1790442920.000 I E2E: enabled=1
+1790442921.000 I E2E: end

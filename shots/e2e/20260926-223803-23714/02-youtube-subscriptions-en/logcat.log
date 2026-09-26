@@ -1,0 +1,4 @@
+--------- beginning of main
+         1790442588.168 19824 19824 I SaathiLog: [goal] "open my YouTube subscriptions" lang=EN auto=false locked=false
+         1790442588.176 19824 19824 I SaathiLog: [map] route yt_subscriptions (YouTube)
+         1790442588.223 19824 19824 I SaathiLog: [halo] show null suspended=false

@@ -1,0 +1,4 @@
+1	name	Greeting response (TE)	
+3	say	TE నమస్తే	
+4	log	\[finish\]|\[respond\]	15
+5	enabled	-	

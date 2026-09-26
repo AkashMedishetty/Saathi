@@ -1,0 +1,8 @@
+1	name	Video choice then phone path (HI)	
+3	say	HI बेटे को वीडियो कॉल करो	
+4	show	choose_video	15
+5	screenshot	video-choice	
+6	tap-choice	phone	
+7	show	(video|call|search|type|pick)	15
+8	not-log	\[act\].*(key=(call|video)|target=.?(Call|Video call))	3
+9	enabled	-	

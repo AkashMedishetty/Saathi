@@ -1,0 +1,6 @@
+1	name	WhatsApp message guidance or login wall	
+2	apps	com.whatsapp	
+4	say	EN send a WhatsApp message to Priya saying I reached home	
+5	show	(wall_.*|search|type|pick|send)	20
+6	not-log	\[act\].*(key=send|target=.?[Ss]end)	3
+7	enabled	-	

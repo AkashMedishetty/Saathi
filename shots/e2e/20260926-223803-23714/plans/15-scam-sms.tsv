@@ -1,0 +1,4 @@
+1	name	SMS KYC threat alert	
+3	cmd	scam_sms	
+4	log	\[alert\] shield kyc CAUTION	8
+5	enabled	-	

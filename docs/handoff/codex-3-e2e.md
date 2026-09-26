@@ -70,3 +70,18 @@ re-enable Saathi only via `scripts/enable-service.sh`.
    cases.
 
 Keep it POSIX bash + standard macOS tools (grep -E, sed, awk). Deliver `docs/handoff/e2e-DONE.md`. Due **00:30**.
+
+## ⚠️ First real phone run (Sat 22:38): every scenario failed inside the runner, not in Saathi
+Evidence: `shots/e2e/20260926-223803-23714/01-youtube-search-en/` (`result.txt`, `replay.log`, `meta.log`,
+`logs.tsv` empty).
+- Saathi received the goal and started the route (`[map] route yt_search` in `replay.log`).
+- But the `say` step was marked failed. `device()`'s `wait` / return code is suspect: the goal *did* arrive.
+- Then `refresh` → "Final log capture failed", and `logs.tsv` was empty. Check that `logs.awk` parses
+  `adb logcat -v epoch` lines as printed on macOS (leading spaces, `1790442524.726 19824 19824 I SaathiLog: …`).
+- Each case then reset (HOME + force-stop), which looked like "opening and leaving the app".
+
+Please:
+1. Reproduce with `--dry-run` on `logcat.log` from that folder.
+2. Fix `device()` return codes + the log parsing.
+3. Add that folder as a selftest case.
+4. Make sure the reset between scenarios happens only after the scenario's checks.

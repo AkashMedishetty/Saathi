@@ -1,0 +1,4 @@
+1	name	Learn-section photo lesson entry	
+3	say	EN teach me how to take a photo	
+4	show	(open_app|find_app|switch|shutter)	15
+5	enabled	-	

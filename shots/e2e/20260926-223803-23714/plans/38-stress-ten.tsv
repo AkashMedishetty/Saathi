@@ -1,0 +1,22 @@
+1	name	Ten requests without resetting apps	
+3	say	EN hello	
+4	log	\[finish\]|\[respond\]	15
+5	say	HI नमस्ते	
+6	log	\[finish\]|\[respond\]	15
+7	say	TE నమస్తే	
+8	log	\[finish\]|\[respond\]	15
+9	say	EN search for old telugu songs on youtube	
+10	show	search	15
+11	say	EN open my YouTube subscriptions	
+12	show	(subscriptions|subs)	15
+13	say	EN teach me how to use Spotify	
+14	show	(open_app|find_app)	15
+15	say	EN read this letter	
+16	focus	ReadActivity	12
+17	say	EN open WhatsApp	
+18	log	\[finish\]|\[show\] key=wall_	15
+19	say	EN call my son	
+20	show	(call|search|type|pick)	15
+21	say	EN hello	
+22	log	\[finish\]|\[respond\]|\[answer\]	20
+23	enabled	-	

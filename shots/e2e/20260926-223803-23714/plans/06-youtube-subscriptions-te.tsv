@@ -1,0 +1,7 @@
+1	name	YouTube subscriptions (TE)	
+2	apps	com.google.android.youtube	
+4	say	TE నా యూట్యూబ్ సబ్‌స్క్రిప్షన్లు తెరువు	
+5	show	(subscriptions|subs)	15
+6	tap-glow	-	
+7	log	\[finish\]	15
+8	enabled	-	

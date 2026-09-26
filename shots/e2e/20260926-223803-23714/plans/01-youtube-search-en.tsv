@@ -1,0 +1,13 @@
+1	name	YouTube search and playback (EN)	
+2	apps	com.google.android.youtube	
+4	say	EN search for old telugu songs on youtube	
+5	show	search	15
+6	tap-glow	-	
+7	show	type	10
+8	doit	-	
+9	show	go	12
+10	tap-glow	-	
+11	show	pick	15
+12	tap-glow	-	
+13	log	\[finish\]|\[show\] key=ad_	20
+14	enabled	-	

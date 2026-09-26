@@ -1,0 +1,10 @@
+1	name	Settings ringtone search (HI)	
+3	start-activity	android.settings.SETTINGS	
+4	focus	com.android.settings	8
+5	say	HI मेरी रिंगटोन बदलो	
+6	show	open_search	15
+7	tap-glow	-	
+8	show	type	10
+9	doit	-	
+10	show	result	12
+11	enabled	-	

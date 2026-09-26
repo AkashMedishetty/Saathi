@@ -1,0 +1,5 @@
+1	name	Reader opens (HI)	
+3	say	HI यह पत्र पढ़ो	
+4	focus	com.saathi.app.*ReadActivity	12
+5	screenshot	reader	
+6	enabled	-	

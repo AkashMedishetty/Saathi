@@ -1,0 +1,5 @@
+1	name	Learn Google Docs entry	
+2	apps	com.google.android.apps.docs.editors.docs	
+4	say	EN teach me how to use Google Docs	
+5	show	(open_app|find_app)	15
+6	enabled	-	

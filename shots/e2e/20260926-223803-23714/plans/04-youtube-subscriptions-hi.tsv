@@ -1,0 +1,7 @@
+1	name	YouTube subscriptions (HI)	
+2	apps	com.google.android.youtube	
+4	say	HI मेरे यूट्यूब सब्सक्रिप्शन खोलो	
+5	show	(subscriptions|subs)	15
+6	tap-glow	-	
+7	log	\[finish\]	15
+8	enabled	-	

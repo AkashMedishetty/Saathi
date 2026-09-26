@@ -1,0 +1,5 @@
+1	name	APK attachment STOP alert	
+3	cmd	scam_apk	
+4	log	\[alert\] shield apk STOP	8
+5	not-log	\[act\].*(key=install|target=.?[Ii]nstall)	3
+6	enabled	-	

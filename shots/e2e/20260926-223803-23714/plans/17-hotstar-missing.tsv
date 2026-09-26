@@ -1,0 +1,6 @@
+1	name	Missing Hotstar points to Install	
+3	say	EN watch my serial on hotstar	
+4	log	\[missing\] app=in.startv.hotstar	15
+5	show	install	15
+6	not-log	\[act\].*(key=install|target=.?[Ii]nstall)	3
+7	enabled	-	

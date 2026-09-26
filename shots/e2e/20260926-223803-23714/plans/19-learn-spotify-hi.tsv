@@ -1,0 +1,5 @@
+1	name	Learn Spotify entry (HI)	
+2	apps	com.spotify.music	
+4	say	HI मुझे Spotify चलाना सिखाओ	
+5	show	(open_app|find_app)	15
+6	enabled	-	

@@ -1,0 +1,3 @@
+status=❌
+failing_step=4: say TE నా యూట్యూబ్ సబ్‌స్క్రిప్షన్లు తెరువు
+reason=Final log capture failed

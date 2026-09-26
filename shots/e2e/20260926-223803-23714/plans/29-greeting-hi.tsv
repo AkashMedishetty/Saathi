@@ -1,0 +1,4 @@
+1	name	Greeting response (HI)	
+3	say	HI नमस्ते	
+4	log	\[finish\]|\[respond\]	15
+5	enabled	-	

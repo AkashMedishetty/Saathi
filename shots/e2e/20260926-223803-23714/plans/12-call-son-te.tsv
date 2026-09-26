@@ -1,0 +1,5 @@
+1	name	Call son guidance without placing call (TE)	
+3	say	TE కొడుకుకి ఫోన్ చేయి	
+4	show	(call|search|type|pick)	15
+5	not-log	\[act\].*(key=call|target=.?(Call|Dial))	3
+6	enabled	-	

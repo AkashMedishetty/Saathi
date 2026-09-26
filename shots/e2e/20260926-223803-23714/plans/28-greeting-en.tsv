@@ -1,0 +1,4 @@
+1	name	Greeting response (EN)	
+3	say	EN hello	
+4	log	\[finish\]|\[respond\]	15
+5	enabled	-	

@@ -1,0 +1,5 @@
+1	name	General question routes to source (EN)	
+3	say	EN how do clouds form	
+4	log	\[respond\] general question	15
+5	log	\[lookup\] q=.* a=	35
+6	enabled	-	

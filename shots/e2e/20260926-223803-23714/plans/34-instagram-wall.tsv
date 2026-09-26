@@ -1,0 +1,5 @@
+1	name	Instagram login wall	
+2	apps	com.instagram.android	
+4	say	EN show me Instagram reels	
+5	show	(wall_.*|reels)	20
+6	enabled	-	

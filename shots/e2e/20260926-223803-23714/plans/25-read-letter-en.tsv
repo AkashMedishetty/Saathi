@@ -1,0 +1,5 @@
+1	name	Reader opens (EN)	
+3	say	EN read this letter	
+4	focus	com.saathi.app.*ReadActivity	12
+5	screenshot	reader	
+6	enabled	-	

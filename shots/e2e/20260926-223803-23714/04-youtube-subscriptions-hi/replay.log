@@ -1,0 +1,7 @@
+--------- beginning of main
+1790442713.000 I E2E: enabled=1
+         1790442713.237 19824 19824 I SaathiLog: [goal] "मेरे यूट्यूब सब्सक्रिप्शन खोलो" lang=HI auto=false locked=false
+         1790442713.244 19824 19824 I SaathiLog: [map] route yt_subscriptions (YouTube)
+         1790442713.281 19824 19824 I SaathiLog: [halo] show null suspended=false
+1790442733.000 I E2E: enabled=1
+1790442734.000 I E2E: end

@@ -1,0 +1,3 @@
+status=❌
+failing_step=4: say HI मेरे यूट्यूब सब्सक्रिप्शन खोलो
+reason=Final log capture failed

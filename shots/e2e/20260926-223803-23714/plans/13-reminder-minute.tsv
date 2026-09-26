@@ -1,0 +1,5 @@
+1	name	One-minute reminder fires	
+3	say	EN remind me in 1 minute to stretch gently	
+4	log	\[reminder\] set	8
+5	log	\[routine\] due .*stretch gently	75
+6	enabled	-	

@@ -1,0 +1,15 @@
+1	name	HOME and BACK during guidance	
+2	apps	com.google.android.youtube	
+4	say	EN search for old telugu songs on youtube	
+5	show	search	15
+6	home	-	
+7	log	\[pause\]	10
+8	say	EN search for old telugu songs on youtube	
+9	show	search	15
+10	tap-glow	-	
+11	show	type	10
+12	back	-	
+13	not-log	\[service\] destroyed	3
+14	home	-	
+15	focus	launcher|Launcher	8
+16	enabled	-	

@@ -1,0 +1,5 @@
+1	name	Learn Spotify entry (TE)	
+2	apps	com.spotify.music	
+4	say	TE నాకు Spotify వాడటం నేర్పించు	
+5	show	(open_app|find_app)	15
+6	enabled	-	

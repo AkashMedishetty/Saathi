@@ -1,0 +1,3 @@
+status=❌
+failing_step=4: say EN open my YouTube subscriptions
+reason=Final log capture failed

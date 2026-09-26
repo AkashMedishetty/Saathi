@@ -1,0 +1,5 @@
+1	name	General question routes to source (TE)	
+3	say	TE మేఘాలు ఎలా ఏర్పడతాయి	
+4	log	\[respond\] general question	15
+5	log	\[lookup\] q=.* a=	35
+6	enabled	-	

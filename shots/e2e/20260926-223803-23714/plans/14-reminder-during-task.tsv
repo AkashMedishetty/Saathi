@@ -1,0 +1,8 @@
+1	name	Reminder fires during YouTube task	
+2	apps	com.google.android.youtube	
+4	say	EN remind me in 1 minute to look away from the screen	
+5	log	\[reminder\] set	8
+6	say	EN search for old telugu songs on youtube	
+7	show	search	15
+8	log	\[routine\] due .*look away from the screen.*active=true	75
+9	enabled	-	

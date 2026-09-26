@@ -1,0 +1,5 @@
+1	name	Reader opens (TE)	
+3	say	TE ఈ ఉత్తరం చదువు	
+4	focus	com.saathi.app.*ReadActivity	12
+5	screenshot	reader	
+6	enabled	-	
