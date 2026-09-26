@@ -9,7 +9,7 @@ import java.io.File
 object Fixtures {
     /** A node line; the class can be empty (vivo Clock: "<indent> t=null d=On,8:00 AM,… id=alarm_item_content …"). */
     private val START = Regex("^( *)(\\S+ )?t=")
-    private val LINE = Regex("^( *)(?:(\\S+) )?t=(.*?) d=(.*?) id=(\\S+) ?([CSKF]*) ri=\\S+ acts=\\S* Rect\\((-?\\d+), (-?\\d+) - (-?\\d+), (-?\\d+)\\)\\s*$",
+    private val LINE = Regex("^( *)(?:(\\S+) )?t=(.*?) d=(.*?) id=(.*?) ([CSKF]*) ri=\\S+ acts=\\S* Rect\\((-?\\d+), (-?\\d+) - (-?\\d+), (-?\\d+)\\)\\s*$",
         RegexOption.DOT_MATCHES_ALL)
 
     val root: File = listOf(File("../fixtures/trees"), File("fixtures/trees"), File("../../fixtures/trees")).first { it.isDirectory }

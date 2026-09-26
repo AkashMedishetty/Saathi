@@ -1,0 +1,11 @@
+name: YouTube aside uses the step explanation and resumes
+requires-installed com.google.android.youtube
+apps: com.google.android.youtube
+# Operator: YouTube Home (the magnifying glass is step 0).
+say EN search for old telugu songs on youtube
+expect show key=map_yt_search_0 within 15
+say EN what does the magnifying glass mean?
+expect log "\[answer\].*The magnifying glass means search\..*\(step's own explanation\)" within 10
+say EN yes
+expect show key=map_yt_search_0 within 10
+expect enabled

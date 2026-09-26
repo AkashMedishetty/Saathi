@@ -1,6 +1,6 @@
 # POSIX awk: validate the whole scenario before any device operation. Output line, op, arg, seconds.
 function error(s) { print FILENAME ":" NR ": " s > "/dev/stderr"; bad=1 }
-function emit(op,a,n) { printf "%d\t%s\t%s\t%s\n", NR,op,a,n }
+function emit(op,a,n) { if (op !~ /^(name|apps|requires-installed|requires-missing)$/) started=1; printf "%d\t%s\t%s\t%s\n", NR,op,a,n }
 function seconds(s) { return s ~ /^[0-9]+$/ && s+0 <= 300 }
 function quoted(s) { return s ~ /^".*"$/ }
 {
@@ -9,6 +9,11 @@ function quoted(s) { return s ~ /^".*"$/ }
  if (s ~ /\t/) { error("tabs inside a command are not supported"); next }
  if (s ~ /^name:/) { if (named++) error("duplicate name"); sub(/^name: */, "",s); if (!length(s)) error("empty name"); emit("name",s,""); next }
  if (s ~ /^apps:/) { if (apps++) error("duplicate apps"); sub(/^apps: */, "",s); sub(/ *#.*/, "",s); emit("apps",s,""); next }
+ if (s ~ /^requires-(installed|missing) [a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/) {
+   if (started) error("preconditions must precede actions and checks")
+   split(s,parts," "); emit(parts[1],parts[2],""); next
+ }
+ if (s ~ /^expect bounds top < [0-9]+$/) { n=s; sub(/^expect bounds top < /,"",n); emit("bounds-top",n,""); next }
  if (s ~ /^say (EN|HI|TE) .+/) { emit("say",substr(s,5),""); next }
  if (s ~ /^cmd (stop|doit|dump|scam_sms|scam_apk|brain_load|brain_unload|overlay_on|overlay_off)$/) { emit("cmd",substr(s,5),""); next }
  if (s ~ /^cmd eval .+/) { emit("eval",substr(s,10),""); next }

@@ -13,7 +13,7 @@ Usage: scripts/e2e/run.sh [--quick] [pattern] [--dry-run LOGFILE] [--output DIR]
        [--scenarios DIR] [--phone-choice X,Y]
 Pattern is a shell glob matched against scenario filenames/stems, not a regex.
 --dry-run never invokes adb or sources device environment scripts.
---quick selects eight demos; execution stops at 210s, transport/evidence by 235s.
+--quick selects eight demos (two mutually exclusive Hotstar cases); execution stops at 210s, transport/evidence by 235s.
 --list validates and prints selected names without device access.
 Replay logs need timestamped E2E: enabled=0|1, focus=..., end annotations for those checks.
 --phone-choice is an operator-calibrated centre of the SECOND choice button, from a current screenshot.
@@ -64,6 +64,7 @@ for file in "$SCENARIOS"/*.scn; do
   awk -f "$DIR/parse.awk" "$file" > "$PLAN/$base.tsv" || exit 2
   while IFS="$(printf '\t')" read -r ln op arg sec; do
     case "$op" in
+      requires-installed|requires-missing) allowed_app "$arg" || { echo "Precondition package not allowed: $arg" >&2; exit 2; };;
       apps) for app in $arg; do allowed_app "$app" || { echo "Force-stop not allowed: $app" >&2; exit 2; }; done;;
       show|log|focus|not-log)
         printf '' | grep -E -e "$arg" >/dev/null 2>&1
@@ -115,6 +116,62 @@ health_enabled() {
     if printf '%s\n' "$services" | tr ':\r' '\n\n' | grep -Eq '^com\.saathi\.app/(com\.saathi\.app\.service\.SaathiService|\.service\.SaathiService)$'; then meta 'enabled=1'; return 0; fi
     meta 'enabled=0'; return 1
   fi
+}
+# A health sample can land inside the same short system/guard restart window.
+ensure_enabled() {
+  local rc deadline recovered
+  if health_enabled; then return 0; else rc=$?; fi
+  [ "$rc" -eq 1 ] || return "$rc"
+  if [ -n "$DRY" ]; then
+    [ "${value:-}" = 0 ] || return 1
+    recovered=$(awk -F '\t' -v t="$NOW" '$2=="enabled" && $1>t && $1<=t+2000 && $3==1 {print $1; exit}' "$CASE/events.tsv")
+    [ -n "$recovered" ] || return 1
+    NOW=$recovered
+    return 0
+  fi
+  deadline=$((SECONDS+2))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    sleep 1
+    if health_enabled; then return 0; else rc=$?; fi
+    [ "$rc" -eq 1 ] || return "$rc"
+  done
+  return 1
+}
+# Preconditions are read-only and run before scenario actions, health/reset, or cleanup.
+check_package() {
+  local pkg=$2 state listing
+  if [ -n "$DRY" ]; then
+    state=$(awk -F '\t' -v p="$pkg" -v t="$NOW" '$2=="package" && $1<=t {split($3,a," "); if(a[1]==p) v=a[2]} END {print v}' "$CASE/events.tsv")
+    [ -n "$state" ] || { REASON="Missing package evidence: $pkg"; return 1; }
+  else
+    listing=$(device shell pm list packages "$pkg") || { REASON="Could not query package: $pkg"; return 1; }
+    # pm's empty successful result means absent; errors must never become SKIP.
+    if printf '%s\n' "$listing" | tr -d '\r' | grep -Ev '^(package:[A-Za-z0-9_.]+)?$' | grep -q .; then
+      REASON="Invalid package query response: $pkg"; return 1
+    fi
+    if printf '%s\n' "$listing" | tr -d '\r' | grep -Fxq "package:$pkg"; then state=installed; else state=missing; fi
+    meta "package=$pkg $state"
+  fi
+  if [ "$state" != "${1#requires-}" ]; then
+    REASON="SKIP: requires ${1#requires-} $pkg (actual: $state)"; skipped=1
+  fi
+}
+audit_service() {
+  local result horizon
+  while :; do
+    horizon=$(now); [ -z "$DRY" ] || horizon=$END_MS
+    result=$(awk -v horizon="$horizon" -f "$DIR/service.awk" "$CASE/logs.tsv")
+    case "$result" in
+      ok) return 0;;
+      healed) NOTE=healed; return 0;;
+      failed) REASON='Saathi switched off: service destroyed without reconnect within 2 s'; return 1;;
+      pending)
+        [ -z "$DRY" ] || { REASON='Replay ends before service reconnect deadline'; return 1; }
+        quick_expired && { REASON='Quick budget ended before reconnect audit'; return 1; }
+        sleep 1
+        refresh || { REASON='Could not read reconnect evidence'; return 1; };;
+    esac
+  done
 }
 mark_action() {
   refresh || { REASON='Could not read logcat'; return 1; }
@@ -192,7 +249,7 @@ fresh_target() {
 manual_safe() {
   [ -n "$LAST_SHOW" ] || { REASON='No fresh show target; refusing stale tap'; return 1; }
   fresh_target || return 1
-  if printf '%s\n' "$LAST_SHOW" | grep -Eiq 'key=(.*_)?(send|pay|call|video|install|uninstall|delete|buy|book|submit|grant|allow)( |$)|el="(send|pay|call|dial|install|uninstall|delete|buy|submit|allow|भेज|भुगतान|कॉल|इंस्टॉल|పంపు|కాల్|ఇన్‌స్టాల్)'; then
+  if printf '%s\n' "$LAST_SHOW" | grep -Eiq 'key=map_wa_((video|voice)_call_[34]|message_4)( |$)|key=(.*_)?(send|pay|call|video|install|uninstall|delete|buy|book|submit|grant|allow)( |$)|el="(send|pay|call|dial|install|uninstall|delete|buy|submit|allow|भेज|भुगतान|कॉल|इंस्टॉल|పంపు|కాల్|ఇన్‌స్టాల్)'; then
     REASON='Refusing a consequential target'; return 1
   fi
   if printf '%s\n' "$LAST_SHOW" | grep -q 'noAct=true'; then
@@ -215,12 +272,17 @@ tap_glow() {
 run_step() {
   op=$1; arg=$2; sec=$3
   case "$op" in
-    name|apps) return 0;;
+    name|apps|requires-installed|requires-missing) return 0;;
+    bounds-top)
+      [ -n "$LAST_SHOW" ] || { REASON='No show target for bounds check'; return 1; }
+      fresh_target || return 1
+      top=$(printf '%s\n' "$LAST_SHOW" | sed -n 's/.*bounds=\[[0-9][0-9]*,\([0-9][0-9]*\)\]\[[0-9][0-9]*,[0-9][0-9]*\].*/\1/p')
+      [ -n "$top" ] && [ "$top" -lt "$arg" ] || { REASON="Glow bounds top must be < $arg (actual: ${top:-missing})"; return 1; };;
     show) check_log "\[show\] key=($arg)( |$)" "$sec" no;;
     log) check_log "$arg" "$sec" no;;
     not-log) check_log "$arg" "$sec" yes;;
     focus) check_focus "$arg" "$sec";;
-    enabled) health_enabled || { REASON='Saathi switched off (or replay has no enabled evidence)'; return 1; };;
+    enabled) ensure_enabled || { REASON='Saathi switched off (or replay has no enabled evidence)'; return 1; };;
     wait) advance "$(( $(now) + sec * 1000 ))";;
     screenshot) screenshot "$arg";;
     tap-glow) tap_glow;;
@@ -253,7 +315,7 @@ run_step() {
   esac
 }
 printf '# E2E %s\n\n| Result | Scenario | Seconds | Reason |\n| --- | --- | ---: | --- |\n' "${DRY:+saved-log replay}" > "$OUTPUT/summary.md"
-PASS=0; FAIL=0
+PASS=0; FAIL=0; SKIP=0
 for base in "${SELECTED[@]}"; do
   if quick_expired; then
     mkdir -p "$OUTPUT/$base"
@@ -262,17 +324,31 @@ for base in "${SELECTED[@]}"; do
     FAIL=$((FAIL+1)); continue
   fi
   CASE="$OUTPUT/$base"; mkdir -p "$CASE"; : > "$CASE/meta.log"; : > "$CASE/actions.txt"
-  REASON= CURSOR=0 NOW=0 LAST_SHOW= LAST_CHOICE=; START=$(date +%s); failed=0; step=reset
+  REASON= NOTE= CURSOR=0 NOW=0 LAST_SHOW= LAST_CHOICE=; skipped=0; START=$(date +%s); failed=0; step=reset
   if [ -n "$DRY" ]; then
     cp "$OUTPUT/replay.tsv" "$CASE/events.tsv"
     awk -F '\t' '$2=="log"' "$CASE/events.tsv" > "$CASE/logs.tsv"
     END_MS=$(awk -F '\t' 'BEGIN {m=0} $1>m {m=$1} END {print m}' "$CASE/events.tsv")
-  else
-    health_enabled || { REASON='Saathi switched off before scenario'; failed=1; }
+  fi
+  while IFS="$(printf '\t')" read -r ln op arg sec; do
+    case "$op" in requires-installed|requires-missing)
+      if ! check_package "$op" "$arg"; then failed=1; fi
+      [ "$failed" -eq 0 ] && [ "$skipped" -eq 0 ] || break;;
+    esac
+  done < "$PLAN/$base.tsv"
+  if [ "$skipped" -eq 1 ] || [ "$failed" -eq 1 ]; then
+    if [ "$skipped" -eq 1 ]; then status='⏭'; SKIP=$((SKIP+1)); else status='❌'; FAIL=$((FAIL+1)); fi
+    if [ -z "$DRY" ]; then meta end; cp "$CASE/meta.log" "$CASE/replay.log"; fi
+    printf 'status=%s\nfailing_step=precondition\nreason=%s\n' "$status" "$REASON" > "$CASE/result.txt"
+    printf '| %s | %s | 0 | %s |\n' "$status" "$base" "$REASON" >> "$OUTPUT/summary.md"
+    continue
+  fi
+  if [ -z "$DRY" ]; then
+    ensure_enabled || { REASON='Saathi switched off before scenario'; failed=1; }
     if [ "$failed" -eq 0 ]; then
       device logcat -c || { REASON='Log reset failed'; failed=1; }
-      START=$(date +%s); : > "$CASE/meta.log"
-      health_enabled || { REASON='Saathi switched off before scenario'; failed=1; }
+      START=$(date +%s)
+      ensure_enabled || { REASON='Saathi switched off before scenario'; failed=1; }
     fi
   fi
   if [ "$failed" -eq 0 ]; then
@@ -287,15 +363,20 @@ for base in "${SELECTED[@]}"; do
       printf '%s\tPASS %s\n' "$(now)" "$step" >> "$CASE/steps.log"
     done < "$PLAN/$base.tsv"
   fi
+  if [ -z "$DRY" ]; then
+    ensure_enabled || { REASON=${HEALTH_REASON:-'Saathi switched off'}; failed=1; step='post-scenario health'; }
+  fi
   refresh || { [ "$failed" -ne 0 ] || { REASON='Final log capture failed'; failed=1; step='final capture'; }; }
+  audit_service || { failed=1; step='post-scenario health'; }
   if grep -Eiq '\[(crash|fatal)\]|FATAL EXCEPTION' "$CASE/logs.tsv"; then REASON='Crash in scenario log'; failed=1; step='post-scenario log audit'; fi
-  if grep -Eq '\[service\] destroyed' "$CASE/logs.tsv"; then REASON='Saathi switched off: service destroyed'; failed=1; step='post-scenario health'; fi
+  if awk -F '\t' '$3 ~ /^\[wall\].*setup=true/ {wall=1} wall && $3 ~ /^\[plan\]/ {bad=1} END {exit !bad}' "$CASE/logs.tsv"; then
+    REASON='Planner ran after a setup login wall'; failed=1; step='post-scenario wall audit'
+  fi
   if [ -n "$DRY" ]; then
     last_enabled=$(awk -F '\t' '$2=="enabled" {t=$1; v=$3} END {print t " " v}' "$CASE/events.tsv")
     set -- $last_enabled
     if [ "$#" -ne 2 ] || [ "$2" != 1 ] || [ "$1" -lt "$NOW" ]; then REASON='Saathi switched off (or missing final enabled evidence)'; failed=1; step='post-scenario health'; fi
   else
-    health_enabled || { REASON=${HEALTH_REASON:-'Saathi switched off'}; failed=1; step='post-scenario health'; }
     screenshot final || { REASON='Screenshot capture failed'; failed=1; }
     meta end
     cat "$CASE/logcat.log" "$CASE/meta.log" | LC_ALL=C sort -s -n -k1,1 > "$CASE/replay.log"
@@ -316,12 +397,12 @@ for base in "${SELECTED[@]}"; do
   fi
   tail -15 "$CASE/logs.tsv" > "$CASE/last15.log"
   elapsed=$(( $(now) / 1000 ))
-  if [ "$failed" -eq 0 ]; then status='✅'; PASS=$((PASS+1)); REASON=PASS; step=none
+  if [ "$failed" -eq 0 ]; then status='✅'; PASS=$((PASS+1)); REASON="PASS${NOTE:+ ($NOTE)}"; step=none
   else status='❌'; FAIL=$((FAIL+1)); fi
   printf 'status=%s\nfailing_step=%s\nreason=%s\n' "$status" "$step" "$REASON" > "$CASE/result.txt"
   reason_md=$(printf '%s' "$REASON" | sed 's/|/\\|/g')
   printf '| %s | %s | %s | %s |\n' "$status" "$base" "$elapsed" "$reason_md" >> "$OUTPUT/summary.md"
 done
 cat "$OUTPUT/summary.md"
-printf '\n%s passed, %s failed. Evidence: %s\n' "$PASS" "$FAIL" "$OUTPUT"
+printf '\n%s passed, %s failed, %s skipped. Evidence: %s\n' "$PASS" "$FAIL" "$SKIP" "$OUTPUT"
 [ "$FAIL" -eq 0 ]

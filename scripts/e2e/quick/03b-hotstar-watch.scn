@@ -1,0 +1,14 @@
+name: Hotstar installed: search Anupama to login wall
+requires-installed in.startv.hotstar
+apps: in.startv.hotstar
+# Operator: Hotstar signed out, on home. Stop at the wall; never enter login fields.
+say EN watch anupama on hotstar
+expect show key=map_hs_watch_0 within 12
+tap-glow
+expect show key=map_hs_watch_1 within 8
+doit
+expect show key=map_hs_watch_2 within 10
+tap-glow
+expect log "\[wall\].*setup=true" within 12
+expect not log "\[plan\]" for 3
+expect enabled

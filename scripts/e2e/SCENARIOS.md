@@ -50,19 +50,24 @@ These are executable assertions, not recorded phone successes. Preconditions are
 | ID | Scenario | Assertion |
 | --- | --- | --- |
 | 41 | Hotstar spoken yes | Missing-app card → ordinary `say EN yes` → Play Store focus and Install glow. |
-| 42 | Spoken WhatsApp choice | Choice event → ordinary WhatsApp reply → app focus and guidance/wall. |
+| 42 | Spoken WhatsApp choice | Choice event → ordinary WhatsApp reply → step `map_wa_video_call_3`, with bounds top < 500; never tap. |
 | 43 | Mid-task aside | `[aside] mid-task question`, then spoken yes and resumed search glow. |
 | 44 | Teach-once voice commands | `[teach] recording` then `[teach] saved`; dispatch only, not proof of a nonempty saved recipe. |
 | 45 | Liked videos | `[route] own things`; rejects a new YouTube search route. |
 | 46 | Uber this location | Current WhatsApp focus then `[route] about this screen`; no booking. |
-| 47 | Telugu message | The specified Telugu sentence reaches type/Send guidance; no send tap. |
+| 47 | Telugu message | The specified Telugu sentence → body step 3 → Do it → Send step 4; no send tap. |
 | 48 | Screenshot/share handoff | Follow-up photo-sharing goal and next guide target; no Send tap. |
 | 49 | Form under voice sheet | Chrome form, nonzero online box count and retained Chrome focus. |
+
+| 50 | Hotstar installed | Search tab → search bar/fill → hero Watch button → setup login wall; no planner afterwards. Requires signed-out Home. |
+| 51 | YouTube playlist | Search through result step 5; a playlist page must glow Play all at step 4, or a direct video must finish with playing. |
+| 52 | Media controls | Start a video, then pause/louder/close media logs and launcher focus. Dispatch and app-focus checks, not audio measurement. |
+| 53 | Step explanation | The magnifying-glass question receives the map's own answer; yes restores step 0. |
 
 Demo-fix step 9 (dragging and text clipping) remains a manual visual check. It cannot be established by log matching.
 
 ## Quick set (separate directory)
 
-Exactly eight: YouTube search EN; video-choice card; Hotstar missing → spoken yes → Install; scam SMS; scam APK;
+Eight runnable demos in nine plans (one Hotstar plan skips): YouTube search EN; video-choice card; Hotstar missing → spoken yes → Install, or installed → Anupama → login wall; scam SMS; scam APK;
 Settings bigger letters HI; learn Spotify; one-minute reminder. No calibrated coordinates needed. The quick
 YouTube check stops at the results glow; it does not assert video playback. See README for the 210/235-second budgets.

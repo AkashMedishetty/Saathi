@@ -1,4 +1,5 @@
 name: Missing Hotstar points to Install
+requires-missing in.startv.hotstar
 # B4. Precondition: Hotstar is absent. No installation is performed.
 say EN watch my serial on hotstar
 expect log "\[missing\] app=in.startv.hotstar" within 15

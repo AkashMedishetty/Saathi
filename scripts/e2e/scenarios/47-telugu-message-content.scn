@@ -1,6 +1,9 @@
-name: Telugu message reaches type or Send
-# Demo fix 10. Requires WhatsApp logged in and a saved son/contact. A login wall is a failure here.
+name: Telugu message types the body; Send only glows
+requires-installed com.whatsapp
+# Operator: WhatsApp logged in, son's matching chat open; saved contact resolves to this title.
 say TE అబ్బాయికి నేను ఇంటికి చేరుకున్నాను అని మెసేజ్ పంపు
-expect show key=(.*(type|send)|map_wa_message_[34]) within 20
+expect show key=map_wa_message_3 within 20
+doit
+expect show key=map_wa_message_4 within 12
 expect not log "\[act\].*(key=.*send|target=.?పంపు)" for 3
 expect enabled
