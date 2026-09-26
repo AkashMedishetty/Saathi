@@ -33,6 +33,7 @@ object MapSlots {
                 "place" -> s.place
                 "term" -> SettingsTerms.termFor(goal) ?: settingsWords(goal)
                 "app" -> appName(goal)
+                "developer" -> com.saathi.app.maps.apps.PlayStoreMap.developerOf(appName(goal))
                 else -> null
             }
             v?.trim()?.takeIf { it.isNotEmpty() }?.let { out[k] = it }
@@ -70,6 +71,6 @@ object MapSlots {
     private fun appName(goal: String): String? {
         var q = " ${goal.lowercase()} "
         repeat(3) { q = INSTALL_WORDS.replace(q, " ") }
-        return q.replace(Regex("\\s+"), " ").trim().ifBlank { null }
+        return q.replace(Regex("\\s+"), " ").trim().ifBlank { null }?.let { com.saathi.app.maps.apps.PlayStoreMap.latinName(it) }
     }
 }

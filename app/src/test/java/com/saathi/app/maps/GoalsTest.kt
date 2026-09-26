@@ -76,6 +76,20 @@ class GoalsTest {
         "ఫోటో పంపు" to "photos_share",
     ))
 
+    @Test fun playStore() = check(listOf(
+        "install whatsapp" to "playstore_install",
+        "download spotify from play store" to "playstore_install",
+        "get the uber app" to "playstore_install",
+        "व्हाट्सएप इंस्टॉल करो" to "playstore_install",
+        "స్పాటిఫై ఇన్‌స్టాల్ చేయి" to "playstore_install",
+        "open play store" to "playstore_install",
+        "update my apps" to "playstore_update_all",
+        "सारे ऐप अपडेट करो" to "playstore_update_all",
+        "యాప్‌లు అప్‌డేట్ చేయి" to "playstore_update_all",
+        "uninstall candy crush" to "playstore_uninstall",
+        "यह ऐप हटाओ" to "playstore_uninstall",
+    ))
+
     @Test fun noCrossMatches() = check(listOf(
         "video call my son" to null,
         "बेटे को वीडियो कॉल करो" to null,

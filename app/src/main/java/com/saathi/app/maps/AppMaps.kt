@@ -4,6 +4,7 @@ import com.saathi.app.guide.Lang
 import com.saathi.app.guide.Say
 import com.saathi.app.guide.say
 import com.saathi.app.maps.apps.PhotosMap
+import com.saathi.app.maps.apps.PlayStoreMap
 import com.saathi.app.maps.apps.SettingsMap
 import com.saathi.app.maps.apps.YouTubeMap
 
@@ -16,7 +17,7 @@ import com.saathi.app.maps.apps.YouTubeMap
  */
 object AppMaps {
     /** All maps, in priority order for goal matching ties. */
-    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map, PhotosMap.map) }
+    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map, PhotosMap.map, PlayStoreMap.map) }
 
     private val byPkg by lazy { all.flatMap { m -> (listOf(m.pkg) + m.alsoPkgs).map { it to m } }.toMap() }
 
@@ -106,10 +107,19 @@ object AppMaps {
     /** The node a selector list picks on this screen (first selector with a visible match), for tests and callers. */
     fun find(sels: List<Sel>, nodes: List<Node>, slots: Map<String, String> = emptyMap()): Node? = Tree(nodes).find(sels, slots)?.node
 
-    /** "Type “{query}”." → "Type “hanuman chalisa”." A missing slot is dropped with its quotes. */
-    fun fillIn(s: Say, slots: Map<String, String>): Say = s.mapValues { (_, v) ->
+    /**
+     * "Type “{query}”." → "Type “hanuman chalisa”." A "[ … ]" segment is kept only when every slot inside it is known
+     * ("Tap “{app}”[ by {developer}]."); a missing slot elsewhere is dropped with its quotes.
+     */
+    fun fillIn(s: Say, slots: Map<String, String>): Say = s.mapValues { (_, v0) ->
+        val v = OPTIONAL.replace(v0) { m ->
+            val inner = m.groupValues[1]
+            if (SLOT.findAll(inner).all { slots[it.groupValues[1]] != null }) inner else ""
+        }
         SLOT.replace(v) { m -> slots[m.groupValues[1]] ?: "" }.replace("“”", "").replace("\"\"", "").replace(Regex(" {2,}"), " ").trim()
     }
+
+    private val OPTIONAL = Regex("\\[([^\\[\\]]*)\\]")
 
     private val SLOT = Regex("\\{(\\w+)\\}")
 
