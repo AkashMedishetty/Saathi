@@ -140,6 +140,20 @@ class GoalsTest {
         "रवि की भेजी हुई लोकेशन खोलो" to "wa_open_location",
     ))
 
+    @Test fun mapsAndCabs() = check(listOf(
+        "directions to Charminar" to "maps_directions",
+        "take me to the railway station" to "maps_directions",
+        "how do I get to Apollo hospital" to "maps_directions",
+        "चारमीनार का रास्ता" to "maps_directions",
+        "చార్మినార్ కి దారి" to "maps_directions",
+        "book a cab to Charminar" to "uber_cab",
+        "get an auto" to "uber_cab",
+        "कैब बुक करो" to "uber_cab",
+        "स्टेशन के लिए टैक्सी" to "uber_cab",
+        "క్యాబ్ బుక్ చేయి" to "uber_cab",
+        "cab to the airport using maps" to "maps_cab",
+    ))
+
     @Test fun noCrossMatches() = check(listOf(
         "what time is it" to null,
         "" to null,
