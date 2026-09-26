@@ -358,7 +358,10 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
         // ML Kit's own confidence per line (0..1) is the stronger signal; the word-shape ratio backs it up.
         val conf = lines.map { it.confidence }.filter { it > 0f }.takeIf { it.isNotEmpty() }?.average() ?: 1.0
         com.saathi.app.DebugLog.i("read", "ocr ${plain.length} chars, confidence ${"%.2f".format(conf)}, word-like ${"%.2f".format(wordLikeRatio(plain))}")
-        if (mode == MODE_READ && plain.length >= 30 && (conf < 0.62 || wordLikeRatio(plain) < 0.55)) {
+        // Blurry = the words themselves look broken, or BOTH signals are weak. Field (23:03): clear print scored ML Kit
+        // confidence 0.55-0.58 with 89-100 % real words and was wrongly called blurry.
+        val wl = wordLikeRatio(plain)
+        if (mode == MODE_READ && plain.length >= 30 && (wl < 0.55 || conf < 0.45 || (conf < 0.62 && wl < 0.8))) {
             aura.setAura(false); busy = false
             com.saathi.app.DebugLog.i("read", "blurry: word-like ${"%.2f".format(wordLikeRatio(plain))}")
             val t = s("The words are blurry. Hold the paper flat, a little closer, and keep the phone still.",
@@ -382,6 +385,13 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
         var usedEngine = ""
         var llm: String? = null
         if (textHeavy) {
+            // The proper text brain first: load it and give it a few seconds (field: "no text brain" → the photo model's
+            // half sentences).
+            if (!LlmManager.isReady) {
+                LlmManager.loadAsync(applicationContext)
+                var waited = 0
+                while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && waited < 8000) { kotlinx.coroutines.delay(250); waited += 250 }
+            }
             if (LlmManager.isReady) llm = ok(LlmManager.generate(explainSys, explainUser))?.also { usedEngine = "${LlmManager.label ?: "Gemma"} · ${LlmManager.lastGenMs} ms" }
             if (llm == null) {
                 val t0 = android.os.SystemClock.elapsedRealtime()
