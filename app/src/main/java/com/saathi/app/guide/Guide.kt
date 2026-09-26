@@ -1100,7 +1100,7 @@ class Guide(
         practice = true; learn = true
         com.saathi.app.DebugLog.i("practice", "start ${f.id}")
         if (f.id.startsWith("map_")) com.saathi.app.maps.AppMaps.routeById(f.id.removePrefix("map_"))?.let { r ->
-            mapRoute = r; mapSlots = MapBridge.slots(g, SlotExtractor.from(g, Prefs.family(svc))); mapStep = -1 }
+            mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1 }
         begin(g, f, autoMode = false)
     }
 
@@ -1393,7 +1393,7 @@ class Guide(
     private fun beginMap(g: String, r: com.saathi.app.maps.Route, autoMode: Boolean) {
         val map = com.saathi.app.maps.AppMaps.mapOf(r)
         com.saathi.app.DebugLog.i("map", "route ${r.id} (${map?.name})")
-        mapRoute = r; mapSlots = MapBridge.slots(g, SlotExtractor.from(g, Prefs.family(svc))); mapStep = -1
+        mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1
         // Reuse the flow machinery for launch / learn-mode / Settings rules; steps come from the map.
         val f = Flow("map_${r.id}", { c -> AppLauncher.launch(c, r.pkg) }, emptyList(), null,
             r.doneSay, r.start ?: say("Let's do it together. Watch for the ring.", "साथ में करते हैं। घेरे को देखिए।", "కలిసి చేద్దాం. రింగ్ చూడండి."),

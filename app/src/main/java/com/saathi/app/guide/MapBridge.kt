@@ -20,7 +20,7 @@ object MapBridge {
             if (n == null || depth > 60 || nodes.size > 1500) return
             if (!n.isVisibleToUser) return
             val r = Rect().also { n.getBoundsInScreen(it) }
-            nodes += Node(n.viewIdResourceName, n.text?.toString(), n.contentDescription?.toString(), n.className?.toString() ?: "",
+            nodes += Node(n.viewIdResourceName, n.text?.toString(), n.contentDescription?.toString(), n.className?.toString()?.substringAfterLast('.') ?: "",
                 n.isClickable, n.isScrollable, n.isCheckable, Box(r.left, r.top, r.right, r.bottom), depth,
                 editable = n.isEditable, checked = n.isChecked, selected = n.isSelected)
             infos += n
