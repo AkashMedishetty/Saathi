@@ -202,8 +202,8 @@ class Guide(
         if (IntentRouter.isObjectHelp(goalText)) { begin(goalText, Skills.byId("learn_app")?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
         IntentRouter.cameraRead(goalText)?.let { id -> begin(goalText, Skills.byId(id)?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
         if (IntentRouter.isFormHelp(goalText)) { formHelp(); return }
-        IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         mapRouteFor(goalText)?.let { r -> beginMap(goalText, r, autoMode); return }
+        IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         IntentRouter.phoneHowTo(svc, goalText)?.let { begin(goalText, it, autoMode); return }
         if (IntentRouter.isQuestion(svc, goalText)) { respond(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
