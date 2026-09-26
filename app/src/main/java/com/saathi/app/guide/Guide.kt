@@ -15,6 +15,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The guide loop. It never fights the person holding the phone:
@@ -22,7 +24,8 @@ import kotlinx.coroutines.launch
  *   screen settles → read → scam check → right app? (else pause) → done? → latest visible scripted step
  *   → scroll hint → planner (LLM in P0-4)  ⇒  glow + card + voice.
  *
- * Saathi only taps when the person presses "Do it", and only after re-finding the target on a fresh read.
+ * Saathi only taps when the person presses "Do it" (or asked "do it all for me": auto mode, which still stops
+ * and asks before anything risky, and never touches PINs), and only after re-finding the target on a fresh read.
  */
 class Guide(
     private val svc: SaathiService,
@@ -79,6 +82,21 @@ class Guide(
     /** Last time the person touched or scrolled. */
     @Volatile private var lastMotion = 0L
 
+    // ── Auto mode ("do it all for me"): Saathi taps each step itself, but stops and asks at risky ones. ──
+    private var auto = false
+    private var awaitingConfirm = false
+    private var autoJob: Job? = null
+    private var autoSteps = 0
+    private var autoLastKey: String? = null
+    private var autoSameKey = 0
+    /** Our own taps/scrolls also produce events; don't mistake them for the person taking over. */
+    @Volatile private var lastOwnAction = 0L
+
+    // ── Watchdog: no progress for 2 minutes → offer help (once per task). ──
+    private var lastProgress = 0L
+    private var stuckOffered = false
+    private var watchdog: Job? = null
+
     val active get() = goal != null
 
     // ───────────────────────── entry points ─────────────────────────
@@ -87,6 +105,12 @@ class Guide(
     fun handleUtterance(text: String) {
         val t = text.lowercase().trim()
         fun any(vararg w: String) = w.any { t == it || t.startsWith("$it ") || t.endsWith(" $it") || t.contains(" $it ") }
+        val allRx = Regex("(?i)do (it )?all( of it)?( for me)?|do everything|you do everything|सब (आप )?कर दो|पूरा कर दो|सब कुछ कर दो|అన్నీ చేయి|మొత్తం చేయి|అన్నీ మీరే చేయండి")
+        allRx.find(text)?.let { m ->
+            val rest = text.removeRange(m.range).trim(' ', ',', ':', '.', '-')
+            if (rest.length > 3) { start(rest, autoMode = true); return }
+            if (active) { enableAuto(); return }
+        }
         if (active || current != null) when {
             any("do it", "do it for me", "you do it", "कर दो", "आप करो", "तुम करो", "చేయి", "మీరే చేయండి") -> { doItForMe(); return }
             any("again", "repeat", "say again", "फिर से", "दोबारा", "మళ్ళీ") -> { repeat(); return }
@@ -96,14 +120,19 @@ class Guide(
         start(text)
     }
 
-    fun start(goalText: String) {
+    fun start(goalText: String, autoMode: Boolean = Prefs.expert(svc)) {
         lang = Prefs.lang(svc)
         hideJob?.cancel()
-        Log.i(TAG, "goal: $goalText")
+        stopAuto()
+        Log.i(TAG, "goal: $goalText (auto=$autoMode)")
+        if (IntentRouter.isSos(goalText)) { sos(); return }
+        Routines.parse(goalText)?.let { (h, m, g) -> addRoutine(h, m, g); return }
+        if (IntentRouter.isRecall(goalText)) { recall(goalText); return }
         if (IntentRouter.isScamCheck(goalText)) { scamCheck(); return }
         if (IntentRouter.isFamilyHelp(goalText)) { askFamily(); return }
         if (IntentRouter.isReadMessages(goalText)) { readMessages(); return }
         if (IntentRouter.isExplain(goalText)) { explain(); return }
+        if (IntentRouter.isBriefing(goalText)) { briefing(); return }
         rememberRequest(goalText)?.let { finish(it); return }
         val f = IntentRouter.route(svc, goalText)
 
@@ -120,6 +149,9 @@ class Guide(
         flow = f
         history.clear(); current = null; lastSpokenKey = null; lastSig = 0; warnedSig = 0; lastStepIdx = -1; scrolls = 0
         taskPkgs.clear(); paused = false; pendingLearn = null; adoptPkg = true
+        auto = autoMode; autoSteps = 0; autoLastKey = null; autoSameKey = 0
+        lastProgress = SystemClock.uptimeMillis(); stuckOffered = false
+        startWatchdog()
 
         var hello = f?.start?.pick(lang) ?: say(
             "Okay! Let's do it together. Watch for the glow.",
@@ -134,7 +166,10 @@ class Guide(
                 "ఆ యాప్ ఈ ఫోన్‌లో లేదు, ఇక్కడి నుంచే చేద్దాం.").pick(lang)
         }
         val n = f?.let { Memory.timesDone(it.id) } ?: 0
-        if (f != null && f.steps.isNotEmpty() && n >= 3) {
+        if (auto) hello += " " + say("I'll do each step for you — watch the glow. I'll ask before anything important.",
+            "मैं हर क़दम ख़ुद करूँगा — चमक देखते रहिए। ज़रूरी चीज़ से पहले पूछूँगा।",
+            "ప్రతి అడుగు నేనే చేస్తాను — మెరుపు చూడండి. ముఖ్యమైనదానికి ముందు అడుగుతాను.").pick(lang)
+        else if (f != null && f.steps.isNotEmpty() && n >= 3) {
             hello += " " + say("You've done this $n times. Try first; I'll glow if you need me.",
                 "आप यह $n बार कर चुके हैं। पहले ख़ुद कोशिश कीजिए, ज़रूरत हो तो मैं दिखाऊँगा।",
                 "మీరు ఇది $n సార్లు చేశారు. ముందు మీరే ప్రయత్నించండి.").pick(lang)
@@ -188,6 +223,16 @@ class Guide(
         if (active) { lastSig = 0; replan = true; schedule(150, force = !thinking) } else schedule(THROTTLE_MS)
     }
 
+    /** A real finger on the screen (from the 1×1 touch watcher). In auto mode, the person is taking over. */
+    fun onUserTouch() {
+        if (auto && SystemClock.uptimeMillis() - lastOwnAction > 900 && !awaitingConfirm) {
+            stopAuto()
+            if (active) speaker.say(say("Okay, you carry on. I'll keep showing the way.", "ठीक है, आप कीजिए। मैं रास्ता दिखाता रहूँगा।",
+                "సరే, మీరు చేయండి. నేను దారి చూపిస్తూ ఉంటాను.").pick(lang), lang)
+        }
+        onUserMotion()
+    }
+
     /** Touches and scrolls: freeze guidance until the screen settles, so we never point at a moving target. */
     fun onUserMotion() {
         lastMotion = SystemClock.uptimeMillis()
@@ -205,6 +250,14 @@ class Guide(
 
     private fun settling(): Long = SETTLE_MS - (SystemClock.uptimeMillis() - lastMotion)
 
+    /**
+     * Read the screen off the main thread with a time limit, so a huge or frozen app can never make
+     * Saathi (or the phone) stutter. A slow read just means "look again shortly" (no weird states).
+     */
+    private suspend fun readScreen(): Screen? = withTimeoutOrNull(1500) {
+        withContext(Dispatchers.Default) { runCatching { ScreenReader.read(svc.rootInActiveWindow) }.getOrNull() }
+    }
+
     // ───────────────────────── the decision ladder (playbook §5) ─────────────────────────
 
     private suspend fun tick() {
@@ -216,7 +269,7 @@ class Guide(
         overlay.setMoving(false)
 
         // 2. Read; nothing changed → nothing to do.
-        val screen = ScreenReader.read(svc.rootInActiveWindow) ?: return
+        val screen = readScreen() ?: run { if (active) schedule(600, force = true); return }
         if (screen.pkg == svc.packageName) return
         if (screen.signature == lastSig) return
         lastSig = screen.signature
@@ -279,12 +332,13 @@ class Guide(
         overlay.showCard(say("Let me look…", "मैं देख रहा हूँ…", "చూస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
         // First use: give the model a few seconds to load (Gemma 4 on the GPU ≈ 4.5 s) before falling back.
         var waited = 0
-        while (!LlmManager.isReady && LlmManager.state.value is LlmManager.State.Loading && waited < 8000) { delay(200); waited += 200 }
+        val lowPower = Power.low(svc)
+        while (!lowPower && !LlmManager.isReady && LlmManager.state.value is LlmManager.State.Loading && waited < 8000) { delay(200); waited += 200 }
         val learned = f?.steps?.mapNotNull { Memory.learnedLabel(screen.pkg, it.key) }.orEmpty()
         replan = false
-        val d = try { Planner.decide(f?.llmGoal ?: g, screen, history, lang, learned) } finally { thinking = false; overlay.setAura(false) }
+        val d = try { Planner.decide(f?.llmGoal ?: g, screen, history, lang, learned, allowLlm = !lowPower) } finally { thinking = false; overlay.setAura(false) }
         if (goal == null) return
-        if (settling() > 0 || ScreenReader.read(svc.rootInActiveWindow)?.signature != screen.signature) {
+        if (settling() > 0 || readScreen()?.signature != screen.signature) {
             lastSig = 0; schedule(200, force = true); return // the screen moved while we thought: look again
         }
         if (d.done) { f?.let { complete(it) } ?: finish(d.say) }
@@ -352,7 +406,9 @@ class Guide(
             overlay.highlight(null, false)
             delayedGlow = scope.launch { delay(3500); if (current?.key == t.key) overlay.highlight(t.el?.bounds, false) }
         } else overlay.highlight(t.el?.bounds, t.warn)
+        if (newKey) lastProgress = SystemClock.uptimeMillis()
         val mode = when {
+            auto && !t.warn && !t.noAct && (t.el != null || t.scroll) && !t.final -> Overlay.Mode.AUTO
             t.warn -> Overlay.Mode.WARN
             t.final -> Overlay.Mode.FINAL
             t.scroll -> Overlay.Mode.SCROLL
@@ -366,6 +422,65 @@ class Guide(
             t.el?.let { history += it.title.take(30) }
             svc.buzz()
         }
+        if (auto) scheduleAuto(t)
+    }
+
+    // ───────────────────────── auto mode ─────────────────────────
+
+    private val CONFIRM_KEYS = setOf("send", "confirm", "dial", "video", "pay", "now", "junk", "clean")
+
+    fun enableAuto() {
+        if (!active) return
+        auto = true; autoSteps = 0; autoSameKey = 0
+        speaker.say(say("Okay, I'll do it for you. Watch the glow. I'll ask before anything important.",
+            "ठीक है, मैं कर देता हूँ। चमक देखिए। ज़रूरी चीज़ से पहले पूछूँगा।",
+            "సరే, నేను చేస్తాను. మెరుపు చూడండి. ముఖ్యమైనదానికి ముందు అడుగుతాను.").pick(lang), lang)
+        current?.let { show(it.copy()) } ?: run { lastSig = 0; schedule(200, force = true) }
+    }
+
+    private fun stopAuto() {
+        auto = false; awaitingConfirm = false
+        autoJob?.cancel()
+        current?.let { if (active && it.el != null) overlay.showCard(it.text, if (it.noAct) Overlay.Mode.INFO else Overlay.Mode.STEP, targetCenterY = it.el.bounds.centerY(), progress = it.progress) }
+    }
+
+    /** After a short, visible pause (so they can see what's happening), do the step — or ask first. */
+    private fun scheduleAuto(t: Target) {
+        autoJob?.cancel()
+        if (t.final || t.warn) { auto = false; return } // last step / warnings: the person decides
+        autoJob = scope.launch {
+            delay(1700)
+            if (!auto || current?.key != t.key || paused || goal == null) return@launch
+            if (t.key == autoLastKey) autoSameKey++ else { autoSameKey = 0; autoLastKey = t.key }
+            if (++autoSteps > 30 || autoSameKey >= 2) {
+                stopAuto()
+                val m = say("This isn't moving forward. Let's do it together — follow the glow.", "आगे नहीं बढ़ रहा। साथ में करते हैं — चमक देखिए।", "ముందుకు వెళ్ళట్లేదు. కలిసి చేద్దాం — మెరుపు చూడండి.").pick(lang)
+                speaker.say(m, lang); return@launch
+            }
+            if (t.noAct || t.el?.password == true) {
+                stopAuto()
+                speaker.say(say("This part is for you to do yourself.", "यह हिस्सा आप ख़ुद कीजिए।", "ఈ భాగం మీరే చేయండి.").pick(lang), lang)
+                return@launch
+            }
+            val label = t.el?.title.orEmpty()
+            if (t.key in CONFIRM_KEYS || (label.isNotBlank() && Planner.isRisky(label))) { askConfirm(t); return@launch }
+            performStep(t)
+        }
+    }
+
+    private fun askConfirm(t: Target) {
+        awaitingConfirm = true
+        val label = t.el?.title?.take(30) ?: ""
+        val q = say("Shall I press “$label”?", "क्या मैं “$label” दबाऊँ?", "“$label” నొక్కనా?").pick(lang)
+        overlay.highlight(t.el?.bounds, false)
+        overlay.showCard(q, Overlay.Mode.CONFIRM, targetCenterY = t.el?.bounds?.centerY())
+        speaker.say(q, lang)
+    }
+
+    /** "Don't press it" on a confirm: stay on this step, back to normal guidance. */
+    fun declineConfirm() {
+        awaitingConfirm = false
+        stopAuto()
     }
 
     private fun pause() {
@@ -390,21 +505,40 @@ class Guide(
 
     fun repeat() { current?.let { speaker.say(it.text, lang) } }
 
-    /** "Do it for me": tap or type on their behalf, only on a settled, freshly re-read screen. */
+    /** The card's primary button / "do it" by voice. In auto mode it means "let me do it myself" (pause auto). */
     fun doItForMe() {
         val t = current ?: return
-        if (t.noAct) { speaker.say(t.text, lang); return }
-        val wait = settling()
-        if (wait > 0) { scope.launch { delay(wait + 50); doItForMe() }; return }
-        // List rows get recycled while scrolling: re-find by label + role on a fresh read (trap #11).
-        val fresh = ScreenReader.read(svc.rootInActiveWindow)
-        val el = t.el?.let { old ->
-            fresh?.elements?.firstOrNull { it.label == old.label && it.role == old.role }
-                ?: run { lastSig = 0; schedule(200, force = true); return }
+        if (awaitingConfirm) { awaitingConfirm = false; performStep(t); return }
+        if (auto) {
+            stopAuto()
+            speaker.say(say("Okay, your turn. Tap where it glows.", "ठीक है, अब आप दबाइए जहाँ चमक है।", "సరే, ఇప్పుడు మీరు మెరుస్తున్న చోట నొక్కండి.").pick(lang), lang)
+            return
         }
+        performStep(t)
+    }
+
+    /** Tap or type on their behalf, only on a settled, freshly re-read screen. */
+    private fun performStep(t: Target) {
+        if (t.noAct) { speaker.say(t.text, lang); return }
+        scope.launch {
+            val wait = settling()
+            if (wait > 0) delay(wait + 50)
+            // List rows get recycled while scrolling: re-find by label + role on a fresh read (trap #11).
+            val fresh = readScreen()
+            val el = t.el?.let { old ->
+                fresh?.elements?.firstOrNull { it.label == old.label && it.role == old.role }
+                    ?: run { lastSig = 0; schedule(200, force = true); return@launch }
+            }
+            act(t, fresh, el)
+        }
+    }
+
+    private fun act(t: Target, fresh: Screen?, el: UiElement?) {
+        lastOwnAction = SystemClock.uptimeMillis()
         if (el == null) {
             // A scroll hint: "Do it" scrolls for them.
             fresh?.scrollable()?.node?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            lastOwnAction = SystemClock.uptimeMillis()
             lastSig = 0
             schedule(700, force = true)
             return
@@ -424,6 +558,7 @@ class Guide(
         } else if (!clickUp(el.node)) {
             svc.tap(el.bounds.exactCenterX(), el.bounds.exactCenterY())
         }
+        lastOwnAction = SystemClock.uptimeMillis()
         lastSig = 0
         replan = true
         schedule(550, force = true)
@@ -442,10 +577,12 @@ class Guide(
     private fun complete(f: Flow) {
         Memory.completed(f.id)
         f.memo?.let { Memory.addReminder(it) }
+        runCatching { f.onDone?.invoke(svc) }
         finish(f.doneSay.pick(lang))
     }
 
     private fun finish(text: String) {
+        auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
         goal = null; flow = null; current = null; paused = false; taskPkgs.clear()
         delayedGlow?.cancel()
         Memory.clearTask()
@@ -458,6 +595,7 @@ class Guide(
     }
 
     fun stop() {
+        auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
         goal = null; flow = null; paused = false; taskPkgs.clear()
         delayedGlow?.cancel()
         Memory.clearTask()
@@ -476,7 +614,7 @@ class Guide(
         lang = Prefs.lang(svc)
         scope.launch {
             delay(900)
-            val screen = ScreenReader.read(svc.rootInActiveWindow) ?: return@launch
+            val screen = readScreen() ?: return@launch
             val alert = ScamGuard.check(screen)
             if (alert != null) show(Target(screen.find(alert.safe), alert.say.pick(lang), "scam_${alert.id}", warn = true))
             else finish(say("I don't see warning signs here. Still: never share an OTP or PIN with anyone who calls you.",
@@ -493,7 +631,7 @@ class Guide(
             overlay.setAura(true)
             overlay.showCard(say("Let me look…", "मैं देख रहा हूँ…", "చూస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
             delay(700)
-            val screen = ScreenReader.read(svc.rootInActiveWindow)
+            val screen = readScreen()
             if (screen == null) { overlay.setAura(false); overlay.hideCard(); return@launch }
             val text = Planner.explain(screen, AppLauncher.labelOf(svc, screen.pkg), lang)
             overlay.setAura(false)
@@ -563,9 +701,11 @@ class Guide(
     }
 
     /** Prefill a redacted help message to the registered family contact. Saathi never sends it. */
-    fun askFamily() {
+    fun askFamily() { scope.launch { askFamilyNow() } }
+
+    private suspend fun askFamilyNow() {
         lang = Prefs.lang(svc)
-        val screen = ScreenReader.read(svc.rootInActiveWindow)
+        val screen = readScreen()
         val pkg = screen?.pkg ?: ""
         val onOwn = pkg == svc.packageName || pkg.isBlank()
         val title = screen?.elements?.firstOrNull { it.role == "text" && it.label.length in 3..40 }?.label
@@ -590,6 +730,98 @@ class Guide(
         overlay.highlight(null, false)
         overlay.showCard(t, Overlay.Mode.INFO)
         speaker.say(t, lang)
+    }
+
+    // ───────────────────────── watchdog ─────────────────────────
+
+    private fun startWatchdog() {
+        watchdog?.cancel()
+        watchdog = scope.launch {
+            while (goal != null) {
+                delay(30_000)
+                if (goal == null || paused || stuckOffered || thinking) continue
+                if (SystemClock.uptimeMillis() - lastProgress > 120_000) {
+                    stuckOffered = true
+                    stopAuto()
+                    val t = say("Stuck? No problem. I can take you home, go back, or ask your family to help.",
+                        "अटक गए? कोई बात नहीं। मैं होम पर ले चलूँ, वापस जाऊँ, या परिवार से मदद माँगूँ।",
+                        "ఆగిపోయారా? పర్వాలేదు. హోమ్‌కి తీసుకెళ్ళనా, వెనక్కి వెళ్ళనా, లేదా కుటుంబాన్ని అడగనా.").pick(lang)
+                    current = Target(null, t, "stuck")
+                    overlay.highlight(null, false)
+                    overlay.showCard(t, Overlay.Mode.LOST)
+                    speaker.say(t, lang)
+                }
+            }
+        }
+    }
+
+    // ───────────────────────── memory recall ─────────────────────────
+
+    /** "What's my BP tablet?" → answered only from what they told Saathi (grounded; never invented). */
+    fun recall(q: String) {
+        lang = Prefs.lang(svc)
+        val facts = Memory.notes() + Memory.reminders() + Routines.all(svc).map { "${it.goal} · ${it.time} daily" } +
+            Prefs.contacts(svc).map { "Family: ${it.name}" }
+        val words = q.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 && it !in RECALL_STOP }
+        val hits = facts.map { f -> f to words.count { it in f.lowercase() } }.filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }
+        scope.launch {
+            val answer = when {
+                hits.isEmpty() -> say("I don't know that yet. Say “remember …” and I'll keep it for you.",
+                    "यह मुझे अभी नहीं पता। “याद रखो …” कहिए, मैं याद रखूँगा।",
+                    "అది నాకు ఇంకా తెలియదు. “గుర్తుంచుకో …” అని చెప్పండి.").pick(lang)
+                lang == Lang.EN && LlmManager.isReady -> LlmManager.generate(
+                    "Answer the elderly person's question in one short sentence using ONLY these notes. If the notes don't answer it, say you don't know.",
+                    "Notes:\n${hits.take(5).joinToString("\n") { "- $it" }}\nQuestion: $q")?.takeIf { it.isNotBlank() && it.length < 240 }
+                    ?: say("You told me: ${hits.first()}.", "", "").pick(lang)
+                else -> say("You told me: ${hits.first()}.", "आपने बताया था: ${hits.first()}।", "మీరు చెప్పారు: ${hits.first()}.").pick(lang)
+            }
+            finish(answer)
+        }
+    }
+
+    private val RECALL_STOP = setOf("what", "whats", "what's", "when", "where", "which", "my", "the", "is", "are", "you", "remember", "tell", "do", "did",
+        "क्या", "मेरी", "मेरा", "मेरे", "कब", "कहाँ", "है", "याद", "ఏమిటి", "నా", "ఎప్పుడు", "గుర్తుందా")
+
+    // ───────────────────────── SOS & routines ─────────────────────────
+
+    fun sos() {
+        stop()
+        runCatching { svc.startActivity(Intent(svc, com.saathi.app.ui.SosActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    private fun addRoutine(h: Int, m: Int, g: String) {
+        val kind = if (Regex("(?i)^remind|याद दिला|గుర్తు చేయి").containsMatchIn(g) || Skills.match(g)?.id == "medicine") "remind" else "do"
+        val r = Routines.add(svc, h, m, g, kind)
+        finish(say("Done. Every day at ${r.time} I'll ask: “$g”.", "ठीक है। रोज़ ${r.time} बजे मैं पूछूँगा: “$g”।", "సరే. ప్రతి రోజు ${r.time}కి అడుగుతాను: “$g”.").pick(lang))
+    }
+
+    /** A routine's time came: offer it (card + voice). Reminders just remind; tasks run on "Yes". */
+    fun routineDue(r: Routines.Routine) {
+        lang = Prefs.lang(svc)
+        if (active) return // don't interrupt a task in progress
+        val med = r.kind == "remind"
+        val what = r.goal.replace(Regex("(?i)^remind me (to )?"), "")
+        val q = if (med) say("It's ${r.time}. Time to $what.", "${r.time} बज गए। $what का समय।", "${r.time} అయింది. $what సమయం.").pick(lang)
+            else say("It's ${r.time}. Shall I help you “${r.goal}”?", "${r.time} बज गए। क्या मैं “${r.goal}” में मदद करूँ?", "${r.time} అయింది. “${r.goal}” చేయనా?").pick(lang)
+        current = Target(null, q, "routine_${r.id}")
+        overlay.showCard(q, if (med) Overlay.Mode.DONE else Overlay.Mode.ASK, onContinue = { overlay.hideCard(); start(r.goal) })
+        speaker.say(q, lang)
+        svc.buzz(); svc.buzz()
+        if (med) { hideJob?.cancel(); hideJob = scope.launch { delay(60_000); if (goal == null) overlay.hideCard() } }
+    }
+
+    /** "Good morning" / "what's today": reminders, routines, and who they might call. */
+    fun briefing() {
+        lang = Prefs.lang(svc)
+        val name = Prefs.name(svc)
+        val items = (Memory.reminders().take(3) + Routines.all(svc).take(3).map { "${it.goal} · ${it.time}" })
+        val person = Memory.topPeople(1).firstOrNull() ?: Prefs.family(svc).ifBlank { null }
+        val t = buildString {
+            append(say("Good morning${if (name.isNotBlank()) ", $name ji" else ""}. ", "सुप्रभात${if (name.isNotBlank()) " $name जी" else ""}। ", "శుభోదయం${if (name.isNotBlank()) " $name గారు" else ""}. ").pick(lang))
+            if (items.isNotEmpty()) append(say("Today: ", "आज: ", "ఈరోజు: ").pick(lang)).append(items.joinToString("; ")).append(". ")
+            person?.let { append(say("Shall we call $it today?", "आज $it को फ़ोन करें?", "ఈరోజు $it కి ఫోన్ చేద్దామా?").pick(lang)) }
+        }
+        finish(t)
     }
 
     fun onFinalDone() { flow?.let { complete(it) } ?: finish(say("Done!", "हो गया!", "అయింది!").pick(lang)) }

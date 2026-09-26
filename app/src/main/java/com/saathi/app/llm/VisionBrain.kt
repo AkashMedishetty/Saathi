@@ -54,6 +54,8 @@ object VisionBrain {
         return null
     }
 
+    fun unload() { runCatching { engine?.close() }; engine = null }
+
     private fun touch() {
         idle?.cancel()
         idle = scope.launch { delay(120_000); lock.withLock { runCatching { engine?.close() }; engine = null } }

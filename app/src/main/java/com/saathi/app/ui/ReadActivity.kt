@@ -59,7 +59,7 @@ import kotlin.coroutines.resume
  * Gemma (text) or a template takes over if needed. Nothing leaves the phone.
  */
 class ReadActivity : AppCompatActivity() {
-    companion object { const val EXTRA_MODE = "mode"; const val MODE_READ = "read"; const val MODE_MEDICINE = "medicine" }
+    companion object { const val EXTRA_MODE = "mode"; const val MODE_READ = "read"; const val MODE_MEDICINE = "medicine"; const val MODE_OBJECT = "object" }
 
     private lateinit var preview: PreviewView
     private lateinit var aura: GlowView
@@ -68,6 +68,7 @@ class ReadActivity : AppCompatActivity() {
     private lateinit var sheetSub: TextView
     private lateinit var sheetActions: LinearLayout
     private lateinit var controls: View
+    private lateinit var frozen: PhotoGlow
     private var capture: ImageCapture? = null
     private var camera: Camera? = null
     private var torch = false
@@ -85,7 +86,10 @@ class ReadActivity : AppCompatActivity() {
         build()
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera()
         else requestPermissions(arrayOf(Manifest.permission.CAMERA), 4)
-        val hello = if (mode == MODE_MEDICINE) s("Hold the medicine strip flat, name side up, and tap the big button.",
+        val hello = if (mode == MODE_OBJECT) s("Point the camera at the machine or thing, and tap the big button. I'll tell you how to use it.",
+            "मशीन या चीज़ की ओर कैमरा कीजिए और बड़ा बटन दबाइए। मैं बताऊँगा कैसे चलाते हैं।",
+            "యంత్రం లేదా వస్తువు వైపు కెమెరా పెట్టి పెద్ద బటన్ నొక్కండి. ఎలా వాడాలో చెబుతాను.")
+        else if (mode == MODE_MEDICINE) s("Hold the medicine strip flat, name side up, and tap the big button.",
             "दवा का पत्ता सीधा पकड़िए, नाम ऊपर, और बड़ा बटन दबाइए।", "మందుల స్ట్రిప్‌ను పేరు పైకి ఉండేలా పట్టుకుని పెద్ద బటన్ నొక్కండి.")
         else s("Point at the paper and tap the big button. I'll read it to you.",
             "काग़ज़ की ओर फ़ोन कीजिए और बड़ा बटन दबाइए। मैं पढ़कर सुनाऊँगा।", "కాగితం వైపు ఫోన్ పెట్టి పెద్ద బటన్ నొక్కండి. నేను చదివి వినిపిస్తాను.")
@@ -109,13 +113,20 @@ class ReadActivity : AppCompatActivity() {
         val root = FrameLayout(this).apply { setBackgroundColor(0xFF000000.toInt()) }
         preview = PreviewView(this).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
         root.addView(preview, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        frozen = PhotoGlow(this).apply { visibility = View.GONE }
+        // The photo sits in the top part of the screen, above the answer sheet.
+        root.addView(frozen, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.52f).toInt(), Gravity.TOP))
         aura = GlowView(this)
         root.addView(aura, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         // Top: close · title · torch
         val top = hbox().apply { setPadding(dp(18), dp(52), dp(18), 0) }
         top.addView(roundIcon(R.drawable.ic_close, s("Close", "बंद करें", "మూసివేయి")) { finish() }, LinearLayout.LayoutParams(dp(56), dp(56)))
-        top.add(overline(if (mode == MODE_MEDICINE) s("Medicine strip", "दवा का पत्ता", "మందుల స్ట్రిప్") else s("Read this for me", "मेरे लिए पढ़ो", "నా కోసం చదువు"), C.WHITE).apply {
+        top.add(overline(when (mode) {
+            MODE_MEDICINE -> s("Medicine strip", "दवा का पत्ता", "మందుల స్ట్రిప్")
+            MODE_OBJECT -> s("How do I use this?", "यह कैसे चलाएँ?", "ఇది ఎలా వాడాలి?")
+            else -> s("Read this for me", "मेरे लिए पढ़ो", "నా కోసం చదువు")
+        }, C.WHITE).apply {
             gravity = Gravity.CENTER }, weight = 1f)
         val torchBtn = roundIcon(R.drawable.ic_flashlight_off, s("Torch", "टॉर्च", "టార్చ్")) {}
         torchBtn.setOnClickListener {
@@ -182,6 +193,7 @@ class ReadActivity : AppCompatActivity() {
     }
 
     private fun reset() {
+        frozen.clear()
         sheet.visibility = View.GONE; controls.visibility = View.VISIBLE; busy = false; aura.setAura(false)
     }
 
@@ -246,7 +258,10 @@ class ReadActivity : AppCompatActivity() {
 
         // 1) FastVLM on the NPU looks at the photo. 2) else Gemma explains the OCR text. 3) else read it out.
         val jpeg = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
-        val vlm = VisionBrain.describe(applicationContext, jpeg,
+        val vlm = if (mode == MODE_OBJECT) VisionBrain.describe(applicationContext, jpeg,
+            "You help an elderly person use everyday things safely. Name the object in the photo, then give 2 or 3 very short, " +
+                "simple steps to use it, based on the buttons or labels you can see. Mention one safety tip if it heats, cuts or uses electricity.")
+        else VisionBrain.describe(applicationContext, jpeg,
             "You help an elderly person. In at most 2 short, simple sentences, say what this paper is and what matters in it. " +
                 "If it is a bill, say the amount and the due date. If it is a medicine, say its name. " +
                 "If it is a letter, say who it is from and what they want. If it looks like a scam, say so clearly.")
@@ -255,9 +270,13 @@ class ReadActivity : AppCompatActivity() {
             LlmManager.generate("You explain papers to elderly people in very simple English. 2 or 3 short sentences. " +
                 "Bills: amount and due date. Letters: who from and what they want. Scams: say so.", "The paper says:\n${plain.take(1500)}")
         } else null
-        val explained = (vlm ?: llm)?.let { firstSentences(it, 2) }
+        val explained = (vlm ?: llm)?.let { firstSentences(it, if (mode == MODE_OBJECT) 4 else 2) }
         aura.setAura(false)
         busy = false
+        // "Tap here" on the real thing: glow the printed button the explanation talks about (object mode),
+        // or the amount / due date on a bill (read mode). Uses OCR word boxes; nothing is guessed.
+        val targets = pointAt(text, explained ?: plain)
+        if (targets.second.isNotEmpty()) frozen.show(bmp, targets.second)
         val engine = when { vlm != null -> "FastVLM · Snapdragon NPU · ${VisionBrain.lastMs} ms"; llm != null -> LlmManager.label ?: ""; else -> "" }
 
         if (explained == null && plain.isBlank()) {
@@ -266,8 +285,10 @@ class ReadActivity : AppCompatActivity() {
             showSheet(t, "", listOf(again(), close())); speaker?.say(t, lang); return
         }
         // Speech: English explanation when EN; for HI/TE we read the words themselves (small models write broken Indic, trap #5).
-        val shown = if (lang == Lang.EN) explained ?: plain.lines().take(6).joinToString("\n")
-            else s("", "इस पर लिखा है:", "దీని మీద రాసి ఉంది:") + "\n" + plain.lines().take(6).joinToString("\n")
+        val pressLine = targets.first?.let { w -> if (mode == MODE_OBJECT) s("Press the glowing “$w” button.", "चमकते “$w” बटन को दबाइए।", "మెరుస్తున్న “$w” బటన్ నొక్కండి.")
+            else s("I've circled the amount on the photo.", "मैंने फ़ोटो पर रक़म पर घेरा बनाया है।", "ఫోటోలో మొత్తం చుట్టూ గుర్తు పెట్టాను.") }
+        val shown = (if (lang == Lang.EN) explained ?: plain.lines().take(6).joinToString("\n")
+            else s("", "इस पर लिखा है:", "దీని మీద రాసి ఉంది:") + "\n" + plain.lines().take(6).joinToString("\n")) + (pressLine?.let { "\n\n$it" } ?: "")
         val preview = plain.lines().filter { it.isNotBlank() }.take(4).joinToString(" · ")
         val sub = if (lang == Lang.EN) (if (explained != null) preview else "") else (explained ?: "")
         showSheet(shown, listOf(sub, engine).filter { it.isNotBlank() }.joinToString("\n\n"),
@@ -315,6 +336,31 @@ class ReadActivity : AppCompatActivity() {
     private fun close() = body(s("Close", "बंद करें", "మూసివేయి"), 18f, C.PINE_DEEP, bold = true).apply {
         gravity = Gravity.CENTER; minHeight = dp(52)
     }.pressable { finish() }
+
+    private val BUTTON_WORDS = listOf("start", "power", "on/off", "on", "off", "stop", "cancel", "ok", "enter", "timer", "time", "clock", "temp",
+        "menu", "mode", "set", "reset", "defrost", "reheat", "quick", "wash", "spin", "rinse", "eco", "auto", "fan", "swing", "cool", "heat",
+        "play", "pause", "open", "lock", "unlock", "boil", "warm", "high", "low", "+30s", "+30 sec")
+
+    /** Returns (word to say, boxes to glow). Object: the button word the explanation mentions first (else START/POWER). */
+    private fun pointAt(t: Text?, explanation: String): Pair<String?, List<android.graphics.Rect>> {
+        t ?: return null to emptyList()
+        val elements = t.textBlocks.flatMap { b -> b.lines.flatMap { it.elements } }
+        if (mode == MODE_OBJECT) {
+            val buttons = elements.filter { e -> e.text.trim().lowercase().trim('.', ':') in BUTTON_WORDS && e.boundingBox != null }
+            if (buttons.isEmpty()) return null to emptyList()
+            val ex = explanation.lowercase()
+            val pick = buttons.minByOrNull { e -> ex.indexOf(e.text.lowercase()).let { if (it < 0) Int.MAX_VALUE else it } }
+                ?.takeIf { ex.contains(it.text.lowercase()) }
+                ?: buttons.firstOrNull { it.text.lowercase() in setOf("start", "power", "on/off") } ?: buttons.first()
+            return pick.text.uppercase() to listOfNotNull(pick.boundingBox)
+        }
+        // Bill / letter: the line with the amount, and the due date line.
+        val lines = t.textBlocks.flatMap { it.lines }
+        val money = lines.firstOrNull { Regex("(?i)(₹|rs\\.?|inr|amount|total|payable)\\s*[:\\-]?\\s*[\\d,]+").containsMatchIn(it.text) }
+        val due = lines.firstOrNull { Regex("(?i)due|last date|pay by|अंतिम तिथि").containsMatchIn(it.text) }
+        val boxes = listOfNotNull(money?.boundingBox, due?.boundingBox)
+        return (if (boxes.isEmpty()) null else "amount") to boxes
+    }
 
     /** Small models ramble: keep the first [n] sentences. */
     private fun firstSentences(t: String, n: Int): String {

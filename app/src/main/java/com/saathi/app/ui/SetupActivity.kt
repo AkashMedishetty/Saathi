@@ -98,12 +98,16 @@ class SetupActivity : AppCompatActivity() {
                 col.add(body(s("A son, daughter or someone you trust. Only they get “Ask family” messages. Changing this later needs the phone's screen lock, so no stranger can add themselves.",
                     "बेटा, बेटी या कोई भरोसेमंद। “परिवार से पूछें” संदेश सिर्फ़ उन्हीं को जाते हैं। बाद में बदलने के लिए फ़ोन का स्क्रीन लॉक चाहिए, ताकि कोई अनजान ख़ुद को न जोड़ सके।",
                     "కొడుకు, కూతురు లేదా నమ్మకమైన వ్యక్తి. “కుటుంబాన్ని అడగండి” సందేశాలు వారికే. తర్వాత మార్చాలంటే ఫోన్ స్క్రీన్ లాక్ కావాలి, కాబట్టి తెలియని వారు చేరలేరు."), 17f), 14)
-                val n = field(Prefs.family(this), s("Name, e.g. Rahul", "नाम, जैसे राहुल", "పేరు, ఉదా: రాహుల్")) { Prefs.setFamily(this, it) }
-                val p = field(Prefs.familyPhone(this), s("Phone number", "फ़ोन नंबर", "ఫోన్ నంబర్")) { Prefs.setFamilyPhone(this, it) }.apply { inputType = InputType.TYPE_CLASS_PHONE }
-                col.add(n, 24); col.add(p, 10)
+                val cur = Prefs.contacts(this)
+                val fields = (0 until 3).map { i ->
+                    val n = field(cur.getOrNull(i)?.name ?: "", if (i == 0) s("Name, e.g. Rahul", "नाम, जैसे राहुल", "పేరు, ఉదా: రాహుల్") else s("Another person (optional)", "एक और व्यक्ति (वैकल्पिक)", "ఇంకొకరు (ఐచ్ఛికం)")) {}
+                    val p = field(cur.getOrNull(i)?.phone ?: "", s("Phone number", "फ़ोन नंबर", "ఫోన్ నంబర్")) {}.apply { inputType = InputType.TYPE_CLASS_PHONE }
+                    col.add(n, if (i == 0) 24 else 20); col.add(p, 8)
+                    n to p
+                }
                 col.add(primaryButton(s("Next", "आगे", "తర్వాత"), R.drawable.ic_chevron_right) {
-                    Prefs.setFamily(this, n.text.toString().trim()); Prefs.setFamilyPhone(this, p.text.toString().trim())
-                    Prefs.family(this).takeIf { it.isNotBlank() }?.let { Memory.person(it) }
+                    Prefs.setContacts(this, fields.map { (n, p) -> Prefs.Contact(n.text.toString().trim(), p.text.toString().trim()) })
+                    Prefs.contacts(this).forEach { if (it.name.isNotBlank()) Memory.person(it.name) }
                     next()
                 }, 36)
                 col.add(body(s("Skip for now", "अभी छोड़ें", "ఇప్పుడు వద్దు"), 17f, C.PINE_DEEP, bold = true).apply {

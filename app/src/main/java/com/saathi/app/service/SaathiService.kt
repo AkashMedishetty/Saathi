@@ -58,10 +58,11 @@ class SaathiService : AccessibilityService() {
             onBubble = { openAsk(listen = false) },
             onBubbleLong = { openAsk(listen = true) },
             onMic = { openAsk(listen = true) },
-            onTouchOutside = { if (::guide.isInitialized) guide.onUserMotion() },
+            onTouchOutside = { if (::guide.isInitialized) guide.onUserTouch() },
             onBack = { guide.goBack() },
             onHome = { guide.goHome() },
             onFamily = { guide.askFamily() },
+            onDecline = { guide.declineConfirm() },
         )
         o.attach()
         overlay = o
@@ -98,6 +99,16 @@ class SaathiService : AccessibilityService() {
     }
 
     override fun onInterrupt() {}
+
+    /** Android is short on memory: give the models back first (they reload on demand). */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_LOW) {
+            Log.i(TAG, "trim memory $level → unloading models")
+            com.saathi.app.llm.LlmManager.unload()
+            com.saathi.app.llm.VisionBrain.unload()
+        }
+    }
 
     private var lastAlarmPkg: String? = null
     private var lastAlarmAt = 0L
@@ -174,6 +185,9 @@ class SaathiService : AccessibilityService() {
                     "aura" -> overlay?.setAura(i.getBooleanExtra("on", true))
                     "dump" -> dumpTree()
                     "ask" -> openAsk(i.getBooleanExtra("listen", false))
+                    "routine" -> com.saathi.app.guide.Routines.all(this@SaathiService).firstOrNull()?.let { guide.routineDue(it) }
+                    "scam_sms" -> com.saathi.app.guide.MessageScam.check("Dear customer your SBI KYC is pending, account will be blocked today. Update now bit.ly/kyc-sbi")
+                        ?.let { guide.messageAlert("VM-SBIUPD", "Messages", it) }
                     "tts" -> Log.i(TAG, "tts: " + Lang.entries.joinToString { "${it.tag}=${speaker.supports(it)}" })
                     null -> i.getStringExtra("goal")?.let { guide.handleUtterance(it) }
                     else -> Log.w(TAG, "unknown cmd $cmd")

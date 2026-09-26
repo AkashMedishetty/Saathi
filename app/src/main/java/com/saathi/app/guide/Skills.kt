@@ -115,16 +115,23 @@ object Skills {
         },
 
         Skill("tv", Cat.WATCH, R.drawable.ic_tv, s3("TV remote", "टीवी रिमोट", "టీవీ రిమోట్"),
-            listOf("tv", "television", "tv remote", "tv volume", "tv off", "tv on", "टीवी", "टीवी की आवाज़", "टीवी बंद", "టీవీ"),
+            listOf("tv", "television", "tv remote", "tv volume", "tv off", "tv on", "tv go", "tv channel", "set top box",
+                "टीवी", "टीवी की आवाज़", "टीवी बंद", "टीवी चैनल", "టీవీ", "టీవీ ఛానెల్"),
             s3("Turn the TV volume up", "टीवी की आवाज़ बढ़ाओ", "టీవీ సౌండ్ పెంచు")) { _, s ->
-            val key = IrRemote.keyFor(s.raw)
-            Flow("tv", null, emptyList(), null, NONE, NONE, quiet = key == null, action = { ctx ->
-                if (key != null && IrRemote.send(ctx, key)) when (key) {
+            val digits = IrRemote.digitsFor(s.raw)
+            val key = if (digits == null) IrRemote.keyFor(s.raw) else null
+            Flow("tv", null, emptyList(), null, NONE, NONE, quiet = key == null && digits == null, action = { ctx ->
+                if (digits != null && IrRemote.sendDigits(ctx, digits)) s3("Changing to channel ${digits.joinToString("") { it.name.drop(1) }}.",
+                    "चैनल ${digits.joinToString("") { it.name.drop(1) }} लगा रहा हूँ।", "ఛానెల్ ${digits.joinToString("") { it.name.drop(1) }} పెడుతున్నాను.")
+                else if (key != null && IrRemote.send(ctx, key)) when (key) {
                     IrRemote.Key.POWER -> s3("Done. I pressed the TV power button.", "टीवी का पावर बटन दबा दिया।", "టీవీ పవర్ బటన్ నొక్కాను.")
                     IrRemote.Key.VOL_UP -> s3("Louder.", "आवाज़ बढ़ा दी।", "సౌండ్ పెంచాను.")
                     IrRemote.Key.VOL_DOWN -> s3("Softer.", "आवाज़ कम कर दी।", "సౌండ్ తగ్గించాను.")
                     IrRemote.Key.MUTE -> s3("Muted.", "आवाज़ बंद कर दी।", "మ్యూట్ చేశాను.")
-                    else -> s3("Changed the channel.", "चैनल बदल दिया।", "ఛానెల్ మార్చాను.")
+                    IrRemote.Key.CH_UP, IrRemote.Key.CH_DOWN -> s3("Changed the channel.", "चैनल बदल दिया।", "ఛానెల్ మార్చాను.")
+                    IrRemote.Key.HOME -> s3("TV home screen. Now use up, down, left, right and OK to choose.", "टीवी का होम। अब ऊपर, नीचे, बाएँ, दाएँ और OK से चुनिए।", "టీవీ హోమ్. ఇప్పుడు పైకి, కిందకి, ఎడమ, కుడి, OK తో ఎంచుకోండి.")
+                    IrRemote.Key.SOURCE -> s3("Changed the input. Press again for the next one.", "इनपुट बदल दिया। अगले के लिए फिर कहिए।", "ఇన్‌పుట్ మార్చాను. తర్వాతిదానికి మళ్ళీ చెప్పండి.")
+                    else -> s3("Pressed.", "दबा दिया।", "నొక్కాను.")
                 } else {
                     ctx.startActivity(Intent(ctx, com.saathi.app.ui.RemoteActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     s3("Here's your TV remote.", "यह रहा आपका टीवी रिमोट।", "ఇదిగో మీ టీవీ రిమోట్.")
@@ -162,7 +169,8 @@ object Skills {
             val h = s.hour ?: 8; val m = s.minute ?: 0
             val what = Regex("(?i)(?:to take|take|to)\\s+(?:my\\s+)?(.+?)\\s+(?:at|every|daily)").find(s.raw)?.groupValues?.get(1) ?: "medicine"
             alarmFlow("medicine", h, m, "Take $what",
-                s3("I'll remind you every day at ${fmt(h, m)} to take $what.", "मैं रोज़ ${fmt(h, m)} बजे दवा की याद दिलाऊँगा।", "రోజూ ${fmt(h, m)}కి మందు గుర్తు చేస్తాను."))
+                s3("I'll remind you every day at ${fmt(h, m)} to take $what.", "मैं रोज़ ${fmt(h, m)} बजे दवा की याद दिलाऊँगा।", "రోజూ ${fmt(h, m)}కి మందు గుర్తు చేస్తాను."),
+                onDone = { c -> Routines.add(c, h, m, "take $what", "remind") })
         },
 
         Skill("alarm", Cat.DAILY, R.drawable.ic_alarm, s3("Set an alarm", "अलार्म लगाएँ", "అలారం పెట్టండి"),
@@ -264,9 +272,16 @@ object Skills {
             s3("Teach me to trim a video", "वीडियो काटना सिखाओ", "వీడియో కత్తిరించడం నేర్పు")) { ctx, _ -> editLesson(ctx, video = true) },
 
         Skill("learn_app", Cat.LEARN, R.drawable.ic_menu_book, s3("Teach me any app", "कोई भी ऐप सिखाइए", "ఏ యాప్ అయినా నేర్పండి"),
-            listOf("teach me", "how do i use", "how to use", "सिखाओ", "सिखा दो", "నేర్పు", "నేర్పించు"),
+            listOf("teach me", "how do i use", "how to use", "how does this work", "सिखाओ", "सिखा दो", "कैसे चलाते", "कैसे चलाऊँ", "कैसे इस्तेमाल",
+                "నేర్పు", "నేర్పించు", "ఎలా వాడాలి", "ఎలా ఉపయోగించాలి"),
             s3("Teach me how to use Google Photos", "यह ऐप सिखाओ", "ఈ యాప్ నేర్పు")) { ctx, s ->
             val app = AppLauncher.findInGoal(ctx, s.raw)
+            // No app named ("how do I use this", "यह कैसे चलाते हैं") → it's a thing in front of them: use the camera.
+            if (app == null && !Regex("(?i)\\bapp\\b|ऐप|యాప్").containsMatchIn(s.raw)) return@Skill Flow("object_help", null, emptyList(), null, NONE, NONE, quiet = true, action = { c ->
+                c.startActivity(Intent(c, com.saathi.app.ui.ReadActivity::class.java)
+                    .putExtra(com.saathi.app.ui.ReadActivity.EXTRA_MODE, com.saathi.app.ui.ReadActivity.MODE_OBJECT).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                NONE
+            })
             Flow("learn_app", app?.let { a -> { c: Context -> AppLauncher.launch(c, a.pkg) } }, emptyList(), null, NONE,
                 s3("Let's learn ${app?.label ?: "this app"} together. I'll explain each part.", "साथ में ${app?.label ?: "यह ऐप"} सीखते हैं।", "కలిసి ${app?.label ?: "ఈ యాప్"} నేర్చుకుందాం."),
                 teach = true, llmGoal = s.raw)
@@ -449,7 +464,7 @@ object Skills {
     }
 
     /** SET_ALARM opens the Clock app prefilled; the person confirms (needs the SET_ALARM permission, trap #16). */
-    private fun alarmFlow(id: String, h: Int, m: Int, message: String, done: Say) = Flow(id,
+    private fun alarmFlow(id: String, h: Int, m: Int, message: String, done: Say, onDone: ((Context) -> Unit)? = null) = Flow(id,
         {
             Intent(AlarmClock.ACTION_SET_ALARM)
                 .putExtra(AlarmClock.EXTRA_HOUR, h).putExtra(AlarmClock.EXTRA_MINUTES, m)
@@ -462,7 +477,7 @@ object Skills {
         { sc -> sc.allText.contains(message, ignoreCase = true) ||
             Regex("Alarm set for|Alarm for .* set|hours and|minutes from now", RegexOption.IGNORE_CASE).containsMatchIn(sc.allText) },
         done, s3("Setting it for ${fmt(h, m)}.", "${fmt(h, m)} के लिए लगा रहा हूँ।", "${fmt(h, m)}కి పెడుతున్నాను."), llmGoal = "save the alarm",
-        memo = "$message · ${fmt(h, m)}${if (id == "medicine") " daily" else ""}")
+        memo = "$message · ${fmt(h, m)}${if (id == "medicine") " daily" else ""}", onDone = onDone)
 
     private fun editLesson(ctx: Context, video: Boolean): Flow {
         val pkg = AppLauncher.first(ctx, "com.google.android.apps.photos", "com.vivo.gallery", "com.android.gallery3d")

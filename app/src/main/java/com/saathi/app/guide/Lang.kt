@@ -25,11 +25,36 @@ object Prefs {
     fun setLang(c: Context, l: Lang) = sp(c).edit().putString("lang", l.name).apply()
     fun name(c: Context): String = sp(c).getString("name", "") ?: ""
     fun setName(c: Context, v: String) = sp(c).edit().putString("name", v).apply()
-    /** Main family contact (name + number), set in caregiver setup; editing it later needs the screen lock. */
-    fun family(c: Context): String = sp(c).getString("family", "") ?: ""
-    fun setFamily(c: Context, v: String) = sp(c).edit().putString("family", v).apply()
-    fun familyPhone(c: Context): String = sp(c).getString("family_phone", "") ?: ""
-    fun setFamilyPhone(c: Context, v: String) = sp(c).edit().putString("family_phone", v).apply()
+    /**
+     * Family contacts (up to 3), set in caregiver setup; editing later needs the screen lock.
+     * The first one is "the" family contact for Ask family.
+     */
+    data class Contact(val name: String, val phone: String)
+
+    fun contacts(c: Context): List<Contact> = runCatching {
+        val a = org.json.JSONArray(sp(c).getString("contacts", "[]"))
+        (0 until a.length()).map { i -> a.getJSONObject(i).let { Contact(it.optString("n"), it.optString("p")) } }
+    }.getOrDefault(emptyList()).ifEmpty {
+        // migrate the single-contact prefs from earlier builds
+        val n = sp(c).getString("family", "") ?: ""; val p = sp(c).getString("family_phone", "") ?: ""
+        if (n.isNotBlank() || p.isNotBlank()) listOf(Contact(n, p)) else emptyList()
+    }
+
+    fun setContacts(c: Context, list: List<Contact>) {
+        val a = org.json.JSONArray()
+        list.filter { it.name.isNotBlank() || it.phone.isNotBlank() }.take(3).forEach { a.put(org.json.JSONObject().put("n", it.name).put("p", it.phone)) }
+        sp(c).edit().putString("contacts", a.toString()).apply()
+    }
+
+    fun family(c: Context): String = contacts(c).firstOrNull()?.name ?: ""
+    fun familyPhone(c: Context): String = contacts(c).firstOrNull()?.phone ?: ""
+    fun setFamily(c: Context, v: String) = setContacts(c, listOf(Contact(v, familyPhone(c))) + contacts(c).drop(1))
+    fun setFamilyPhone(c: Context, v: String) = setContacts(c, listOf(Contact(family(c), v)) + contacts(c).drop(1))
+
+    /** Expert mode: less teaching, and Saathi does whole tasks (still stopping at anything risky). */
+    fun expert(c: Context): Boolean = sp(c).getBoolean("expert", false)
+    fun setExpert(c: Context, v: Boolean) = sp(c).edit().putBoolean("expert", v).apply()
+
     fun speechRate(c: Context): Float = sp(c).getFloat("rate", 0.88f)
     fun setSpeechRate(c: Context, v: Float) = sp(c).edit().putFloat("rate", v).apply()
     fun textScale(c: Context): Float = sp(c).getFloat("text_scale", 1f)

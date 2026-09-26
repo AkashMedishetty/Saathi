@@ -92,6 +92,19 @@ class RoutingTest {
         assert(IntentRouter.isReadMessages("read my messages"))
     }
 
+    @Test fun routinesAndIntentsParse() {
+        assertEquals(Triple(7, 0, "play Hanuman Chalisa"), Routines.parse("every morning at 7 am play Hanuman Chalisa"))
+        assertEquals(20, Routines.parse("every day at 8 pm remind me to call Rahul")?.first)
+        assertEquals(7, Routines.parse("रोज़ सुबह 7 बजे भजन लगाओ")?.first)
+        assertEquals(null, Routines.parse("play Hanuman Chalisa"))
+        assert(IntentRouter.isSos("help!")); assert(IntentRouter.isSos("बचाओ")); assert(!IntentRouter.isSos("help me set an alarm"))
+        assert(IntentRouter.isRecall("what's my BP tablet?")); assert(IntentRouter.isBriefing("good morning"))
+        assertEquals(listOf(IrRemote.Key.N2, IrRemote.Key.N5), IrRemote.digitsFor("tv channel 25"))
+        assertEquals(IrRemote.Key.DOWN, IrRemote.keyFor("tv go down"))
+        assertEquals(IrRemote.Key.OK, IrRemote.keyFor("tv ok"))
+        assertEquals("learn_app", Skills.match("how do I use this machine")?.id)
+    }
+
     @Test fun irPatternsAreStandard() {
         val p = IrRemote.pattern(0x20DF10EFL, samsung = false)
         assertEquals(9000, p[0]); assertEquals(4500, p[1]); assertEquals(67, p.size)

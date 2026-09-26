@@ -34,6 +34,8 @@ class Flow(
     val memo: String? = null,
     /** Instant skills that open one of Saathi's own screens: just speak, no card on top of it. */
     val quiet: Boolean = false,
+    /** Extra work when the task completes (e.g. Saathi's own spoken medicine reminder). */
+    val onDone: ((Context) -> Unit)? = null,
 )
 
 fun rx(vararg p: String) = p.map { Regex(it, RegexOption.IGNORE_CASE) }

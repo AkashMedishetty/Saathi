@@ -118,7 +118,12 @@ class MainActivity : AppCompatActivity() {
         hero.add(body(say("Tap the light and speak", "रोशनी छूकर बोलिए", "వెలుగును తాకి మాట్లాడండి").pick(lang), 20f, C.INK, bold = true).apply { gravity = Gravity.CENTER }, 6)
         hero.add(body(say("in English, हिंदी or తెలుగు", "हिंदी, English या తెలుగు में", "తెలుగు, हिंदी లేదా English లో").pick(lang), 16f).apply { gravity = Gravity.CENTER }, 2)
         page.add(hero, 18)
-        page.add(primaryButton(say("Type instead", "लिखकर बताइए", "టైప్ చేయండి").pick(lang), R.drawable.ic_keyboard, bg = C.PAPER_2, fg = C.PINE_DEEP) { openAsk(false) }, 18)
+        val actions = hbox()
+        actions.add(primaryButton(say("Type instead", "लिखकर बताइए", "టైప్ చేయండి").pick(lang), R.drawable.ic_keyboard, bg = C.PAPER_2, fg = C.PINE_DEEP) { openAsk(false) }, weight = 1f)
+        actions.add(primaryButton(say("SOS", "मदद", "SOS").pick(lang), R.drawable.ic_sos, bg = C.VERMILION) {
+            startActivity(Intent(this, SosActivity::class.java))
+        }, top = 10)
+        page.add(actions, 18)
 
         // ── Today ──
         val today = today()
@@ -184,6 +189,9 @@ class MainActivity : AppCompatActivity() {
         fun add(v: View) { if (box.childCount > 0) box.addView(divider()); box.addView(v) }
         Memory.task()?.let { t -> add(row(R.drawable.ic_history, say("Continue", "जारी रखें", "కొనసాగించండి").pick(lang), "“${t.goal}”") { run(t.goal) }) }
         Memory.reminders().takeLast(3).forEach { r -> add(row(R.drawable.ic_notifications_active, r, null, C.SAFFRON) { }) }
+        com.saathi.app.guide.Routines.all(this).take(3).forEach { r ->
+            add(row(if (r.kind == "remind") R.drawable.ic_medication else R.drawable.ic_alarm, r.goal, say("Every day · ${r.time}", "हर दिन · ${r.time}", "ప్రతి రోజు · ${r.time}").pick(lang), C.SAFFRON) { run(r.goal) })
+        }
         Memory.topPeople(2).forEach { p ->
             add(row(R.drawable.ic_videocam, say("Video call $p", "$p को वीडियो कॉल", "$p కి వీడియో కాల్").pick(lang), null) {
                 run(say("video call $p", "$p को वीडियो कॉल करो", "$p కి వీడియో కాల్ చేయి").pick(lang))

@@ -55,8 +55,9 @@ class Overlay(
     private val onBack: () -> Unit = {},
     private val onHome: () -> Unit = {},
     private val onFamily: () -> Unit = {},
+    private val onDecline: () -> Unit = {},
 ) {
-    enum class Mode { INFO, THINKING, STEP, SCROLL, FINAL, WARN, DONE, PAUSED, LOST, ALARM }
+    enum class Mode { INFO, THINKING, STEP, SCROLL, FINAL, WARN, DONE, PAUSED, LOST, ALARM, CONFIRM, AUTO, ASK }
 
     private val wm = ctx.getSystemService(WindowManager::class.java)
     val glow = GlowView(ctx)
@@ -163,7 +164,8 @@ class Overlay(
             setStroke(ctx.dp(1), if (warn) 0x33FFFFFF else C.LINE)
         }
         orb.mood = when (mode) {
-            Mode.WARN -> OrbView.Mood.WARN
+            Mode.AUTO -> OrbView.Mood.ACTIVE
+            Mode.WARN, Mode.ALARM -> OrbView.Mood.WARN
             Mode.DONE -> OrbView.Mood.DONE
             Mode.THINKING -> OrbView.Mood.ACTIVE
             else -> OrbView.Mood.IDLE
@@ -173,6 +175,8 @@ class Overlay(
         val headerText = when (mode) {
             Mode.WARN -> say("Careful", "सावधान", "జాగ్రత్త").pick(l)
             Mode.ALARM -> say("Stop — are you on a call?", "रुकिए — क्या आप फ़ोन पर हैं?", "ఆగండి — మీరు కాల్‌లో ఉన్నారా?").pick(l)
+            Mode.CONFIRM -> say("Before I press it", "दबाने से पहले", "నొక్కే ముందు").pick(l)
+            Mode.AUTO -> say("Doing it for you · watch the glow", "आपके लिए कर रहा हूँ · चमक देखिए", "మీ కోసం చేస్తున్నాను · మెరుపు చూడండి").pick(l)
             Mode.THINKING -> say("Looking…", "देख रहा हूँ…", "చూస్తున్నాను…").pick(l)
             Mode.PAUSED -> say("Paused", "रुका हुआ", "ఆగింది").pick(l)
             else -> null
@@ -201,6 +205,9 @@ class Overlay(
             Mode.PAUSED -> say("Continue", "जारी रखें", "కొనసాగించు").pick(l)
             Mode.LOST -> say("Take me home", "होम पर ले चलो", "హోమ్‌కి తీసుకెళ్ళు").pick(l)
             Mode.ALARM -> say("I'll hang up now", "मैं फ़ोन काट रहा हूँ", "నేను ఫోన్ పెట్టేస్తాను").pick(l)
+            Mode.CONFIRM -> say("Yes, press it", "हाँ, दबा दो", "అవును, నొక్కండి").pick(l)
+            Mode.AUTO -> say("Let me do it myself", "मैं ख़ुद करूँगा", "నేనే చేస్తాను").pick(l)
+            Mode.ASK -> say("Yes, please", "हाँ, कीजिए", "అవును, చేయండి").pick(l)
             Mode.FINAL -> say("I'm done", "हो गया", "అయిపోయింది").pick(l)
             Mode.WARN -> if (targetCenterY != null) say("Show me the safe button", "सुरक्षित बटन दिखाओ", "సురక్షిత బటన్ చూపించు").pick(l) else null
             else -> null
@@ -209,6 +216,8 @@ class Overlay(
             Mode.PAUSED -> R.drawable.ic_play_circle
             Mode.LOST -> R.drawable.ic_home
             Mode.ALARM -> R.drawable.ic_call_end
+            Mode.CONFIRM, Mode.ASK -> R.drawable.ic_check
+            Mode.AUTO -> R.drawable.ic_pause_circle
             Mode.FINAL -> R.drawable.ic_check
             Mode.WARN -> R.drawable.ic_shield
             Mode.SCROLL -> R.drawable.ic_arrow_downward
@@ -220,7 +229,7 @@ class Overlay(
 
         val quietBg = if (warn) 0x26FFFFFF else C.PAPER_2
         val quietFg = if (warn) C.WHITE else C.PINE_DEEP
-        if (mode == Mode.ALARM) {
+        if (mode == Mode.ALARM || mode == Mode.CONFIRM || mode == Mode.ASK) {
             btnAgain.visibility = View.GONE; btnMic.visibility = View.GONE
         } else if (mode == Mode.LOST) {
             // Lost: Back · Ask family · Close, all one tap.
@@ -235,6 +244,8 @@ class Overlay(
             btnMic.round(say("Speak to Saathi", "साथी से बोलिए", "సాథీతో మాట్లాడండి").pick(l), R.drawable.ic_mic, quietBg, quietFg)
         }
         btnStop.round(if (mode == Mode.ALARM) say("It's family, continue", "परिवार है, जारी रखें", "కుటుంబమే, కొనసాగించు").pick(l)
+            else if (mode == Mode.ASK) say("Not now", "अभी नहीं", "ఇప్పుడు వద్దు").pick(l)
+            else if (mode == Mode.CONFIRM) say("Don't press it", "मत दबाओ", "నొక్కవద్దు").pick(l)
             else if (mode == Mode.DONE || mode == Mode.LOST || mode == Mode.INFO) say("Close", "बंद करें", "మూసివేయి").pick(l) else say("Stop", "रोकें", "ఆపండి").pick(l),
             R.drawable.ic_close, quietBg, quietFg)
         lastTargetY = targetCenterY
@@ -405,9 +416,16 @@ class Overlay(
         btnAgain.setOnClickListener { if (mode == Mode.LOST) onBack() else onAgain() }
         primary.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-            when (mode) { Mode.PAUSED -> onContinue?.invoke(); Mode.FINAL -> onFinalDone(); Mode.LOST, Mode.ALARM -> onHome(); else -> onDoIt() }
+            when (mode) { Mode.PAUSED, Mode.ASK -> onContinue?.invoke(); Mode.FINAL -> onFinalDone(); Mode.LOST, Mode.ALARM -> onHome(); else -> onDoIt() }
         }
-        btnStop.setOnClickListener { if (mode == Mode.DONE || mode == Mode.LOST || mode == Mode.INFO || mode == Mode.ALARM) { hideCard(); onStop() } else onStop() }
+        btnStop.setOnClickListener {
+            when (mode) {
+                Mode.ASK -> hideCard()
+                Mode.CONFIRM -> onDecline()
+                Mode.DONE, Mode.LOST, Mode.INFO, Mode.ALARM -> { hideCard(); onStop() }
+                else -> onStop()
+            }
+        }
 
         // Drag anywhere on the card (not the buttons) to move it; it snaps to the nearer edge and stays there.
         var downY = 0f

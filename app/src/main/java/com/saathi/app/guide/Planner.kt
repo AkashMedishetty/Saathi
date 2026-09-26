@@ -60,9 +60,11 @@ object Planner {
         append("Screen:\n").append(screen.forPrompt()).append('\n')
     }
 
-    suspend fun decide(goal: String, screen: Screen, history: List<String>, lang: Lang, learned: List<String> = emptyList()): Decision {
-        // Banking / UPI screens never go to the model at all: keywords and scripts only.
-        val raw = if (LlmManager.isReady && !isMoneyApp(screen.pkg)) LlmManager.generate(SYSTEM, buildUser(goal, screen, history, learned)) else null
+    fun isRisky(label: String) = RISKY.containsMatchIn(label)
+
+    suspend fun decide(goal: String, screen: Screen, history: List<String>, lang: Lang, learned: List<String> = emptyList(), allowLlm: Boolean = true): Decision {
+        // Banking / UPI screens never go to the model at all: keywords and scripts only. Low battery: keywords only.
+        val raw = if (allowLlm && LlmManager.isReady && !isMoneyApp(screen.pkg)) LlmManager.generate(SYSTEM, buildUser(goal, screen, history, learned)) else null
         val d = raw?.let { parse(it, screen, lang) } ?: heuristic(goal, screen, lang)
         return guard(d, screen, lang)
     }

@@ -86,12 +86,12 @@ class SettingsActivity : AppCompatActivity() {
         // ── Family (locked) ──
         section(page, s("Family contact", "परिवार का नंबर", "కుటుంబ నంబర్"))
         val fam = surface().apply { setPadding(dp(18), dp(16), dp(18), dp(18)) }
-        val famName = Prefs.family(this); val famNum = Prefs.familyPhone(this)
-        fam.add(body(if (famName.isBlank()) s("Not set yet.", "अभी नहीं जोड़ा।", "ఇంకా సెట్ చేయలేదు.") else "$famName · ${famNum.ifBlank { "—" }}", 19f, C.INK, bold = true))
+        val cs = Prefs.contacts(this)
+        fam.add(body(if (cs.isEmpty()) s("Not set yet.", "अभी नहीं जोड़ा।", "ఇంకా సెట్ చేయలేదు.") else cs.joinToString("\n") { "${it.name} · ${it.phone.ifBlank { "—" }}" }, 19f, C.INK, bold = true))
         fam.add(body(s("Only these people get “Ask family” messages. Changing them needs your phone's screen lock.",
             "“परिवार से पूछें” संदेश सिर्फ़ इन्हीं को जाते हैं। बदलने के लिए फ़ोन का स्क्रीन लॉक चाहिए।",
             "“కుటుంబాన్ని అడగండి” సందేశాలు వీరికే వెళ్తాయి. మార్చాలంటే ఫోన్ స్క్రీన్ లాక్ కావాలి."), 15f), 6)
-        fam.add(primaryButton(s("Change family contact", "परिवार का नंबर बदलें", "కుటుంబ నంబర్ మార్చండి"), R.drawable.ic_lock, bg = C.PAPER_2, fg = C.PINE_DEEP) {
+        fam.add(primaryButton(s("Change family contacts", "परिवार के नंबर बदलें", "కుటుంబ నంబర్లు మార్చండి"), R.drawable.ic_lock, bg = C.PAPER_2, fg = C.PINE_DEEP) {
             withScreenLock { editFamily() }
         }, 14)
         page.add(fam, 10)
@@ -126,6 +126,8 @@ class SettingsActivity : AppCompatActivity() {
         look.add(sizes, 8)
         look.add(toggle(s("Dim the screen around the glow", "चमक के आसपास स्क्रीन धुंधली करें", "మెరుపు చుట్టూ స్క్రీన్ మసకబార్చండి"), Prefs.dim(this)) { Prefs.setDim(this, it) }, 14)
         look.add(toggle(s("Warn me about scams", "धोखे से सावधान करें", "మోసాల గురించి హెచ్చరించండి"), Prefs.scamGuard(this)) { Prefs.setScamGuard(this, it) }, 6)
+        look.add(toggle(s("Expert mode: do whole tasks for me (still asks before anything important)", "एक्सपर्ट मोड: पूरा काम कर दो (ज़रूरी चीज़ से पहले पूछे)",
+            "నిపుణ మోడ్: పూర్తి పని చేయి (ముఖ్యమైనదానికి ముందు అడుగుతుంది)"), Prefs.expert(this)) { Prefs.setExpert(this, it) }, 6)
         look.add(toggle(s("Explain why (teaching tips)", "क्यों, यह भी समझाएँ", "ఎందుకో కూడా చెప్పండి"), Prefs.teach(this)) { Prefs.setTeach(this, it) }, 6)
         look.add(primaryButton(s("Let Saathi read my messages aloud", "Saathi मेरे संदेश पढ़कर सुनाए", "Saathi నా సందేశాలు చదివి వినిపించాలి"), R.drawable.ic_sms, bg = C.PAPER_2, fg = C.PINE_DEEP) {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
@@ -159,6 +161,36 @@ class SettingsActivity : AppCompatActivity() {
             lifecycleScope.launch { out.text = withContext(Dispatchers.IO) { NpuProbe.run(applicationContext, "NPU", "vision") } }
         }, 10)
         page.add(brain, 10)
+
+        // ── Routines ──
+        section(page, s("Every day", "हर दिन", "ప్రతి రోజు"))
+        val rt = surface()
+        val routines = com.saathi.app.guide.Routines.all(this)
+        if (routines.isEmpty()) rt.add(body(s("Nothing yet. Say: “every morning at 7 play Hanuman Chalisa”.", "अभी कुछ नहीं। कहिए: “रोज़ सुबह 7 बजे भजन लगाओ”।", "ఇంకా ఏమీ లేదు. ఇలా చెప్పండి: “రోజూ ఉదయం 7 గంటలకు భజన పెట్టు”."), 16f).apply { setPadding(dp(18), dp(16), dp(18), dp(16)) })
+        routines.forEachIndexed { i, r ->
+            if (i > 0) rt.addView(divider())
+            rt.addView(row(if (r.kind == "remind") R.drawable.ic_medication else R.drawable.ic_alarm, r.goal, "${r.time} · " + s("tap to remove", "हटाने के लिए छुइए", "తొలగించడానికి తాకండి")) {
+                com.saathi.app.guide.Routines.remove(this, r.id); render()
+            })
+        }
+        page.add(rt, 10)
+
+        // ── Performance (proof it's light on the phone) ──
+        section(page, s("Phone health", "फ़ोन की सेहत", "ఫోన్ ఆరోగ్యం"))
+        val perf = surface().apply { setPadding(dp(18), dp(16), dp(18), dp(18)) }
+        val mi = android.app.ActivityManager.MemoryInfo().also { getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(it) }
+        val mine = android.os.Debug.getPss() / 1024
+        perf.add(body(listOf(
+            s("Saathi uses", "Saathi इस्तेमाल करता है", "Saathi వాడుతోంది") + ": $mine MB",
+            s("Phone memory free", "फ़ोन की ख़ाली मेमोरी", "ఫోన్ ఖాళీ మెమరీ") + ": ${mi.availMem / (1024 * 1024)} MB",
+            s("Text brain", "टेक्स्ट दिमाग़", "టెక్స్ట్ మెదడు") + ": " + (LlmManager.label?.let { "$it · ${LlmManager.lastGenMs} ms" } ?: s("asleep (loads when needed)", "सोया है (ज़रूरत पर जागेगा)", "నిద్రలో ఉంది (అవసరమైతే లోడ్)")),
+            s("Vision (NPU)", "विज़न (NPU)", "విజన్ (NPU)") + ": " + (com.saathi.app.llm.VisionBrain.label?.let { "$it · ${com.saathi.app.llm.VisionBrain.lastMs} ms" } ?: s("asleep", "सोया है", "నిద్రలో")),
+            if (com.saathi.app.guide.Power.low(this)) s("Battery low: using scripts only", "बैटरी कम: सिर्फ़ स्क्रिप्ट", "బ్యాటరీ తక్కువ: స్క్రిప్ట్‌లు మాత్రమే") else s("Battery OK", "बैटरी ठीक", "బ్యాటరీ సరే"),
+        ).joinToString("\n"), 16f, C.INK))
+        perf.add(primaryButton(s("Free memory now", "मेमोरी ख़ाली करें", "మెమరీ ఖాళీ చేయండి"), R.drawable.ic_cleaning_services, bg = C.PAPER_2, fg = C.PINE_DEEP) {
+            LlmManager.unload(); com.saathi.app.llm.VisionBrain.unload(); render()
+        }, 12)
+        page.add(perf, 10)
 
         // ── Memory ──
         section(page, s("What Saathi remembers", "साथी को क्या याद है", "సాథీకి ఏం గుర్తుంది"))
@@ -219,15 +251,19 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun editFamily() {
         val box = vbox(22, 10)
-        val n = field(Prefs.family(this), s("Name, e.g. Rahul", "नाम, जैसे राहुल", "పేరు, ఉదా: రాహుల్")) {}
-        val p = field(Prefs.familyPhone(this), s("Phone number", "फ़ोन नंबर", "ఫోన్ నంబర్")) {}.apply { inputType = InputType.TYPE_CLASS_PHONE }
-        box.add(n); box.add(p, 10)
+        val cur = Prefs.contacts(this)
+        val fields = (0 until 3).map { i ->
+            val n = field(cur.getOrNull(i)?.name ?: "", s("Name ${i + 1}, e.g. Rahul", "नाम ${i + 1}, जैसे राहुल", "పేరు ${i + 1}, ఉదా: రాహుల్")) {}
+            val p = field(cur.getOrNull(i)?.phone ?: "", s("Phone number", "फ़ोन नंबर", "ఫోన్ నంబర్")) {}.apply { inputType = InputType.TYPE_CLASS_PHONE }
+            box.add(n, if (i == 0) 0 else 18); box.add(p, 8)
+            n to p
+        }
         android.app.AlertDialog.Builder(this)
-            .setTitle(s("Family contact", "परिवार का नंबर", "కుటుంబ నంబర్"))
-            .setView(box)
+            .setTitle(s("Family contacts (up to 3)", "परिवार के नंबर (3 तक)", "కుటుంబ నంబర్లు (3 వరకు)"))
+            .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton(s("Save", "सेव करें", "సేవ్ చేయండి")) { _, _ ->
-                Prefs.setFamily(this, n.text.toString().trim()); Prefs.setFamilyPhone(this, p.text.toString().trim())
-                Prefs.family(this).takeIf { it.isNotBlank() }?.let { Memory.person(it) }
+                Prefs.setContacts(this, fields.map { (n, p) -> Prefs.Contact(n.text.toString().trim(), p.text.toString().trim()) })
+                Prefs.contacts(this).forEach { if (it.name.isNotBlank()) Memory.person(it.name) }
                 render()
             }
             .setNegativeButton(s("Cancel", "रद्द करें", "రద్దు చేయండి"), null)

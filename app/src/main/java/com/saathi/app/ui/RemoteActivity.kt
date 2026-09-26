@@ -68,7 +68,41 @@ class RemoteActivity : AppCompatActivity() {
         cols.add(column(s("Channel", "चैनल", "ఛానెల్"), Key.CH_UP, Key.CH_DOWN), top = 14, weight = 1f)
         page.add(cols, 28)
         page.add(primaryButton(s("Mute", "आवाज़ बंद", "మ్యూట్"), R.drawable.ic_volume_up, bg = C.PAPER_2, fg = C.PINE_DEEP) { press(scroll, Key.MUTE) }, 18)
-        page.add(body(s("You can also say: “TV volume up”", "आप बोल भी सकते हैं: “टीवी की आवाज़ बढ़ाओ”", "ఇలా కూడా చెప్పవచ్చు: “టీవీ సౌండ్ పెంచు”"), 15f).apply { gravity = Gravity.CENTER }, 18)
+
+        // Navigation: a big D-pad with OK in the middle, then Back · Home · Source.
+        page.add(overline(s("Move around the TV", "टीवी में आगे-पीछे", "టీవీలో కదలండి")).apply { gravity = Gravity.CENTER }, 30)
+        val pad = android.widget.GridLayout(this).apply { columnCount = 3; rowCount = 3 }
+        fun cell(k: Key?, label: String, bg: Int = C.PINE_DEEP) {
+            val v: View = if (k == null) View(this) else display(label, 30f, C.WHITE).apply {
+                gravity = Gravity.CENTER; background = rounded(bg, dpf(24)); contentDescription = k.name
+            }.also { tv -> tv.pressable { press(tv, k) } }
+            pad.addView(v, android.widget.GridLayout.LayoutParams().apply { width = dp(96); height = dp(88); setMargins(dp(5), dp(5), dp(5), dp(5)) })
+        }
+        cell(null, ""); cell(Key.UP, "▲"); cell(null, "")
+        cell(Key.LEFT, "◀"); cell(Key.OK, "OK", C.MARIGOLD); cell(Key.RIGHT, "▶")
+        cell(null, ""); cell(Key.DOWN, "▼"); cell(null, "")
+        page.addView(pad, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(10) })
+        val nav = hbox()
+        listOf(Triple(Key.BACK, s("Back", "वापस", "వెనక్కి"), R.drawable.ic_arrow_back), Triple(Key.HOME, s("Home", "होम", "హోమ్"), R.drawable.ic_home),
+            Triple(Key.SOURCE, s("Input", "इनपुट", "ఇన్‌పుట్"), R.drawable.ic_settings_remote)).forEachIndexed { i, (k, l, ic) ->
+            nav.add(primaryButton(l, ic, bg = C.PAPER_2, fg = C.PINE_DEEP) { press(scroll, k) }, top = if (i == 0) 0 else 8, weight = 1f)
+        }
+        page.add(nav, 14)
+
+        // Channel number pad
+        page.add(overline(s("Channel number", "चैनल नंबर", "ఛానెల్ నంబర్")).apply { gravity = Gravity.CENTER }, 30)
+        val nums = android.widget.GridLayout(this).apply { columnCount = 3 }
+        (listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)).forEach { n ->
+            val k = Key.valueOf("N$n")
+            val v = display("$n", 30f, C.PINE_DEEP).apply { gravity = Gravity.CENTER; background = rounded(C.WHITE, dpf(22), C.LINE, dp(1)) }
+            v.pressable { press(v, k) }
+            nums.addView(v, android.widget.GridLayout.LayoutParams().apply {
+                width = dp(96); height = dp(72); setMargins(dp(5), dp(5), dp(5), dp(5))
+                if (n == 0) columnSpec = android.widget.GridLayout.spec(1)
+            })
+        }
+        page.addView(nums, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(10) })
+        page.add(body(s("You can also say: “TV volume up”, “TV go down”, “TV OK”, “channel 25”", "आप बोल भी सकते हैं: “टीवी की आवाज़ बढ़ाओ”, “टीवी चैनल 25”", "ఇలా కూడా చెప్పవచ్చు: “టీవీ సౌండ్ పెంచు”, “టీవీ ఛానెల్ 25”"), 15f).apply { gravity = Gravity.CENTER }, 18)
         page.add(View(this), 40)
         scroll.removeAllViews(); scroll.addView(page)
     }

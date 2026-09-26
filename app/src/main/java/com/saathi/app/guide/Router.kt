@@ -50,6 +50,19 @@ object IntentRouter {
         "read my messages", "read messages", "any messages", "new messages", "who messaged", "read my whatsapp",
         "मेरे संदेश", "संदेश पढ़ो", "मैसेज पढ़ो", "मैसेज सुनाओ", "సందేశాలు చదువు", "మెసేజ్‌లు చదువు", "మెసేజ్ చదువు")
 
+    fun isSos(goal: String) = goal.lowercase().trim().let { g ->
+        Regex("^(help|help me|help!|sos|emergency|save me)\\W*$").matches(g) || g.has("emergency", "call ambulance", "i fell", "i have fallen",
+            "बचाओ", "आपातकाल", "एम्बुलेंस", "मैं गिर गया", "मैं गिर गई", "కాపాడండి", "అత్యవసరం", "ఆపద", "అంబులెన్స్")
+    }
+
+    fun isRecall(goal: String) = goal.lowercase().has(
+        "what is my", "what's my", "when is my", "when do i", "do you remember", "what did i", "what did i tell", "which tablet", "which medicine",
+        "क्या है मेरी", "मेरी दवा क्या", "मेरा क्या", "याद है", "क्या बताया था", "గుర్తుందా", "నా మందు ఏమిటి", "ఏం చెప్పాను")
+
+    fun isBriefing(goal: String) = goal.lowercase().trim().let { g ->
+        Regex("^(good morning|what'?s today|what is today|today'?s plan|my day)\\W*$").matches(g) || g.has("आज क्या है", "आज का दिन", "సుప్రభాతం", "ఈరోజు ఏమిటి")
+    }
+
     fun isScamCheck(goal: String) = goal.lowercase().has("scam", "fraud", "is this safe", "धोखा", "ठगी", "మోసం")
 
     fun route(ctx: Context, goal: String): Flow? {
