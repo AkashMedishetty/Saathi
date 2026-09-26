@@ -1405,7 +1405,10 @@ class Guide(
     /** One map decision for this screen. true = handled (shown / waited / done); false = not mapped → planner. */
     private fun mapTick(r: com.saathi.app.maps.Route, screen: Screen): Boolean {
         val live = MapBridge.read(svc.rootInActiveWindow)
-        val d = runCatching { com.saathi.app.maps.AppMaps.next(r, screen.pkg, live.nodes, maxOf(mapStep, 0), mapSlots) }.getOrNull() ?: return false
+        // "Done" only after the route's last step was really reached (field test: a Short's Like button on YouTube's
+        // home screen made the search route "done" before a single step).
+        val rr = if (r.doneNeedsLastStep) r else r.copy(doneNeedsLastStep = true)
+        val d = runCatching { com.saathi.app.maps.AppMaps.next(rr, screen.pkg, live.nodes, maxOf(mapStep, 0), mapSlots) }.getOrNull() ?: return false
         when (d) {
             is com.saathi.app.maps.Decision.Glow -> {
                 if (d.step > mapStep) mapStep = d.step
