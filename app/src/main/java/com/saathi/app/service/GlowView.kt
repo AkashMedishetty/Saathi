@@ -4,7 +4,13 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
+import android.graphics.ComposeShader
+import android.graphics.PorterDuff
+import android.graphics.Shader
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
@@ -159,22 +165,43 @@ class GlowView(ctx: Context) : View(ctx) {
         ring.shader = s
     }
 
-    private fun drawAura(c: Canvas) {
-        val w = width.toFloat(); val h = height.toFloat()
-        sweep(w / 2, h / 2, 70f)
-        val breath = 0.85f + 0.15f * sin(t * 2.4f) + auraLevel * 0.5f
-        val r = RectF(0f, 0f, w, h)
-        // Bloom: wide faint strokes inward, then a crisp bright line at the very edge.
-        for (k in 5 downTo 1) {
-            val sw = pad * k * 1.3f * breath
-            ring.strokeWidth = sw
-            ring.alpha = ((14 + 60 / k) * aura).toInt().coerceIn(0, 255)
-            c.drawRoundRect(RectF(r).apply { inset(sw / 2 - pad * 0.3f, sw / 2 - pad * 0.3f) }, screenCorner, screenCorner, ring)
+    // Aura = a soft, blurred edge mask (rendered once, quarter resolution, in software) tinted each frame by a
+    // rotating sweep gradient on the GPU. Looks like a real glow; costs one textured rect per frame.
+    private var auraMask: Bitmap? = null
+    private val auraPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val maskM = Matrix()
+
+    private fun buildMask(w: Int, h: Int): Bitmap {
+        val k = 4
+        val bw = (w / k).coerceAtLeast(1); val bh = (h / k).coerceAtLeast(1)
+        val bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ALPHA_8)
+        val cv = Canvas(bmp)
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = pad * 2.2f / k
+            maskFilter = BlurMaskFilter(pad * 3.2f / k, BlurMaskFilter.Blur.NORMAL)
         }
-        ring.strokeWidth = pad * 0.55f
-        ring.alpha = (255 * aura).toInt()
-        c.drawRoundRect(RectF(r).apply { inset(pad * 0.2f, pad * 0.2f) }, screenCorner, screenCorner, ring)
-        ring.shader = null
+        val inset = p.strokeWidth * 0.2f
+        val rr = screenCorner / k
+        cv.drawRoundRect(RectF(inset, inset, bw - inset, bh - inset), rr, rr, p)
+        p.maskFilter = null; p.strokeWidth = pad * 0.35f / k
+        cv.drawRoundRect(RectF(0.5f, 0.5f, bw - 0.5f, bh - 0.5f), rr, rr, p) // crisp bright rim
+        return bmp
+    }
+
+    private fun drawAura(c: Canvas) {
+        val w = width; val h = height
+        val mask = auraMask?.takeIf { it.width == (w / 4).coerceAtLeast(1) } ?: buildMask(w, h).also { auraMask = it }
+        val bs = BitmapShader(mask, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        maskM.setScale(w / mask.width.toFloat(), h / mask.height.toFloat())
+        bs.setLocalMatrix(maskM)
+        val sw = SweepGradient(w / 2f, h / 2f, sweepColors, null)
+        shaderM.setRotate((t * 70f) % 360f, w / 2f, h / 2f)
+        sw.setLocalMatrix(shaderM)
+        auraPaint.shader = ComposeShader(sw, bs, PorterDuff.Mode.DST_IN)
+        val breath = 0.78f + 0.22f * sin(t * 2.4f) + auraLevel * 0.3f
+        auraPaint.alpha = (255 * aura * breath.coerceAtMost(1f)).toInt()
+        c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), auraPaint)
     }
 
     private fun drawSpot(c: Canvas) {

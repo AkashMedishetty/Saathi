@@ -229,14 +229,18 @@ class Overlay(
      * Top or bottom: where the person dragged it, else away from the target. Never on top of the target
      * (trap #30), even if they chose that side.
      */
-    private fun place(animateIn: Boolean) {
+    private fun place(animateIn: Boolean, moved: Boolean = false) {
         val screenH = ctx.resources.displayMetrics.heightPixels
         val ty = lastTargetY
-        val targetLow = ty != null && ty > screenH * 0.52
-        val wantTop = when (Prefs.cardPos(ctx)) {
-            "top" -> !(ty != null && ty < screenH * 0.40)
-            "bottom" -> ty != null && ty > screenH * 0.60
-            else -> targetLow
+        // Where it would like to be: the person's choice, else the side away from the target.
+        val preferTop = when (Prefs.cardPos(ctx)) { "top" -> true; "bottom" -> false; else -> ty != null && ty > screenH * 0.5 }
+        // Hysteresis: once shown, only move if the target would actually sit under the card.
+        val cardH = (if (card.height > 0) card.height else ctx.dp(170)) + ctx.dp(40)
+        fun covers(top: Boolean) = ty != null && (if (top) ty < ctx.dp(46) + cardH else ty > screenH - cardH)
+        val wantTop = when {
+            animateIn || moved -> if (covers(preferTop)) !preferTop else preferTop
+            covers(cardAtTop) -> !cardAtTop
+            else -> cardAtTop
         }
         val p = lp(WLP.MATCH_PARENT, WLP.WRAP_CONTENT, true).apply {
             gravity = if (wantTop) Gravity.TOP else Gravity.BOTTOM
@@ -248,6 +252,10 @@ class Overlay(
             card.translationY = ctx.dpf(if (wantTop) -40 else 40); card.alpha = 0f
             card.scaleX = 0.96f; card.scaleY = 0.96f
             card.animate().translationY(0f).alpha(1f).scaleX(1f).scaleY(1f).setInterpolator(EASE).setDuration(400).start()
+        } else if (moved) {
+            runCatching { wm.updateViewLayout(cardWrap, p) }
+            card.translationY = ctx.dpf(if (wantTop) -24 else 24)
+            card.animate().alpha(1f).translationY(0f).setInterpolator(EASE).setDuration(300).start()
         } else if (wantTop != cardAtTop) {
             card.animate().alpha(0f).setDuration(120).withEndAction {
                 runCatching { wm.updateViewLayout(cardWrap, p) }
@@ -400,11 +408,7 @@ class Overlay(
                         val toTop = e.rawY < h / 2
                         Prefs.setCardPos(ctx, if (toTop) "top" else "bottom")
                         v.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
-                        v.animate().translationY(0f).alpha(0f).setDuration(120).withEndAction {
-                            cardAtTop = !toTop // force a re-place
-                            place(animateIn = false)
-                            v.alpha = 1f
-                        }.start()
+                        v.animate().alpha(0f).setDuration(120).withEndAction { v.translationY = 0f; place(animateIn = false, moved = true) }.start()
                     }
                     true
                 }

@@ -39,7 +39,8 @@ object IntentRouter {
     private fun String.has(vararg w: String) = w.any { it in this }
 
     fun isExplain(goal: String) = goal.lowercase().has(
-        "what is on", "what's on", "explain", "what is this", "samjhao", "समझाओ", "क्या है", "ఏమిటి", "వివరించు", "ఏముంది")
+        "what is on", "what's on", "explain", "what is this", "where am i", "i'm lost", "i am lost", "samjhao",
+        "समझाओ", "यह क्या है", "मैं कहाँ हूँ", "कहाँ हूँ", "ఏమిటి", "వివరించు", "ఏముంది", "ఎక్కడ ఉన్నాను")
 
     fun isScamCheck(goal: String) = goal.lowercase().has("scam", "fraud", "is this safe", "धोखा", "ठगी", "మోసం")
 

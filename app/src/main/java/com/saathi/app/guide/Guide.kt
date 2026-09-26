@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
+import com.saathi.app.llm.LlmManager
 import com.saathi.app.service.Overlay
 import com.saathi.app.service.SaathiService
 import com.saathi.app.service.Speaker
@@ -36,6 +37,8 @@ class Guide(
         val warn: Boolean = false,
         val final: Boolean = false,
         val scroll: Boolean = false,
+        /** Glow only: Saathi will not tap this for them (risky or a PIN field). */
+        val noAct: Boolean = false,
         val tip: String? = null,
         val progress: Pair<Int, Int>? = null,
     )
@@ -63,6 +66,8 @@ class Guide(
     private var scrolls = 0
     private var delayedGlow: Job? = null
     private var hideJob: Job? = null
+    /** Something was tapped or a new screen opened: the planner must decide afresh (maybe it's done). */
+    private var replan = false
 
     /** Packages this task lives in. Anything else (except transient system UI) pauses the task. */
     private val taskPkgs = mutableSetOf<String>()
@@ -96,6 +101,7 @@ class Guide(
         hideJob?.cancel()
         Log.i(TAG, "goal: $goalText")
         if (IntentRouter.isScamCheck(goalText)) { scamCheck(); return }
+        if (IntentRouter.isExplain(goalText)) { explain(); return }
         rememberRequest(goalText)?.let { finish(it); return }
         val f = IntentRouter.route(svc, goalText)
 
@@ -168,6 +174,7 @@ class Guide(
         delayedGlow?.cancel()
         overlay.highlight(null, false)
         lastSig = 0
+        replan = true
         lastMotion = SystemClock.uptimeMillis() - SETTLE_MS + 250
         schedule(260, force = !thinking)
     }
@@ -175,7 +182,7 @@ class Guide(
     /** A new window (screen) opened: re-read quickly instead of waiting for the throttle. */
     fun onWindowChanged() {
         if (SaathiService.ownUiOpen) return
-        if (active) { lastSig = 0; schedule(150, force = !thinking) } else schedule(THROTTLE_MS)
+        if (active) { lastSig = 0; replan = true; schedule(150, force = !thinking) } else schedule(THROTTLE_MS)
     }
 
     /** Touches and scrolls: freeze guidance until the screen settles, so we never point at a moving target. */
@@ -254,12 +261,25 @@ class Guide(
             }
         }
 
-        // 10. Anything else: the planner.
+        // 10a. The planner already picked something and it's still here: follow it (it may have moved), don't re-ask.
+        if (!replan) current?.takeIf { it.key.startsWith("plan_") && it.el != null && goal != null }?.let { cur ->
+            val still = screen.elements.firstOrNull { it.label == cur.el!!.label && it.role == cur.el.role }
+            if (still != null) { if (still.bounds != cur.el!!.bounds) show(cur.copy(el = still)); return }
+        }
+
+        // 10. Anything else: the planner (on-device LLM, loaded on first need; keywords while it warms up).
+        if (!LlmManager.isReady) LlmManager.loadAsync(svc)
+        delay(50)
         thinking = true
         overlay.highlight(null, false)
         overlay.setAura(true)
         overlay.showCard(say("Let me look…", "मैं देख रहा हूँ…", "చూస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
-        val d = try { Planner.decide(f?.llmGoal ?: g, screen, history, lang) } finally { thinking = false; overlay.setAura(false) }
+        // First use: give the model a few seconds to load (Gemma 4 on the GPU ≈ 4.5 s) before falling back.
+        var waited = 0
+        while (!LlmManager.isReady && LlmManager.state.value is LlmManager.State.Loading && waited < 8000) { delay(200); waited += 200 }
+        val learned = f?.steps?.mapNotNull { Memory.learnedLabel(screen.pkg, it.key) }.orEmpty()
+        replan = false
+        val d = try { Planner.decide(f?.llmGoal ?: g, screen, history, lang, learned) } finally { thinking = false; overlay.setAura(false) }
         if (goal == null) return
         if (settling() > 0 || ScreenReader.read(svc.rootInActiveWindow)?.signature != screen.signature) {
             lastSig = 0; schedule(200, force = true); return // the screen moved while we thought: look again
@@ -268,7 +288,7 @@ class Guide(
         else {
             val el = d.targetId?.let { screen.byId(it) }
             if (f != null && el != null) f.steps.getOrNull(lastStepIdx + 1)?.let { pendingLearn = Triple(screen.pkg, it.key, el.title) }
-            show(Target(el, d.say, "plan_${el?.label ?: "scroll"}"))
+            show(Target(el, d.say, "plan_${el?.label ?: "scroll"}", noAct = d.noAct, scroll = el == null))
         }
         if (pending) { pending = false; lastSig = 0; schedule(300, force = true) }
     }
@@ -333,7 +353,7 @@ class Guide(
             t.warn -> Overlay.Mode.WARN
             t.final -> Overlay.Mode.FINAL
             t.scroll -> Overlay.Mode.SCROLL
-            t.el == null -> Overlay.Mode.INFO
+            t.el == null || t.noAct -> Overlay.Mode.INFO
             else -> Overlay.Mode.STEP
         }
         overlay.showCard(t.text, mode, targetCenterY = t.el?.bounds?.centerY(), tip = t.tip, progress = t.progress)
@@ -370,6 +390,7 @@ class Guide(
     /** "Do it for me": tap or type on their behalf, only on a settled, freshly re-read screen. */
     fun doItForMe() {
         val t = current ?: return
+        if (t.noAct) { speaker.say(t.text, lang); return }
         val wait = settling()
         if (wait > 0) { scope.launch { delay(wait + 50); doItForMe() }; return }
         // List rows get recycled while scrolling: re-find by label + role on a fresh read (trap #11).
@@ -401,6 +422,7 @@ class Guide(
             svc.tap(el.bounds.exactCenterX(), el.bounds.exactCenterY())
         }
         lastSig = 0
+        replan = true
         schedule(550, force = true)
     }
 
@@ -457,6 +479,26 @@ class Guide(
             else finish(say("I don't see warning signs here. Still: never share an OTP or PIN with anyone who calls you.",
                 "यहाँ कोई ख़तरे का निशान नहीं दिखा। फिर भी OTP या PIN किसी को फ़ोन पर मत बताइए।",
                 "ఇక్కడ ప్రమాద సంకేతాలు లేవు. అయినా OTP, PIN ఫోన్‌లో ఎవరికీ చెప్పకండి.").pick(lang))
+        }
+    }
+
+    /** "Where am I?" / "What is this?": explain the current screen, offer Back / Home. */
+    fun explain() {
+        lang = Prefs.lang(svc)
+        if (!LlmManager.isReady) LlmManager.loadAsync(svc)
+        scope.launch {
+            overlay.setAura(true)
+            overlay.showCard(say("Let me look…", "मैं देख रहा हूँ…", "చూస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
+            delay(700)
+            val screen = ScreenReader.read(svc.rootInActiveWindow)
+            if (screen == null) { overlay.setAura(false); overlay.hideCard(); return@launch }
+            val text = Planner.explain(screen, AppLauncher.labelOf(svc, screen.pkg), lang)
+            overlay.setAura(false)
+            current = Target(null, text, "explain")
+            overlay.showCard(text, Overlay.Mode.INFO)
+            speaker.say(text, lang)
+            hideJob?.cancel()
+            hideJob = scope.launch { delay(15_000); if (goal == null) overlay.hideCard() }
         }
     }
 

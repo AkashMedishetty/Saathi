@@ -21,3 +21,8 @@
   EN/HI/TE keywords, slots (people/family, times incl. बजे/రాత్రి, places, HI/TE search-phrase cleanup).
   RoutingTest green (50 phrases EN/HI/TE + slots). Verified on the iQOO: "हनुमान चालीसा लगाओ यूट्यूब पर" (HI) → YouTube
   opens → glow on the search box → Hindi card.
+- 13:00 **P0-4 LLM**: LlmManager (lazy load, crash guard, 3-min idle unload; NPU→GPU→CPU; Gemma 4 E2B on GPU loads in ~5 s,
+  decides in ~750 ms). Planner with a knowledge pack + few-shot + learned labels; guardrails in code (on-screen ids only,
+  never PIN fields, risky taps glow-only, HI/TE speech from templates). Verified: "turn on dark mode" (no script) →
+  Gemma picks "Display, brightness & eye protection" then "Dark mode". Explain/"where am I". Siri-style aura rebuilt as a
+  blurred edge mask + rotating sweep (smooth); card placement hysteresis (no top/bottom jumping).
