@@ -16,6 +16,8 @@ import android.provider.Settings
  */
 object A11yGuard {
     private var started = false
+    /** When Saathi last put itself back (the service restarts right after): the guide just carries on then. */
+    @Volatile var healedAt = 0L
     private val main = Handler(Looper.getMainLooper())
 
     fun canHeal(c: Context) = c.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == PackageManager.PERMISSION_GRANTED
@@ -26,7 +28,9 @@ object A11yGuard {
         started = true
         val uri = Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
         app.contentResolver.registerContentObserver(uri, false, object : ContentObserver(main) {
-            override fun onChange(selfChange: Boolean) { main.removeCallbacks(check); main.postDelayed(check, 700) }
+            // At once, and again shortly after: this phone freezes the process soon after the service is switched off
+            // (field: the 700 ms delayed check never ran).
+            override fun onChange(selfChange: Boolean) { heal(app); main.removeCallbacks(check); main.postDelayed(check, 300) }
             private val check = Runnable { heal(app) }
         })
     }
@@ -40,7 +44,7 @@ object A11yGuard {
         runCatching {
             Settings.Secure.putString(c.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, (entries + me).joinToString(":"))
             Settings.Secure.putInt(c.contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, 1)
-        }.onSuccess { com.saathi.app.DebugLog.i("guard", "the system removed Saathi's accessibility entry; put it back") }
+        }.onSuccess { healedAt = android.os.SystemClock.uptimeMillis(); com.saathi.app.DebugLog.i("guard", "the system removed Saathi's accessibility entry; put it back") }
             .onFailure { com.saathi.app.DebugLog.w("guard", "couldn't restore the accessibility entry", it) }
     }
 }

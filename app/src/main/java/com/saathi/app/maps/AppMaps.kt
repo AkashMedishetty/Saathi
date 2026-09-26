@@ -236,7 +236,7 @@ internal class Tree(val nodes: List<Node>) {
     fun find(sels: List<Sel>, slots: Map<String, String>): Hit? {
         for (s in sels) {
             val hits = nodes.indices.filter { matches(it, s, slots) }.mapNotNull { target(it, s) }.distinct()
-                .mapNotNull { i -> visible(i)?.let { i to it } }
+                .mapNotNull { i -> visible(i, s.ignoreCovers)?.let { i to it } }
             if (hits.isEmpty()) continue
             val (i, box) = when (s.pick) {
                 Pick.LARGEST -> hits.maxBy { it.second.area }
@@ -252,11 +252,12 @@ internal class Tree(val nodes: List<Node>) {
      * over it (later in the tree, not its own children, e.g. YouTube's bottom tab bar over a result row). Null when
      * too little is left.
      */
-    fun visible(i: Int): Box? {
+    fun visible(i: Int, ignoreCovers: Boolean = false): Box? {
         val n = nodes[i]
         if (n.box.empty || n.box.l < -2 || n.box.t < -2) return null
         val c = n.box.intersect(screen)
         if (c.w < MIN_SIDE || c.h < MIN_SIDE) return null
+        if (ignoreCovers) return c
         val covers = (end[i] until nodes.size).map { nodes[it] }
             .filter { it.clickable && !it.box.empty }
             .map { it.box.intersect(c) }.filter { !it.empty }

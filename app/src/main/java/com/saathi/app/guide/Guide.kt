@@ -548,6 +548,12 @@ class Guide(
     fun offerResume() {
         val t = Memory.task() ?: return
         lang = Prefs.lang(svc)
+        // The phone switched Saathi off for a moment (opening Settings does that here) and the guard put it back: the
+        // person did nothing wrong, so just carry on, no question (field, 02:35).
+        if (android.os.SystemClock.uptimeMillis() - com.saathi.app.service.A11yGuard.healedAt < 8000) {
+            com.saathi.app.DebugLog.i("resume", "after the self-heal: \"${t.goal}\"")
+            Memory.clearTask(); start(t.goal); return
+        }
         val text = say("Shall we continue: \"${t.goal}\"?", "क्या हम जारी रखें: \"${t.goal}\"?", "కొనసాగిద్దామా: \"${t.goal}\"?").pick(lang)
         overlay.showCard(text, Overlay.Mode.PAUSED, onContinue = { Memory.clearTask(); start(t.goal) })
     }
@@ -725,6 +731,9 @@ class Guide(
                 // The Settings APP icon, straight from the accessibility tree (labels repeat: the launcher's own
                 // "Settings" button is a thin strip; the app icon is roughly square and may read "Settings, 1 notification(s)").
                 val icon = appIcon("Settings")
+                // Their next touch may open Settings: every window of ours goes first, back once it has opened.
+                overlay.guardLaunch = true
+                overlay.onQuietEnd = { lastSig = 0; schedule(0, force = true) }
                 show(Target(icon, if (icon != null) say("Open Settings: tap the glowing Settings icon.", "Settings खोलिए: चमकते Settings आइकन को दबाइए।", "Settings తెరవండి: మెరుస్తున్న Settings ఐకాన్ నొక్కండి.").pick(lang)
                     else say("Let's open Settings. Put your finger in the middle of the screen and slide it up, to see all your apps.",
                         "चलिए Settings खोलते हैं। उँगली स्क्रीन के बीच में रखिए और ऊपर की ओर सरकाइए, सारे ऐप दिखेंगे।",
@@ -732,7 +741,7 @@ class Guide(
                     if (icon != null) "open_settings" else "find_settings", noAct = true))
                 return
             }
-            needSettings = false
+            needSettings = false; overlay.guardLaunch = false
             com.saathi.app.DebugLog.i("settings", "opened by the person")
         }
         if (settingsFresh && screen.pkg == "com.android.settings") {
@@ -1264,7 +1273,7 @@ class Guide(
     }
 
     fun stop() {
-        setAside = false
+        setAside = false; overlay.guardLaunch = false
         LlmManager.endChat()
         goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")

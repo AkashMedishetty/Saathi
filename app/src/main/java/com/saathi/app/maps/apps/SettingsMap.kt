@@ -36,8 +36,11 @@ object SettingsMap {
     private val BACK = lbl("^(Navigate up|Back|Go back|Up)$", clickable = true)
 
     /** A result row that contains the topic AND more ("Incoming call ringtone"): never the bare history chip. */
-    private val RESULT = Sel(slot = "term", slotLonger = true, clickable = true, editable = false, below = 0.1f, pick = Pick.TOP,
+    private val RESULT_BASE = Sel(slot = "term", slotLonger = true, clickable = true, editable = false, below = 0.1f, pick = Pick.TOP,
         not = rx("^(clear( all)?|search history|history|recent searches)$| · (remove|delete|clear)$"))
+    /** vivo: results live in search_list_view, with the main page still in the tree under them (not really covering). */
+    private val RESULT_VIVO = RESULT_BASE.copy(inside = Sel(resId = "search_list_view"), ignoreCovers = true)
+    private val RESULT = RESULT_BASE
 
     private fun topic(id: String, term: String, doneSay: Say, vararg g: String) = searchRoute(id, goals(*g), doneSay, mapOf("term" to term))
 
@@ -51,7 +54,7 @@ object SettingsMap {
             MapStep("set_search", listOf(FIELD),
                 say("Type “{term}”. Or tap Do it and I'll type it.", "“{term}” लिखिए। या 'आप कर दो' दबाइए, मैं लिख दूँगा।",
                     "“{term}” టైప్ చేయండి. లేదా 'మీరే చేయండి' నొక్కండి, నేను టైప్ చేస్తాను."), fill = "term"),
-            MapStep("set_search_typed", listOf(RESULT),
+            MapStep("set_search_typed", listOf(RESULT, RESULT_VIVO),
                 say("Tap the result that says “{term}”.", "“{term}” वाला नतीजा दबाइए।", "“{term}” అని ఉన్న ఫలితం నొక్కండి."),
                 why = say("Tap the result below, not the old search word.", "नीचे वाला नतीजा दबाइए, पुराना खोजा हुआ शब्द नहीं।",
                     "కింద ఉన్న ఫలితం నొక్కండి, పాత వెతికిన పదం కాదు."),

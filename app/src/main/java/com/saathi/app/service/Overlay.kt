@@ -116,7 +116,8 @@ class Overlay(
         watcher.setOnTouchListener { _, e ->
             if (e.action == MotionEvent.ACTION_OUTSIDE) {
                 // Finger down anywhere: nothing of ours on screen while whatever they tap opens (trap #45).
-                if (halo.showing) { clearForLaunch(); watcher.removeCallbacks(restore); watcher.postDelayed(restore, 1200) }
+                if (guardLaunch) quietForLaunch()
+                else if (halo.showing) { clearForLaunch(); watcher.removeCallbacks(restore); watcher.postDelayed(restore, 1200) }
                 onTouchOutside()
             }
             false
@@ -183,7 +184,31 @@ class Overlay(
     /** A tap is about to open another screen (e.g. Settings): take every window away until it settles. */
     fun clearForLaunch() { halo.suspend(); if (bubbleAttached) { runCatching { wm.removeView(bubble) }; bubbleAttached = false } }
     private val restore = Runnable { restoreAfterLaunch() }
-    fun restoreAfterLaunch() { if (steppedBack) return; halo.resume(); bubbleLp?.let { if (!bubbleAttached) bubbleAttached = add(bubble, it) } }
+    /**
+     * Pointing at the Settings icon: this phone switches off an accessibility app whose windows are on screen while
+     * Settings opens (field, 02:31: even the card alone did it). Finger down → EVERY window of ours goes (card, halo,
+     * bubble, watcher) until Settings has opened; then [onQuietEnd] lets the guide show the next step.
+     */
+    var guardLaunch = false
+    var quiet = false; private set
+    var onQuietEnd: () -> Unit = {}
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val endQuiet = Runnable {
+        quiet = false
+        if (steppedBack) return@Runnable
+        attachWatcher(); halo.resume(); bubbleLp?.let { if (!bubbleAttached) bubbleAttached = add(bubble, it) }
+        onQuietEnd()
+    }
+    fun quietForLaunch(ms: Long = 2500) {
+        quiet = true; guardLaunch = false
+        halo.suspend(); hideCardNow()
+        if (bubbleAttached) { runCatching { wm.removeView(bubble) }; bubbleAttached = false }
+        if (watcherAttached) { runCatching { wm.removeView(watcher) }; watcherAttached = false }
+        com.saathi.app.DebugLog.i("overlay", "quiet for a launch (${ms} ms)")
+        main.removeCallbacks(endQuiet); main.postDelayed(endQuiet, ms)
+    }
+
+    fun restoreAfterLaunch() { if (steppedBack || quiet) return; halo.resume(); bubbleLp?.let { if (!bubbleAttached) bubbleAttached = add(bubble, it) } }
 
     private var imeVisible = false
     private var imeTop: Int? = null
@@ -419,6 +444,7 @@ class Overlay(
         val p = lp(WLP.MATCH_PARENT, WLP.WRAP_CONTENT, true).apply { gravity = Gravity.TOP; this.y = y.coerceAtLeast(topMin) }
         val changed = y != cardY
         if (animateIn) {
+            if (quiet) return   // back after the launch settles (onQuietEnd re-shows it)
             if (!add(cardWrap, p)) return
             cardShown = true
             bubbleForCard(true)

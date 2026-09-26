@@ -66,6 +66,9 @@ data class Sel(
     val above: Float? = null,
     /** Only nodes inside (a descendant of) a node matching this: the switch of the 8:00 alarm card. */
     val inside: Sel? = null,
+    /** Don't treat later clickable nodes as covering this one (vivo Settings keeps its main page in the tree under the
+     *  search results; field 02:37: every result looked covered). */
+    val ignoreCovers: Boolean = false,
 )
 
 /** How to recognise a screen: all `must` selectors present, none of `mustNot`. [wait] marks a progress screen. */

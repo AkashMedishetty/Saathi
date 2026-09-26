@@ -108,4 +108,12 @@ class SettingsMapTest {
         val r2 = AppMaps.route("change the setting for call waiting")!!
         assertEquals("call waiting", MapSlots.of(r2, "change the setting for call waiting")["term"])
     }
+
+    /** Field (vivo, 02:37): the main page stays in the tree under the search results; the result must still glow. */
+    @Test fun vivoSearchResultUnderMainPageGlows() {
+        val font = AppMaps.routeById("settings_font")!!
+        val nodes = Fixtures.load("settings", "vivo_search_results_font")
+        val d = AppMaps.next(font, pkg, nodes, 1, MapSlots.of(font, "अक्षर बड़े करो"))
+        assertTrue("$d", d is Decision.Glow && d.step == 2)
+    }
 }
