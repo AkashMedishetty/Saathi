@@ -140,7 +140,7 @@ class Guide(
     /** The task is set aside while Saathi answers something else; the loop waits until they continue. */
     private var setAside = false
     /** Arrived on a Settings page: the page's own control is the last step (slider / switch / choice list). */
-    private data class Settle(val routeId: String, val kind: String, val label: String, val say: String,
+    private data class Settle(val routeId: String, var kind: String, val label: String, var say: String,
         var start: String, var last: String, var changedAt: Long = 0L, var asked: Boolean = false)
     private var settle: Settle? = null
     /** What they answered to Saathi's questions in this task ("play the playlist"): the planner sees it every time. */
@@ -353,6 +353,7 @@ class Guide(
                 //    route is run as if they'd said it. Small models rewrite well; they pick badly from numbered lists.
                 canonical(goalText)?.let { c -> start(c, autoMode, learnMode = learn); return@launch }
                 // 1) Understand the vague request. 2) Jump there with an intent. 3) Only then guide / answer.
+                com.saathi.app.llm.AiMeter.purpose = "understand"
                 val u = Understand.parse(goalText, svc)
                 com.saathi.app.DebugLog.i("understand", "\"$goalText\" → $u")
                 if (u != null && handleIntent(goalText, u, autoMode)) return@launch
@@ -388,6 +389,7 @@ class Guide(
             while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && LlmManager.state.value !is LlmManager.State.NoModel && waited < 6000) { delay(200); waited += 200 }
             if (!LlmManager.isReady) { com.saathi.app.DebugLog.i("route", "model: not ready, old path"); return null }
         }
+        com.saathi.app.llm.AiMeter.purpose = "rewrite"
         val out = runCatching { LlmManager.generate(sys, g) }.getOrNull()?.lines()
             ?.map { it.trim().trim('"', '.', '\'', '*', '`', ' ', '-') }
             ?.lastOrNull { it.isNotBlank() && !it.endsWith(":") && !Regex("(?i)^(okay|sure|here|command)\\b").containsMatchIn(it) }?.lowercase()
@@ -468,6 +470,10 @@ class Guide(
                 AppLauncher.findInGoal(svc, goalText)?.takeIf { it.pkg != "com.google.android.youtube" }?.let { app ->
                     begin(goalText, Skills.byId("learn_app")?.build(svc, SlotExtractor.from("how do I use ${app.label} to $q")), autoMode); return true
                 }
+                // YouTube: the app map (tested screen by screen: search → type → the real first result, ads skipped). The
+                // old deep link's "pick" matched the search bar itself and looped (field, 03:43).
+                if (u.app?.contains("netflix", true) != true) com.saathi.app.maps.AppMaps.routeById("yt_search")
+                    ?.takeIf { AppLauncher.isInstalled(svc, it.pkg) }?.let { r -> beginMap("search for $q on youtube", r, autoMode); return true }
                 // Learning: every step (open, search, type, pick), no jumping straight to the results.
                 if (learn && u.app?.contains("netflix", true) != true) { begin(goalText, skill("youtube", "play $q on youtube"), autoMode); return true }
                 val netflix = u.app?.contains("netflix", true) == true
@@ -929,6 +935,7 @@ class Guide(
         replan = false
         plansThisTask++
         var d = try {
+            com.saathi.app.llm.AiMeter.purpose = "plan step"
             Planner.decideInTask(taskKey, (f?.llmGoal ?: g) + answers.joinToString("") { " (they chose: $it)" }, screen, lastActionNote, lang, AppLauncher.labelOf(svc, screen.pkg), allowLlm = !lowPower,
                 progress = history.toList())
         } finally { thinking = false; overlay.setAura(false) }
@@ -1864,7 +1871,10 @@ class Guide(
         // "Done" only after the route's last step was really reached (field test: a Short's Like button on YouTube's
         // home screen made the search route "done" before a single step).
         val rr = if (r.doneNeedsLastStep) r else r.copy(doneNeedsLastStep = true)
+        val t0 = SystemClock.elapsedRealtime()
         val d = runCatching { com.saathi.app.maps.AppMaps.next(rr, screen.pkg, live.nodes, maxOf(mapStep, 0), mapSlots) }.getOrNull() ?: return false
+        if (d is com.saathi.app.maps.Decision.Glow && d.step != mapStep)
+            com.saathi.app.llm.AiMeter.record("CPU", "App map", "${com.saathi.app.maps.AppMaps.mapOf(r)?.name ?: ""} #${d.step + 1}", SystemClock.elapsedRealtime() - t0)
         // The next target is hidden and a nag popup is on top: point at its "Maybe later" first, in any app.
         if (d !is com.saathi.app.maps.Decision.Glow && d !is com.saathi.app.maps.Decision.Done) ScreenKinds.nag(screen)?.let { later ->
             show(Target(later, say("A popup is in the way. Tap “${later.title}” to close it.", "एक पॉपअप बीच में है। बंद करने के लिए “${later.title}” दबाइए।",
@@ -1927,8 +1937,11 @@ class Guide(
 
     /** The page's main control: a slider, else the switch for this topic, else a list of choices. */
     private fun settleControl(screen: Screen, term: String): Pair<String, UiElement?>? {
-        screen.elements.firstOrNull { it.role == "slider" }?.let { return "slider" to it }
         val words = term.lowercase().split(Regex("[^a-z]+")).filter { it.length >= 3 }
+        // A slider only for size / brightness / volume topics (field: "ringtone" glowed a volume slider).
+        if (Regex("(?i)font|size|text|bright|volume|loud").containsMatchIn(term)) screen.elements.firstOrNull { it.role == "slider" }?.let { return "slider" to it }
+        // The row that names the topic ("Incoming call ringtone", "Wallpaper", "Language").
+        screen.elements.firstOrNull { e -> e.role == "button" && e.bounds.top > 300 && words.any { e.title.lowercase().contains(it) } }?.let { return "row" to it }
         screen.elements.firstOrNull { e -> e.role == "switch" && words.any { e.label.lowercase().contains(it) } }?.let { return "switch" to it }
         if (screen.elements.count { it.role == "switch" } >= 3) return "list" to screen.scrollable()
         screen.elements.filter { it.role == "switch" }.takeIf { it.size in 1..2 }?.first()?.let { return "switch" to it }
@@ -1956,6 +1969,7 @@ class Guide(
             "slider" -> say(" Watch the words on this page change as you move it.", " सरकाते ही इस पेज के अक्षर बदलते दिखेंगे।",
                 " జరుపుతుంటే ఈ పేజీలోని అక్షరాలు మారడం చూడండి.")
             "switch" -> say(" Tap the glowing switch to turn it on or off.", " चमकता स्विच दबाकर चालू या बंद कीजिए।", " మెరుస్తున్న స్విచ్ నొక్కి ఆన్ లేదా ఆఫ్ చేయండి.")
+            "row" -> say(" Tap “${el?.title}” to see the choices.", " चुनने के लिए “${el?.title}” दबाइए।", " ఎంచుకోవడానికి “${el?.title}” నొక్కండి.")
             else -> say(" Tap the one you like. You can change it again any time.", " जो पसंद हो उसे दबाइए। बाद में कभी भी बदल सकते हैं।", " నచ్చినదాన్ని నొక్కండి. తర్వాత ఎప్పుడైనా మార్చవచ్చు.")
         }.pick(lang)
         val v = settleValue(kind, screen, el)
@@ -1969,6 +1983,14 @@ class Guide(
     private fun settleTick(st: Settle, screen: Screen): Boolean {
         if (screen.pkg != "com.android.settings") { settle = null; finish(say("Okay.", "ठीक है।", "సరే.").pick(lang)); return true }
         val (kind, el) = settleControl(screen, mapSlots["term"] ?: "") ?: return true
+        if (kind != st.kind) {
+            // The row opened its page (the ringtone list…): now "tap the one you like" and watch which one is ticked.
+            st.kind = kind; st.asked = false
+            st.say = say("Tap the one you like. You can change it again any time.", "जो पसंद हो उसे दबाइए। बाद में कभी भी बदल सकते हैं।",
+                "నచ్చినదాన్ని నొక్కండి. తర్వాత ఎప్పుడైనా మార్చవచ్చు.").pick(lang)
+            settleValue(kind, screen, el).let { st.start = it; st.last = it }
+            com.saathi.app.DebugLog.i("settle", "${st.routeId}: now $kind")
+        }
         val v = settleValue(kind, screen, el)
         val now = SystemClock.uptimeMillis()
         if (v != st.last) { st.last = v; st.changedAt = now; st.asked = false; schedule(1600, force = true) }
@@ -2184,6 +2206,7 @@ class Guide(
             overlay.showCard(say("Let me think…", "सोच रहा हूँ…", "ఆలోచిస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
             var waited = 0
             while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && waited < 6000) { delay(200); waited += 200 }
+            com.saathi.app.llm.AiMeter.purpose = "answer"
             val a = Conversation.answer(if (aside != null) "$aside\nMy question: $q" else q, lang, Prefs.name(svc), svc).let { raw ->
                 // No source: only safe, general advice passes; facts, medical, legal, money → the kind fallback.
                 val c = com.saathi.app.policy.AnswerCheck.verify(q, raw, null, lang)

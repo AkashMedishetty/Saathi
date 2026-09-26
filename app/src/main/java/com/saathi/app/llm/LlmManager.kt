@@ -66,10 +66,10 @@ object LlmManager {
     }
 
     /** Cleaned model text, or null when no model is loaded / the brain isn't there. Never throws. */
-    suspend fun generate(system: String, user: String): String? = Brain.call(null) { it.generate(system, user) }
+    suspend fun generate(system: String, user: String): String? = AiMeter.time("GPU", "Gemma 4 E4B") { Brain.call(null) { it.generate(system, user) } }
 
     /** A turn in the task's ongoing conversation (the brain keeps the conversation's memory). */
-    suspend fun chat(key: String, system: String, user: String): String? = Brain.call(null) { it.chat(key, system, user) }
+    suspend fun chat(key: String, system: String, user: String): String? = AiMeter.time("GPU", "Gemma 4 E4B") { Brain.call(null) { it.chat(key, system, user) } }
 
     /** Is [key] the conversation currently alive (so we only send what's new)? */
     fun inChat(key: String) = lastChatKey == key && Brain.sync(0) { it.turns() } in 1..9

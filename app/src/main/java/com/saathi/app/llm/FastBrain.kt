@@ -11,6 +11,6 @@ object FastBrain {
 
     suspend fun generate(ctx: Context, system: String, user: String): String? {
         Brain.connect(ctx)
-        return Brain.call(null) { it.fast(system, user) }
+        return AiMeter.time("NPU", "Gemma 3 1B") { Brain.call(null) { it.fast(system, user) } }
     }
 }

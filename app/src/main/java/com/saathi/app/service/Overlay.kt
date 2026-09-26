@@ -57,6 +57,10 @@ class Overlay(
     private val onFamily: () -> Unit = {},
     private val onDecline: () -> Unit = {},
 ) {
+    companion object {
+        /** Pixels the AI monitor strip takes at the top (0 when it's off). */
+        @Volatile var reserveTop = 0
+    }
     enum class Mode { INFO, THINKING, STEP, SCROLL, FINAL, WARN, DONE, PAUSED, LOST, ALARM, CONFIRM, AUTO, ASK, CHOICE }
 
     private val wm = ctx.getSystemService(WindowManager::class.java)
@@ -424,7 +428,7 @@ class Overlay(
      */
     private fun place(animateIn: Boolean, moved: Boolean = false) {
         val screenH = ctx.resources.displayMetrics.heightPixels
-        val topMin = ctx.dp(46)                                   // clear of the status bar (and the event's HackTracker pill)
+        val topMin = ctx.dp(46) + reserveTop                      // clear of the status bar (and the event's HackTracker pill, and the AI monitor)
         val bottomMax = (imeTop ?: screenH) - ctx.dp(10)
         val ch = (if (card.height > 0) card.height else ctx.dp(170)) + ctx.dp(16)
         val avoid = listOfNotNull(targetBox, focusBox).map { Rect(it).apply { inset(0, -ctx.dp(8)) } }

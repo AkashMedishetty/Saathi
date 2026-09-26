@@ -392,6 +392,7 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
                 var waited = 0
                 while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && waited < 8000) { kotlinx.coroutines.delay(250); waited += 250 }
             }
+            com.saathi.app.llm.AiMeter.purpose = "explain paper"
             if (LlmManager.isReady) llm = ok(LlmManager.generate(explainSys, explainUser))?.also { usedEngine = "${LlmManager.label ?: "Gemma"} · ${LlmManager.lastGenMs} ms" }
             if (llm == null) {
                 val t0 = android.os.SystemClock.elapsedRealtime()
@@ -541,6 +542,11 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
     }
 
     private suspend fun ocr(bmp: Bitmap): Text? = withContext(Dispatchers.Default) {
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        try { ocrRaw(bmp) } finally { com.saathi.app.llm.AiMeter.record("CPU", "ML Kit OCR", "read paper", android.os.SystemClock.elapsedRealtime() - t0) }
+    }
+
+    private suspend fun ocrRaw(bmp: Bitmap): Text? = withContext(Dispatchers.Default) {
         val img = InputImage.fromBitmap(bmp, 0)
         val latin = run(TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS), img)
         if (lang == Lang.HI || (latin?.text?.length ?: 0) < 8) run(TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build()), img)?.takeIf { (it.text.length) > (latin?.text?.length ?: 0) } ?: latin

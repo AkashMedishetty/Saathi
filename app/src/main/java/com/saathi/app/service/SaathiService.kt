@@ -41,6 +41,7 @@ class SaathiService : AccessibilityService() {
     }
 
     var overlay: Overlay? = null; private set
+    var aiMonitor: AiMonitor? = null; private set
     private lateinit var speaker: Speaker
     lateinit var guide: Guide; private set
     private var debugReceiver: BroadcastReceiver? = null
@@ -57,6 +58,8 @@ class SaathiService : AccessibilityService() {
         com.saathi.app.DebugLog.i("service", "connected")
         com.saathi.app.llm.Brain.connect(this) // the models live in the ":brain" process
         A11yGuard.start(this)
+        aiMonitor = AiMonitor(this, getSystemService(WINDOW_SERVICE) as android.view.WindowManager).also {
+            it.setOn(com.saathi.app.guide.Prefs.aiMonitor(this)) }
         // Know which pictures are documents before anyone asks (on the phone, ids + kinds only; see DocFinder).
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             kotlinx.coroutines.delay(20_000); runCatching { com.saathi.app.guide.DocFinder.index(this@SaathiService) } }
@@ -97,6 +100,7 @@ class SaathiService : AccessibilityService() {
             wasLocked = locked
             overlay?.setBubbleVisible(!locked && !ownUiOpen)
             // Nothing of Saathi shows over the lock screen; the task picks up again once unlocked.
+            aiMonitor?.setVisible(!locked)
             if (locked) overlay?.setHidden(true) else { overlay?.setHidden(false); guide.onWindowChanged() }
         }
         if (locked) return
@@ -257,6 +261,7 @@ class SaathiService : AccessibilityService() {
                     // Experiments (debug builds): what makes the phone switch Saathi off around Settings?
                     "brain_unload" -> { com.saathi.app.llm.LlmManager.unload(); com.saathi.app.llm.VisionBrain.unload() }
                     "brain_load" -> com.saathi.app.llm.LlmManager.loadAsync(this@SaathiService)
+                    "monitor" -> { val on = i.getBooleanExtra("on", true); com.saathi.app.guide.Prefs.setAiMonitor(this@SaathiService, on); aiMonitor?.setOn(on) }
                     "overlay_off" -> { debugHidden = true; overlay?.stepBack(true) }
                     "overlay_on" -> { debugHidden = false; overlay?.stepBack(false) }
                     "dump" -> dumpTree()

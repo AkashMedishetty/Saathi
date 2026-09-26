@@ -81,6 +81,7 @@ object DocFinder {
         val todo = ids.filter { it !in seen }
         if (todo.isEmpty()) return@withContext 0
         val reader = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val t0 = android.os.SystemClock.elapsedRealtime()
         var n = 0
         for (id in todo) {
             val uri = ContentUris.withAppendedId(col, id)
@@ -97,6 +98,7 @@ object DocFinder {
             n++
         }
         save(c)
+        com.saathi.app.llm.AiMeter.record("CPU", "ML Kit OCR", "read $n photos", android.os.SystemClock.elapsedRealtime() - t0)
         com.saathi.app.DebugLog.i("docs", "read $n pictures; documents: ${seen.values.filter { it.isNotEmpty() }.groupingBy { it }.eachCount()}")
         n
     }

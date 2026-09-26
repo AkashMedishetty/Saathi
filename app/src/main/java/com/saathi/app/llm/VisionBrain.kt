@@ -17,7 +17,7 @@ object VisionBrain {
     suspend fun describe(ctx: Context, jpeg: ByteArray, prompt: String): String? {
         Brain.connect(ctx)
         val small = shrink(jpeg)
-        return Brain.call(null) { it.vision(small, prompt) }
+        return AiMeter.time("NPU", "FastVLM") { Brain.call(null) { it.vision(small, prompt) } }
     }
 
     fun unload() = Brain.sync(Unit) { it.unloadVision() }

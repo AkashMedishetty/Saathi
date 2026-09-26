@@ -48,6 +48,9 @@ object Prefs {
 
     /** WhatsApp showed its "set up / sign in" screen: don't offer WhatsApp until we see it working. */
     fun waNotSetUp(c: Context) = sp(c).getBoolean("wa_not_set_up", false)
+    /** The AI monitor strip (which engine decided each step, CPU / RAM / GPU). */
+    fun aiMonitor(c: Context) = sp(c).getBoolean("ai_monitor", false)
+    fun setAiMonitor(c: Context, v: Boolean) = sp(c).edit().putBoolean("ai_monitor", v).apply()
     fun setWaNotSetUp(c: Context, v: Boolean) = sp(c).edit().putBoolean("wa_not_set_up", v).apply()
 
     fun family(c: Context): String = contacts(c).firstOrNull()?.name ?: ""

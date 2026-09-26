@@ -197,6 +197,9 @@ class SettingsActivity : AppCompatActivity() {
 
         // ── Performance (proof it's light on the phone) ──
         section(page, s("Phone health", "फ़ोन की सेहत", "ఫోన్ ఆరోగ్యం"))
+        // Show which engine decides each step (NPU / GPU / OCR / app map) and CPU / RAM / GPU, live.
+        page.add(toggle(s("AI monitor (NPU · GPU · CPU, live)", "AI मॉनिटर (NPU · GPU · CPU)", "AI మానిటర్ (NPU · GPU · CPU)"),
+            com.saathi.app.guide.Prefs.aiMonitor(this)) { v -> com.saathi.app.guide.Prefs.setAiMonitor(this, v); com.saathi.app.service.SaathiService.instance?.aiMonitor?.setOn(v) }, 10)
         val perf = surface().apply { setPadding(dp(18), dp(16), dp(18), dp(18)) }
         val mi = android.app.ActivityManager.MemoryInfo().also { getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(it) }
         val mine = android.os.Debug.getPss() / 1024
