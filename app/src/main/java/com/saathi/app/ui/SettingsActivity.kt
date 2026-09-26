@@ -127,6 +127,9 @@ class SettingsActivity : AppCompatActivity() {
         look.add(toggle(s("Dim the screen around the glow", "चमक के आसपास स्क्रीन धुंधली करें", "మెరుపు చుట్టూ స్క్రీన్ మసకబార్చండి"), Prefs.dim(this)) { Prefs.setDim(this, it) }, 14)
         look.add(toggle(s("Warn me about scams", "धोखे से सावधान करें", "మోసాల గురించి హెచ్చరించండి"), Prefs.scamGuard(this)) { Prefs.setScamGuard(this, it) }, 6)
         look.add(toggle(s("Explain why (teaching tips)", "क्यों, यह भी समझाएँ", "ఎందుకో కూడా చెప్పండి"), Prefs.teach(this)) { Prefs.setTeach(this, it) }, 6)
+        look.add(primaryButton(s("Let Saathi read my messages aloud", "Saathi मेरे संदेश पढ़कर सुनाए", "Saathi నా సందేశాలు చదివి వినిపించాలి"), R.drawable.ic_sms, bg = C.PAPER_2, fg = C.PINE_DEEP) {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }, 14)
         look.add(primaryButton(s("Card position: automatic", "कार्ड की जगह: अपने आप", "కార్డ్ స్థానం: ఆటోమేటిక్"), R.drawable.ic_touch_app, bg = C.PAPER_2, fg = C.PINE_DEEP) {
             Prefs.setCardPos(this, "auto")
         }, 14)

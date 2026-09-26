@@ -46,6 +46,10 @@ object IntentRouter {
         "ask family", "ask my son", "ask my daughter", "ask for help", "help from family", "call for help", "tell my son", "tell my daughter",
         "परिवार से", "बेटे से पूछो", "बेटी से पूछो", "मदद मांगो", "मदद माँगो", "కుటుంబాన్ని అడుగు", "సహాయం అడుగు", "కొడుకుని అడుగు", "కూతురుని అడుగు")
 
+    fun isReadMessages(goal: String) = goal.lowercase().has(
+        "read my messages", "read messages", "any messages", "new messages", "who messaged", "read my whatsapp",
+        "मेरे संदेश", "संदेश पढ़ो", "मैसेज पढ़ो", "मैसेज सुनाओ", "సందేశాలు చదువు", "మెసేజ్‌లు చదువు", "మెసేజ్ చదువు")
+
     fun isScamCheck(goal: String) = goal.lowercase().has("scam", "fraud", "is this safe", "धोखा", "ठगी", "మోసం")
 
     fun route(ctx: Context, goal: String): Flow? {

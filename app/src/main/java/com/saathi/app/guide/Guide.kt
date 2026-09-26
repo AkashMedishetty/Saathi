@@ -102,6 +102,7 @@ class Guide(
         Log.i(TAG, "goal: $goalText")
         if (IntentRouter.isScamCheck(goalText)) { scamCheck(); return }
         if (IntentRouter.isFamilyHelp(goalText)) { askFamily(); return }
+        if (IntentRouter.isReadMessages(goalText)) { readMessages(); return }
         if (IntentRouter.isExplain(goalText)) { explain(); return }
         rememberRequest(goalText)?.let { finish(it); return }
         val f = IntentRouter.route(svc, goalText)
@@ -518,6 +519,35 @@ class Guide(
         overlay.showCard(t, Overlay.Mode.ALARM)
         speaker.say(t, lang)
         svc.buzz(); svc.buzz()
+    }
+
+    /** An incoming message looks like a scam: say so before they act on it. */
+    fun messageAlert(sender: String, app: String, hit: MessageScam.Hit) {
+        lang = Prefs.lang(svc)
+        val head = say("A message from $sender on $app.", "$app पर $sender का संदेश।", "$app లో $sender నుంచి సందేశం.").pick(lang)
+        val t = "$head ${hit.say.pick(lang)}"
+        current = Target(null, t, "msg_${hit.id}", warn = true)
+        overlay.highlight(null, false)
+        overlay.showCard(t, Overlay.Mode.WARN)
+        speaker.say(t, lang)
+        svc.buzz()
+    }
+
+    /** "Read my messages": the last three, from RAM only. */
+    fun readMessages() {
+        lang = Prefs.lang(svc)
+        val list = com.saathi.app.service.MessageListener.latest(3)
+        val t = if (list.isEmpty()) say("No new messages. (If this is wrong, allow Saathi to read notifications in Settings.)",
+            "कोई नया संदेश नहीं। (अगर ग़लत है, तो Settings में Saathi को सूचनाएँ पढ़ने दीजिए।)",
+            "కొత్త సందేశాలు లేవు. (తప్పైతే, Settings లో Saathi కి నోటిఫికేషన్ అనుమతి ఇవ్వండి.)").pick(lang)
+        else say("${list.size} recent messages. ", "${list.size} नए संदेश। ", "${list.size} కొత్త సందేశాలు. ").pick(lang) +
+            list.joinToString(" ") { m -> say("${m.sender} on ${m.app} says: ${m.text.take(160)}.", "${m.app} पर ${m.sender} ने लिखा: ${m.text.take(160)}।", "${m.app} లో ${m.sender}: ${m.text.take(160)}.").pick(lang) }
+        current = Target(null, t, "messages")
+        overlay.highlight(null, false)
+        overlay.showCard(t, Overlay.Mode.INFO)
+        speaker.say(t, lang)
+        hideJob?.cancel()
+        hideJob = scope.launch { delay(30_000); if (goal == null) overlay.hideCard() }
     }
 
     fun goBack() {

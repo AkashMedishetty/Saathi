@@ -83,6 +83,15 @@ class RoutingTest {
         assert(IntentRouter.isFamilyHelp("बेटे से पूछो"))
     }
 
+    @Test fun messageScamsAreCaught() {
+        assertEquals("otp", MessageScam.check("Dear customer, share the OTP with our executive to stop the charge")?.id)
+        assertEquals("kyc", MessageScam.check("Your SBI KYC is pending, account will be blocked today. Update now")?.id)
+        assertEquals("electricity", MessageScam.check("Dear consumer your electricity power will be disconnected tonight at 9.30pm")?.id)
+        assertEquals("link", MessageScam.check("Check this bit.ly/3xYz")?.id)
+        assertEquals(null, MessageScam.check("Reached home safely. Call you later, Ma"))
+        assert(IntentRouter.isReadMessages("read my messages"))
+    }
+
     @Test fun irPatternsAreStandard() {
         val p = IrRemote.pattern(0x20DF10EFL, samsung = false)
         assertEquals(9000, p[0]); assertEquals(4500, p[1]); assertEquals(67, p.size)
