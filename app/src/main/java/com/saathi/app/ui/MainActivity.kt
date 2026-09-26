@@ -44,7 +44,7 @@ class MainActivity : AppCompatActivity() {
     private var lang = Lang.EN
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        super.onCreate(savedInstanceState); com.saathi.app.llm.Brain.connect(this)
         Memory.init(this)
         com.saathi.app.DebugLog.init(this)
         scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false; setBackgroundColor(C.PAPER) }

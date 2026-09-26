@@ -1,150 +1,82 @@
 package com.saathi.app.llm
 
 import android.content.Context
-import android.os.SystemClock
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
- * The one shared on-device text brain. Loads lazily on first need, serialises inference,
- * and unloads after 3 idle minutes so ~2 GB goes back to the phone (trap #28).
- * Order: NPU build for this chip → Gemma 4 on the GPU → any .litertlm → MediaPipe .task (GPU, CPU).
+ * The shared text brain (Gemma 4 on the GPU), as the app sees it. The model itself runs in the ":brain" process
+ * ([LocalLlm] inside [BrainService]); this is a thin, crash-proof client with the same API as before.
  */
 object LlmManager {
-    private const val TAG = "SaathiLLM"
-    private const val IDLE_UNLOAD_MS = 3 * 60_000L
-
     sealed interface State {
         data object Idle : State
         data object NoModel : State
         data class Loading(val what: String) : State
         data class Ready(val label: String, val backend: String, val loadMs: Long) : State
         data class Failed(val msg: String) : State
+
+        companion object {
+            private const val SEP = "\u001f"
+            fun encode(s: State): String = when (s) {
+                Idle -> "idle"
+                NoModel -> "nomodel"
+                is Loading -> "loading$SEP${s.what}"
+                is Ready -> "ready$SEP${s.label}$SEP${s.backend}$SEP${s.loadMs}"
+                is Failed -> "failed$SEP${s.msg}"
+            }
+            fun decode(raw: String): State {
+                val p = raw.split(SEP)
+                return when (p[0]) {
+                    "nomodel" -> NoModel
+                    "loading" -> Loading(p.getOrElse(1) { "" })
+                    "ready" -> Ready(p.getOrElse(1) { "" }, p.getOrElse(2) { "" }, p.getOrNull(3)?.toLongOrNull() ?: 0)
+                    "failed" -> Failed(p.getOrElse(1) { "" })
+                    else -> Idle
+                }
+            }
+        }
     }
 
-    private val _state = MutableStateFlow<State>(State.Idle)
-    val state = _state.asStateFlow()
+    /** `state.value` asks the brain process (cheap); Idle when it isn't connected. */
+    class StateView internal constructor() { val value: State get() = State.decode(Brain.sync("idle") { it.state() }) }
+    val state = StateView()
 
-    @Volatile private var engine: LlmEngine? = null
-    private val loadLock = Mutex()
-    private val genLock = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var idleJob: Job? = null
 
-    val isReady get() = engine != null
-    val label get() = engine?.label
-    @Volatile var lastGenMs = 0L; private set
+    val isReady get() = state.value is State.Ready
+    val label get() = (state.value as? State.Ready)?.label
+    val lastGenMs get() = Brain.sync(0L) { it.lastGenMs() }
 
-    fun loadAsync(ctx: Context) {
-        if (engine != null || _state.value is State.Loading) return
-        scope.launch { load(ctx.applicationContext) }
-    }
+    fun loadAsync(ctx: Context) { Brain.connect(ctx); scope.launch { Brain.call(Unit) { it.load() } } }
 
-    suspend fun load(ctx: Context) = loadLock.withLock {
-        if (engine != null) return@withLock
-        val files = ModelLocator.text(ctx)
-        if (files.isEmpty()) { _state.value = State.NoModel; return@withLock }
-        val prefs = ctx.getSharedPreferences("saathi", Context.MODE_PRIVATE)
-        val errors = mutableListOf<String>()
-        for (f in files) for (backend in backendsFor(f)) {
-            // Crash guard (trap #7): if this file+backend killed the process natively last time, never retry it.
-            val crashKey = "crash_${f.name}_$backend"
-            if (prefs.getBoolean(crashKey, false)) { errors += "${f.name} $backend: skipped (crashed before)"; continue }
-            _state.value = State.Loading("${f.nameWithoutExtension.take(24)} · $backend")
-            prefs.edit().putBoolean(crashKey, true).commit()
-            val t0 = SystemClock.elapsedRealtime()
-            val e = try {
-                withContext(Dispatchers.IO) { create(ctx, f, backend) }
-            } catch (t: Throwable) {
-                Log.w(TAG, "load failed ${f.name} $backend", t)
-                com.saathi.app.DebugLog.w("llm", "load failed ${f.name} $backend", t)
-                errors += "${f.name} $backend: ${t.message?.take(90)}"
-                null
-            } finally {
-                prefs.edit().putBoolean(crashKey, false).commit()
-            }
-            if (e != null) {
-                engine = e
-                touchIdle()
-                _state.value = State.Ready(e.label, e.backend, SystemClock.elapsedRealtime() - t0)
-                Log.i(TAG, "loaded ${e.label} in ${SystemClock.elapsedRealtime() - t0} ms")
-                com.saathi.app.DebugLog.i("llm", "loaded ${e.label} in ${SystemClock.elapsedRealtime() - t0} ms")
-                return@withLock
-            }
-        }
-        _state.value = State.Failed(errors.joinToString("\n"))
-    }
-
-    /** NPU only for builds compiled for this chip; "-gpu" builds have no CPU path (trap #35). */
-    private fun backendsFor(f: File): List<String> {
-        val n = f.name.lowercase()
-        return when {
-            n.endsWith(".task") -> listOf("GPU", "CPU")
-            "sm8850" in n || "qualcomm" in n -> listOf("NPU", "GPU", "CPU")
-            "gpu" in n -> listOf("GPU")
-            else -> listOf("GPU", "CPU")
+    /** Starts loading and waits (up to 40 s) until it's ready or has failed. */
+    suspend fun load(ctx: Context) {
+        Brain.connect(ctx)
+        Brain.call(Unit) { it.load() }
+        var waited = 0
+        while (waited < 40_000) {
+            val s = state.value
+            if (s is State.Ready || s is State.Failed || s is State.NoModel) return
+            delay(200); waited += 200
         }
     }
 
-    private fun create(ctx: Context, f: File, backend: String): LlmEngine =
-        if (f.name.endsWith(".litertlm")) LiteRtEngine(ctx, f, backend)
-        else MediaPipeEngine(ctx, f, gpu = backend == "GPU")
+    /** Cleaned model text, or null when no model is loaded / the brain isn't there. Never throws. */
+    suspend fun generate(system: String, user: String): String? = Brain.call(null) { it.generate(system, user) }
 
-    /** Cleaned model text, or null when no model is loaded. Never throws. */
-    suspend fun generate(system: String, user: String): String? = genLock.withLock {
-        val e = engine ?: return@withLock null
-        withContext(Dispatchers.IO) {
-            val t0 = SystemClock.elapsedRealtime()
-            val out = try { e.generate(system, user) } catch (t: Throwable) { Log.w(TAG, "gen failed", t); "" }
-            lastGenMs = SystemClock.elapsedRealtime() - t0
-            touchIdle()
-            Log.i(TAG, "gen ${lastGenMs} ms: ${out.take(200).replace('\n', ' ')}")
-            com.saathi.app.DebugLog.i("llm", "gen ${lastGenMs} ms: ${out.take(200)}")
-            Templates.clean(out)
-        }
-    }
-
-    /** A turn in the task's ongoing conversation. Returns (text, isFirstTurnOfSession). */
-    suspend fun chat(key: String, system: String, user: String): String? = genLock.withLock {
-        val e = engine ?: return@withLock null
-        withContext(Dispatchers.IO) {
-            val t0 = SystemClock.elapsedRealtime()
-            val out = try { e.chat(key, system, user) } catch (t: Throwable) { Log.w(TAG, "chat failed", t); runCatching { e.endChat() }; "" }
-            lastGenMs = SystemClock.elapsedRealtime() - t0
-            touchIdle()
-            com.saathi.app.DebugLog.i("llm", "chat[$key] ${lastGenMs} ms: ${out.take(200)}")
-            Templates.clean(out)
-        }
-    }
+    /** A turn in the task's ongoing conversation (the brain keeps the conversation's memory). */
+    suspend fun chat(key: String, system: String, user: String): String? = Brain.call(null) { it.chat(key, system, user) }
 
     /** Is [key] the conversation currently alive (so we only send what's new)? */
-    fun inChat(key: String) = (engine as? LiteRtEngine)?.let { it.turns in 1..9 && lastChatKey == key } ?: false
+    fun inChat(key: String) = lastChatKey == key && Brain.sync(0) { it.turns() } in 1..9
     @Volatile var lastChatKey: String? = null
 
-    fun endChat() { runCatching { engine?.endChat() }; lastChatKey = null }
+    fun endChat() { lastChatKey = null; Brain.sync(Unit) { it.endChat() } }
 
-    private fun touchIdle() {
-        idleJob?.cancel()
-        idleJob = scope.launch {
-            delay(IDLE_UNLOAD_MS)
-            genLock.withLock { Log.i(TAG, "idle → unloading"); unload() }
-        }
-    }
-
-    fun unload() {
-        runCatching { engine?.close() }
-        engine = null
-        _state.value = State.Idle
-    }
+    /** Frees the GPU brain (off the caller's thread: closing takes ~1 s). */
+    fun unload() { scope.launch { Brain.sync(Unit) { it.unload() } } }
 }

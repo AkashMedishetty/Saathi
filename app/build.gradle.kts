@@ -23,6 +23,7 @@ android {
     // Extract native libs to nativeLibraryDir so LiteRT can find the NPU dispatch + QNN libs.
     packaging { jniLibs { useLegacyPackaging = true } }
     testOptions { unitTests.isReturnDefaultValues = true }
+    buildFeatures { aidl = true } // IBrain: the models run in their own ":brain" process
 }
 
 kotlin { jvmToolchain(17) }

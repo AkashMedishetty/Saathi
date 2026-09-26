@@ -285,7 +285,6 @@ class Guide(
     private fun begin(goalText: String, f: Flow?, autoMode: Boolean) {
         // Another app is about to be in front: keep Saathi light so the OS doesn't clean it up. The NPU brain stays;
         // the GPU brain reloads on demand if a later step needs the planner.
-        if (f?.launch != null && coachGoal == null) LlmManager.unload()
 
         // Instant skills (torch, volume): just do it and say so.
         f?.action?.let { act ->

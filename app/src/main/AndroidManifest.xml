@@ -86,6 +86,12 @@
             android:name=".ui.SettingsActivity"
             android:exported="false" />
 
+        <!-- The models run in their own process so vivo's memory guard never touches the accessibility service. -->
+        <service
+            android:name=".llm.BrainService"
+            android:process=":brain"
+            android:exported="false" />
+
         <service
             android:name=".service.SaathiService"
             android:foregroundServiceType="specialUse"

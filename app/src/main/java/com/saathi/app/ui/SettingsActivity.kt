@@ -46,7 +46,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        super.onCreate(savedInstanceState); com.saathi.app.llm.Brain.connect(this)
         Memory.init(this)
         speaker = Speaker(this)
         scroll = ScrollView(this).apply { setBackgroundColor(C.PAPER) }

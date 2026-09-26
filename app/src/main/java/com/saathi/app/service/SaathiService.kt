@@ -51,6 +51,7 @@ class SaathiService : AccessibilityService() {
         Memory.init(this)
         com.saathi.app.DebugLog.init(this)
         com.saathi.app.DebugLog.i("service", "connected")
+        com.saathi.app.llm.Brain.connect(this) // the models live in the ":brain" process
         speaker = Speaker(this)
         val o = Overlay(
             this,

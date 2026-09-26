@@ -1,64 +1,36 @@
 package com.saathi.app.llm
 
 import android.content.Context
-import android.os.SystemClock
-import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import java.io.ByteArrayOutputStream
 
 /**
- * FastVLM-0.5B compiled for this phone's Snapdragon (SM8850) and run on the Hexagon NPU: it looks at a photo
- * the person took on purpose (never the screen) and explains it. Loads on first use (~0.2 s), unloads after 2 idle min.
+ * FastVLM on the NPU, looking at a photo the person took on purpose. Runs in the ":brain" process ([LocalVision]).
  */
 object VisionBrain {
-    private const val TAG = "SaathiLLM"
-    private val lock = Mutex()
-    private var engine: LiteRtEngine? = null
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var idle: Job? = null
-    @Volatile var label: String? = null; private set
-    @Volatile var lastMs = 0L; private set
+    private fun info() = Brain.sync("") { it.visionInfo() }.split("\u001f").takeIf { it.size == 2 }
+    val label: String? get() = info()?.get(0)
+    val lastMs: Long get() = info()?.get(1)?.toLongOrNull() ?: 0L
 
     /** Plain-language explanation of the photo, or null if the vision model isn't available. */
-    suspend fun describe(ctx: Context, jpeg: ByteArray, prompt: String): String? = lock.withLock {
-        withContext(Dispatchers.IO) {
-            val e = engine ?: load(ctx) ?: return@withContext null
-            val t0 = SystemClock.elapsedRealtime()
-            val out = runCatching { e.describe(jpeg, prompt) }.onFailure { Log.w(TAG, "vision failed", it) }.getOrNull()
-            lastMs = SystemClock.elapsedRealtime() - t0
-            Log.i(TAG, "vision ${lastMs} ms: ${out?.take(200)}")
-            com.saathi.app.DebugLog.i("vision", "${lastMs} ms: ${out?.take(200)}")
-            touch()
-            out?.let { Templates.clean(it) }?.takeIf { it.isNotBlank() && !Templates.garbled(it) }
-        }
+    suspend fun describe(ctx: Context, jpeg: ByteArray, prompt: String): String? {
+        Brain.connect(ctx)
+        val small = shrink(jpeg)
+        return Brain.call(null) { it.vision(small, prompt) }
     }
 
-    private fun load(ctx: Context): LiteRtEngine? {
-        val f = ModelLocator.vision(ctx) ?: return null
-        val prefs = ctx.getSharedPreferences("saathi", Context.MODE_PRIVATE)
-        for (b in listOf("NPU", "GPU")) {
-            val key = "crash_${f.name}_vision_$b"
-            if (prefs.getBoolean(key, false)) continue
-            prefs.edit().putBoolean(key, true).commit()
-            val e = runCatching { LiteRtEngine(ctx.applicationContext, f, b, vision = true) }
-                .onFailure { Log.w(TAG, "vision load $b failed", it) }.getOrNull()
-            prefs.edit().putBoolean(key, false).commit()
-            if (e != null) { engine = e; label = e.label; Log.i(TAG, "vision loaded ${e.label}"); return e }
-        }
-        return null
-    }
+    fun unload() = Brain.sync(Unit) { it.unloadVision() }
 
-    fun unload() { runCatching { engine?.close() }; engine = null }
-
-    private fun touch() {
-        idle?.cancel()
-        idle = scope.launch { delay(120_000); lock.withLock { runCatching { engine?.close() }; engine = null } }
+    /** Binder calls carry at most ~1 MB: big photos are scaled down (the model sees ~1 k pixels anyway). */
+    private fun shrink(jpeg: ByteArray): ByteArray {
+        if (jpeg.size <= 600_000) return jpeg
+        return runCatching {
+            val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, o)
+            var s = 1; while (maxOf(o.outWidth, o.outHeight) / s > 1600) s *= 2
+            val b = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, BitmapFactory.Options().apply { inSampleSize = s })
+            ByteArrayOutputStream().also { b.compress(Bitmap.CompressFormat.JPEG, 85, it); b.recycle() }.toByteArray()
+        }.getOrDefault(jpeg)
     }
 }
