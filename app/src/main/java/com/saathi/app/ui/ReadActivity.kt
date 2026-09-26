@@ -352,6 +352,20 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
         if (mode == MODE_READ && Regex("(?i)\\b\\d+\\s?mg\\b|tablets?\\s+i\\.?p|\\bcapsules?\\b|\\bI\\.P\\.|\\bRx\\b").containsMatchIn(plain)) mode = MODE_MEDICINE
         if (mode == MODE_MEDICINE) { medicine(lines.map { it.text to (it.boundingBox?.height() ?: 0) }); return }
 
+        // Blurry / a screen / at an angle: OCR returns mostly non-words ("Ith lorly Androld Oompanlon…"). Explaining
+        // that invents things (field test: "an old man named Oek wants money"). Ask for a better photo instead.
+        // ML Kit's own confidence per line (0..1) is the stronger signal; the word-shape ratio backs it up.
+        val conf = lines.map { it.confidence }.filter { it > 0f }.takeIf { it.isNotEmpty() }?.average() ?: 1.0
+        com.saathi.app.DebugLog.i("read", "ocr ${plain.length} chars, confidence ${"%.2f".format(conf)}, word-like ${"%.2f".format(wordLikeRatio(plain))}")
+        if (mode == MODE_READ && plain.length >= 30 && (conf < 0.62 || wordLikeRatio(plain) < 0.55)) {
+            aura.setAura(false); busy = false
+            com.saathi.app.DebugLog.i("read", "blurry: word-like ${"%.2f".format(wordLikeRatio(plain))}")
+            val t = s("The words are blurry. Hold the paper flat, a little closer, and keep the phone still.",
+                "अक्षर धुंधले हैं। काग़ज़ सीधा रखिए, थोड़ा पास लाइए, और फ़ोन स्थिर रखिए।",
+                "అక్షరాలు మసకగా ఉన్నాయి. కాగితం సమంగా పెట్టి, కొంచెం దగ్గరగా, ఫోన్ కదలకుండా పట్టుకోండి.")
+            showSheet(t, "", listOf(again(), close())); speaker?.say(t, lang); return
+        }
+
         // A paper with real words: explain THOSE words with the text brain (grounded; FastVLM only guesses at small print
         // and made things up in the field test). Objects / pictures / little text: FastVLM on the NPU, with the words as a hint.
         // Order for text: Gemma 4 if already loaded → Gemma 3 1B on the NPU (≈1 s) → FastVLM. Loops/garbage are rejected.
@@ -384,7 +398,14 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
                 "If it is a bill, say the amount and the due date. If it is a medicine, say its name. " +
                 "If it is a letter, say who it is from and what they want. If it looks like a scam, say so clearly. Only say what you can see.$hint"))
         if (vlm != null) usedEngine = "FastVLM · Snapdragon NPU · ${VisionBrain.lastMs} ms"
-        val explained = (vlm ?: llm)?.let { firstSentences(it, if (mode == MODE_OBJECT) 4 else 3) }
+        // Clean (no markdown, no "Okay! Let me explain…") and grounded: a text explanation must only use what's on
+        // the paper (policy.AnswerCheck); otherwise we read the words themselves instead of guessing.
+        val cleaned = (vlm ?: llm)?.let { clean(it) }
+        val grounded = if (llm != null && cleaned != null && textHeavy)
+            cleaned.takeIf { com.saathi.app.policy.AnswerCheck.verify("What does this paper say?", it, words, lang).ok }
+                .also { if (it == null) com.saathi.app.DebugLog.i("read", "explanation not supported by the paper → reading the words") }
+        else cleaned
+        val explained = grounded?.let { firstSentences(it, if (mode == MODE_OBJECT) 4 else 3) }
         aura.setAura(false)
         busy = false
         // "Tap here" on the real thing: glow the printed button the explanation talks about (object mode),
@@ -482,6 +503,27 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
     }
 
     /** Small models ramble: keep the first [n] sentences. */
+    /** Share of tokens that look like real words (letters, a vowel, sane length), in any script we read. */
+    private fun wordLikeRatio(t: String): Double {
+        val toks = t.split(Regex("[\\s·,;:|/]+")).filter { it.length >= 2 }
+        if (toks.isEmpty()) return 1.0
+        val vowel = Regex("(?i)[aeiouy]|[\\u0900-\\u097F]|[\\u0C00-\\u0C7F]")
+        val good = toks.count { w ->
+            val letters = w.count { it.isLetter() }
+            (w.all { it.isDigit() || it in ".,-/₹%" }) || // numbers, amounts, dates are fine
+                (letters >= w.length * 0.7 && w.length <= 16 && vowel.containsMatchIn(w) && !Regex("[a-z][A-Z][a-z]").containsMatchIn(w))
+        }
+        return good.toDouble() / toks.size
+    }
+
+    /** No markdown, no chatty preamble ("Okay! Let me explain this paper simply…"). */
+    private fun clean(t: String): String = t
+        .replace(Regex("\\*\\*|__|`|#+ "), "")
+        .replace(Regex("(?m)^\\s*[*•-]\\s+"), "")
+        .replace(Regex("(?i)^\\s*(okay|ok|sure|alright|here'?s|let me)[^.:!]*[.:!]\\s*"), "")
+        .replace(Regex("(?i)\\b(what it is|what matters|what to do( next)?)\\s*:\\s*"), "")
+        .replace(Regex("\\s+"), " ").trim()
+
     private fun firstSentences(t: String, n: Int): String {
         val parts = Regex("(?<=[.!?।])\\s+").split(t.trim())
         return parts.take(n).joinToString(" ").take(260)
