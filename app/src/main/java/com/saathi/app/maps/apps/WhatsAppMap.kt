@@ -70,6 +70,28 @@ object WhatsAppMap {
         backHint = say("This is another WhatsApp page. Tap the back arrow at the top left.",
             "यह WhatsApp का दूसरा पेज है। ऊपर बाईं ओर पीछे वाला तीर दबाइए।", "ఇది WhatsApp లో వేరే పేజీ. పైన ఎడమవైపు వెనక్కి బాణం నొక్కండి."),
         routes = listOf(
+            // "Akash sent me a photo, how do I see it?": their chat → the newest photo → it opens big.
+            Route(
+                id = "wa_see_photo", pkg = PKG,
+                goals = goals("(sent|send|shared|forwarded) me (a |an |the |some )?(photo|image|picture|pic|pics|photos)",
+                    "(see|open|view|look at) (the |a |an |that )?(photo|image|picture|pic)", "(photo|image|picture|pic) (from|by) ",
+                    "(received|got) (a |an )?(photo|image|picture)",
+                    "(फोटो|फ़ोटो|तस्वीर).*(भेजी|भेजा)", "(फोटो|फ़ोटो|तस्वीर) (कैसे )?(देख|खोल)", "ఫోటో (పంపా|పంపి)", "ఫోటో (ఎలా )?(చూడ|తెరవ)"),
+                avoid = listOf(rx("\\b(send|share) (my|this|the|a) (photo|picture|pic) to\\b|screenshot|स्क्रीनशॉट|aadhaa?r|आधार|ఆధార్")),
+                slots = listOf("contact"),
+                steps = inChat(MapStep("wa_chat_them", listOf(Sel(resId = "image", label = rx("^(Enlarge photo|View photo|Photo)$"), pick = Pick.BOTTOM),
+                    lbl("^(Enlarge photo|View photo)$").copy(pick = Pick.BOTTOM)),
+                    say("Tap the photo to see it big.", "फ़ोटो को बड़ा देखने के लिए उसे दबाइए।", "ఫోటోను పెద్దగా చూడటానికి దాన్ని నొక్కండి."),
+                    why = say("Pictures in a chat are small; one tap opens them full screen.", "चैट में फ़ोटो छोटी दिखती है; एक बार दबाने से पूरी खुलती है।",
+                        "చాట్‌లో ఫోటోలు చిన్నగా ఉంటాయి; ఒక్క నొక్కుతో పూర్తిగా తెరుచుకుంటాయి."),
+                    scrollHint = say("Slowly scroll up in the chat to find the photo.", "चैट में धीरे से ऊपर स्क्रॉल करके फ़ोटो ढूँढिए।",
+                        "చాట్‌లో నెమ్మదిగా పైకి స్క్రోల్ చేసి ఫోటో వెతకండి."), alsoOn = listOf("wa_chat_label"))),
+                // The viewer: the picture full screen, Reply at the bottom, Save / Forward at the top.
+                done = listOf(lbl("^Reply$"), lbl("^(Save|Forward)$")), doneNeedsLastStep = true,
+                doneSay = say("Here it is, big. Pinch with two fingers to zoom. Tap the back arrow to return to the chat.",
+                    "यह रही, बड़ी। दो उँगलियों से फैलाकर और बड़ा कीजिए। चैट पर लौटने के लिए पीछे वाला तीर दबाइए।",
+                    "ఇదిగో, పెద్దగా. రెండు వేళ్లతో విడదీసి ఇంకా పెద్దది చేయండి. చాట్‌కి తిరిగి రావడానికి వెనక్కి బాణం నొక్కండి."),
+            ),
             Route(
                 id = "wa_video_call", pkg = PKG,
                 goals = goals("video ?call( to)? .+", ".+ (ko|को) (video|वीडियो) (call|कॉल)", "वीडियो कॉल", "వీడియో కాల్", "(see|talk to) .+ on (video|whatsapp)"),

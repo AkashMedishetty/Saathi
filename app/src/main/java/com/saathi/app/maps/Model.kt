@@ -40,6 +40,8 @@ enum class Pick {
     LARGEST,
     /** The top-most visible match (the first search result). */
     TOP,
+    /** The bottom-most visible match (the newest message in a chat). */
+    BOTTOM,
 }
 
 /**

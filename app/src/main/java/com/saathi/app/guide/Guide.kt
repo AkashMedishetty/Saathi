@@ -347,6 +347,11 @@ class Guide(
             // Let the model pick the helper (NPU ≈0.25 s); keywords only if it can't.
             overlay.showCard(say("Okay…", "ठीक है…", "సరే…").pick(lang), Overlay.Mode.THINKING)
             scope.launch {
+                // 0) The bridge: the model picks from what Saathi actually knows how to do (the app-map routes), so a
+                //    request in any words reaches the right route; phrases are only the fast path.
+                //    The model rewrites their words (any language) as one plain command; a command that reaches a known
+                //    route is run as if they'd said it. Small models rewrite well; they pick badly from numbered lists.
+                canonical(goalText)?.let { c -> start(c, autoMode, learnMode = learn); return@launch }
                 // 1) Understand the vague request. 2) Jump there with an intent. 3) Only then guide / answer.
                 val u = Understand.parse(goalText, svc)
                 com.saathi.app.DebugLog.i("understand", "\"$goalText\" → $u")
@@ -359,6 +364,70 @@ class Guide(
             return
         }
         begin(goalText, IntentRouter.route(svc, goalText), autoMode)
+    }
+
+    private val COMMAND_EXAMPLES = listOf(
+        "video call my son on whatsapp", "call my son", "send a whatsapp message to my son saying I reached home",
+        "see the photo my son sent on whatsapp", "send a photo to my son on whatsapp", "search for old telugu songs on youtube",
+        "show my liked videos on youtube", "show my youtube subscriptions", "make the text bigger", "change my ringtone",
+        "turn on bluetooth", "make the screen brighter", "change the wallpaper", "install hotstar", "watch anupama on hotstar",
+        "where is my aadhaar card", "send my aadhaar card to my son", "take a screenshot and send it to my son on whatsapp",
+        "set an alarm for 6 am", "take me to the nearest hospital", "book an uber to the airport", "open the camera",
+        "how do i use spotify", "where am i")
+
+    /** Their words → one plain English command that a known route handles, or null (a question, or nothing fits). */
+    private suspend fun canonical(g: String): String? {
+        val sys = "You turn what an elderly person says (English, Hindi or Telugu) into ONE short English phone command. " +
+            "Write it in the same style as these: " + COMMAND_EXAMPLES.joinToString("; ") + ". Keep names and search words " +
+            "they said. Reply with the command only. If they ask a question to be answered (weather, facts, health, money), reply QUESTION."
+        // Gemma 4 only: the 1B model copied examples ("a nicer ringtone" → "turn on bluetooth"); a wrong confident
+        // action is worse than the old path. Load it if needed (a few seconds), else give up quietly.
+        if (!LlmManager.isReady) {
+            LlmManager.loadAsync(svc)
+            var waited = 0
+            while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && LlmManager.state.value !is LlmManager.State.NoModel && waited < 6000) { delay(200); waited += 200 }
+            if (!LlmManager.isReady) { com.saathi.app.DebugLog.i("route", "model: not ready, old path"); return null }
+        }
+        val out = runCatching { LlmManager.generate(sys, g) }.getOrNull()?.lines()
+            ?.map { it.trim().trim('"', '.', '\'', '*', '`', ' ', '-') }
+            ?.lastOrNull { it.isNotBlank() && !it.endsWith(":") && !Regex("(?i)^(okay|sure|here|command)\\b").containsMatchIn(it) }?.lowercase()
+        val c = out?.takeIf { it.length in 4..120 && !it.contains("question") && !it.equals(g.trim(), true) }
+        val ok = c != null && (mapRouteFor(c) != null || DocFinder.ask(c) != null || IntentRouter.settingsTask(c) != null ||
+            LOST_WORDS.containsMatchIn(c) || Skills.match(c)?.id in IntentRouter.DIRECT)
+        com.saathi.app.DebugLog.i("route", "model: \"$g\" → \"${out ?: "-"}\" ${if (ok) "(known route)" else "(not used)"}")
+        return if (ok) c else null
+    }
+
+    /** A route in plain words for the model: "WhatsApp — see photo: Here it is, big…". */
+    private fun describeRoute(m: com.saathi.app.maps.AppMap, r: com.saathi.app.maps.Route): String {
+        val what = r.id.substringAfter('_').replace('_', ' ')
+        val end = (r.doneSay[Lang.EN] ?: "").replace(Regex("\\{[a-z]+\\}"), "someone").replace(Regex("\\[[^]]*\\]"), "").take(90)
+        return "${m.name} — $what: $end"
+    }
+
+    /**
+     * NLU over the route catalog: shortlist the routes that share the app or words with the request (the NPU model
+     * has a short context), then the model picks one number or 0. Null = none / no model → the old path.
+     */
+    private suspend fun modelRoute(g: String): com.saathi.app.maps.Route? {
+        val words = g.lowercase().split(Regex("[^\\p{L}\\p{M}]+")).filter { it.length >= 3 }.toSet()
+        val app = AppLauncher.findInGoal(svc, g)?.pkg
+        val scored = com.saathi.app.maps.AppMaps.all.flatMap { m -> m.routes.map { r -> m to r } }
+            .filter { (_, r) -> runCatching { AppLauncher.isInstalled(svc, r.pkg) }.getOrDefault(false) }
+            .map { (m, r) ->
+                val d = describeRoute(m, r)
+                val appHit = app != null && (r.pkg == app || app in m.alsoPkgs)
+                Triple(r, d, (if (appHit) 5 else 0) + words.count { w -> d.lowercase().contains(w) })
+            }.filter { it.third > 0 }.sortedByDescending { it.third }.take(8)
+        if (scored.isEmpty()) return null
+        val list = scored.mapIndexed { i, t -> "${i + 1}. ${t.second}" }.joinToString("\n")
+        val sys = "You match an elderly person's request to ONE task that a phone helper knows how to guide. " +
+            "Reply with only the task number. Reply 0 if no task clearly fits, or if they are asking a question to be answered."
+        val out = runCatching { com.saathi.app.llm.FastBrain.generate(svc, sys, "Request: \"$g\"\nTasks:\n$list\nTask number:") }.getOrNull()
+        val n = out?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() }
+        val pick = n?.takeIf { it in 1..scored.size }?.let { scored[it - 1].first }
+        com.saathi.app.DebugLog.i("route", "model picked ${pick?.id ?: "none"} (answer=\"${out?.take(20)}\", from ${scored.map { it.first.id }})")
+        return pick
     }
 
     /** Returns true if the intent was handled (deep link / answer / skill); false → fall back to routing + agent. */

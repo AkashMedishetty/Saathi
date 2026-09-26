@@ -100,4 +100,16 @@ class WhatsAppMapTest {
             assertTrue("Missing top-bar control must not glow the bubble: $missing", missing is Decision.Scroll)
         }
     }
+
+    /** Field (03:33): "akash sent me an image on whatsapp how to see it" → his chat → the newest photo glows. */
+    @Test fun seeAPhotoTheySent() {
+        val g = "akash sent me an image on whatsapp how to see it"
+        val r = AppMaps.route(g)
+        assertEquals("wa_see_photo", r?.id)
+        val slots = MapSlots.of(r!!, g, "Akash")
+        assertEquals("akash", slots["contact"]?.lowercase())
+        val d = AppMaps.next(r, "com.whatsapp", Fixtures.load("whatsapp", "chat_with_photo"), 3, slots)
+        assertTrue("$d", d is Decision.Glow && d.box.t in 1600..1700)
+        assertEquals(Decision.Done, AppMaps.next(r, "com.whatsapp", Fixtures.load("whatsapp", "photo_viewer"), 3, slots))
+    }
 }

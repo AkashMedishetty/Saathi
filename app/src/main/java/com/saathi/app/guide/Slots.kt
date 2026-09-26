@@ -41,6 +41,10 @@ object SlotExtractor {
             ?.dropWhile { it.lowercase() in STOP }
             ?.takeWhile { it.lowercase() !in STOP && it.isNotBlank() }
             ?.take(2)?.joinToString(" ")?.takeIf { it.isNotBlank() }
+        // "Akash sent me a photo", "my son sent me…", "a photo from Akash", "अकाश ने फोटो भेजी": the sender.
+        if (contact == null) contact = (Regex("^(?:my\\s+)?([\\p{L}\\p{M}]+(?:\\s+[\\p{L}\\p{M}]+)?)\\s+(?:has\\s+)?(?:sent|send|shared|forwarded)\\s+me\\b", IC).find(g)
+            ?: Regex("\\b(?:from|by)\\s+(?:my\\s+)?([\\p{L}\\p{M}]+)", IC).find(g)
+            ?: Regex("^(\\S+)\\s+ने\\s").find(g))?.groupValues?.get(1)?.trim()?.takeIf { it.lowercase() !in STOP && it.lowercase() != "someone" }
         // Hindi/Telugu: "बेटे को वीडियो कॉल करो", "కొడుకుకి వీడియో కాల్ చేయి"
         if (contact == null) contact = FAMILY.firstOrNull { f -> f.any { it.code > 0x900 } && g.contains(f) }
         contact = contact?.let { c -> if (c.lowercase() in FAMILY) family.ifBlank { c } else c }

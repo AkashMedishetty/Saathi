@@ -242,6 +242,7 @@ internal class Tree(val nodes: List<Node>) {
             val (i, box) = when (s.pick) {
                 Pick.LARGEST -> hits.maxBy { it.second.area }
                 Pick.TOP -> hits.minWith(compareBy<Pair<Int, Box>> { it.second.t }.thenBy { it.second.l })
+                Pick.BOTTOM -> hits.maxWith(compareBy<Pair<Int, Box>> { it.second.b }.thenBy { it.second.l })
             }
             return Hit(nodes[i], box)
         }
