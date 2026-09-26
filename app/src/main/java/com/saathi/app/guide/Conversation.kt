@@ -30,10 +30,13 @@ object Conversation {
             }
 
     /** Returns a spoken answer, or a gentle template if the model is unavailable or answers badly. */
-    suspend fun answer(q: String, lang: Lang, name: String): String {
-        if (!LlmManager.isReady) return fallback(q, lang)
+    suspend fun answer(q: String, lang: Lang, name: String, app: android.content.Context? = null): String {
         val ctx = recent().takeLast(4).joinToString("\n") { (u, s) -> "Person: $u\nSaathi: $s" }
-        val out = LlmManager.generate(system(lang, name), (if (ctx.isNotBlank()) "Earlier:\n$ctx\n\n" else "") + "Person: $q\nSaathi:")
+        val prompt = (if (ctx.isNotBlank()) "Earlier:\n$ctx\n\n" else "") + "Person: $q\nSaathi:"
+        // Gemma 4 (GPU) if it's up; otherwise the NPU brain answers now instead of "ask me again" (field test).
+        val raw = if (LlmManager.isReady) LlmManager.generate(system(lang, name), prompt)
+            else app?.let { com.saathi.app.llm.FastBrain.generate(it, system(lang, name), prompt) }
+        val out = raw
             ?.replace(Regex("(?i)^saathi:\\s*"), "")?.replace(Regex("[*#_`]"), "")?.trim()
         val ok = !out.isNullOrBlank() && !Templates.garbled(out) && out.length < 600 && when (lang) {
             Lang.EN -> true

@@ -84,6 +84,28 @@ object IntentRouter {
         "notification sound|vibrat|hotspot|mobile data|data usage|location|gps|software update|system update|about phone|keyboard|auto.?rotate|" +
         "do not disturb|airplane|flight mode|sim|nfc|default app|app permission|eye (protection|comfort)|blue light|night light|reading mode|screen timeout|auto.?lock|रिंगटोन|वॉलपेपर|भाषा|पासवर्ड|रिंगटోన్|రింగ్‌టోన్|వాల్‌పేపర్|భాష|పాస్‌వర్డ్")
 
+    private val SETTINGS_VERB = Regex("(?i)change|set|put|turn|switch|how (do|to|can)|बदल|लगा|మార్చ|పెట్ట")
+
+    /** "How do I change my ringtone" / "set a photo as wallpaper": a settings task, whatever the model calls it. */
+    fun settingsTask(goal: String): Flow? =
+        if (SETTINGS_TOPIC.containsMatchIn(goal) && SETTINGS_VERB.containsMatchIn(goal)) settingsSearch(goal) else null
+
+    private val HOW_TO = Regex("(?i)^\\W*(please\\s+)?(teach me|show me|help me|how (do|can|should) i|how to|how does|i want to learn)\\b|सिखा|कैसे|నేర్ప|ఎలా")
+
+    /**
+     * "Teach me to edit a photo", "how do I use Instagram", "how do I change my ringtone": a thing ON the phone → guide it
+     * with the glow. Only general knowledge ("how to make upma") gets a spoken answer. Decided before the model, which
+     * labels all of these "question" (field test: everything came back as text).
+     */
+    fun phoneHowTo(ctx: Context, goal: String): Flow? {
+        if (!HOW_TO.containsMatchIn(goal)) return null
+        settingsTask(goal)?.let { return it }
+        val slots = SlotExtractor.from(goal)
+        Skills.match(goal)?.takeIf { it.id != "learn_app" }?.let { return it.build(ctx, slots) }
+        if (AppLauncher.findInGoal(ctx, goal) != null || PHONE_WORDS.containsMatchIn(goal)) return Skills.byId("learn_app")?.build(ctx, slots)
+        return null
+    }
+
     /** Phone-settings goals: open Settings search and type the topic (works on every OEM skin). */
     fun settingsSearch(goal: String): Flow? {
         val m = SETTINGS_TOPIC.find(goal) ?: return null
@@ -160,6 +182,8 @@ object IntentRouter {
         if (!QUESTION.containsMatchIn(goal.trim())) return false
         if (NOT_CHAT.containsMatchIn(goal)) return false
         if (PHONE_WORDS.containsMatchIn(goal)) return false
+        // "How do I change my ringtone / set a wallpaper": a phone task to guide, not a chat answer.
+        if (SETTINGS_TOPIC.containsMatchIn(goal) && SETTINGS_VERB.containsMatchIn(goal)) return false
         if (Skills.match(goal) != null) return false
         return ctx == null || AppLauncher.findInGoal(ctx, goal) == null
     }

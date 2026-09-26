@@ -175,6 +175,8 @@ class Guide(
         if (IntentRouter.isBriefing(goalText)) { briefing(); return }
         if (IntentRouter.isObjectHelp(goalText)) { begin(goalText, Skills.byId("learn_app")?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
         IntentRouter.cameraRead(goalText)?.let { id -> begin(goalText, Skills.byId(id)?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
+        IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
+        IntentRouter.phoneHowTo(svc, goalText)?.let { begin(goalText, it, autoMode); return }
         if (IntentRouter.isQuestion(svc, goalText)) { answerQuestion(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
         // Teach-once: "watch me: video call Rahul" … "done teaching".
@@ -321,7 +323,11 @@ class Guide(
             "సరే! కలిసి చేద్దాం. మెరుపును చూడండి.").pick(lang)
         f?.launch?.let { make ->
             val intent = runCatching { make(svc) }.getOrNull()
-            val ok = intent != null && runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+            // Already in Settings (they opened it themselves)? Guide from here; don't start Settings again (trap #45).
+            val inSettingsAlready = intent != null && resolvePkg(intent) == "com.android.settings" &&
+                runCatching { svc.rootInActiveWindow?.packageName?.toString() }.getOrNull() == "com.android.settings"
+            val ok = intent != null && (inSettingsAlready || runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess)
+            if (inSettingsAlready) com.saathi.app.DebugLog.i("begin", "already in Settings: guiding from this screen")
             if (ok) resolvePkg(intent!!)?.let { taskPkgs += it; adoptPkg = false }
             else { missingApp(f); return }
         }
@@ -524,7 +530,10 @@ class Guide(
         // First use: give the model a few seconds to load (Gemma 4 on the GPU ≈ 4.5 s) before falling back.
         var waited = 0
         val lowPower = Power.low(svc)
-        while (!lowPower && !LlmManager.isReady && LlmManager.state.value is LlmManager.State.Loading && waited < 8000) { delay(200); waited += 200 }
+        // (The brain lives in its own process: right after loadAsync its state can still read Idle, so wait on
+        // "not ready and not failed", not on "Loading" — otherwise we fell straight to the weak keyword guess.)
+        while (!lowPower && !LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed &&
+            LlmManager.state.value !is LlmManager.State.NoModel && waited < 18000) { delay(250); waited += 250 }
         val learned = f?.steps?.mapNotNull { Memory.learnedLabel(screen.pkg, it.key) }.orEmpty()
         replan = false
         plansThisTask++
@@ -1062,8 +1071,8 @@ class Guide(
             overlay.setAura(true)
             overlay.showCard(say("Let me think…", "सोच रहा हूँ…", "ఆలోచిస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
             var waited = 0
-            while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && waited < 9000) { delay(200); waited += 200 }
-            val a = Conversation.answer(q, lang, Prefs.name(svc))
+            while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && waited < 6000) { delay(200); waited += 200 }
+            val a = Conversation.answer(q, lang, Prefs.name(svc), svc)
             overlay.setAura(false)
             Conversation.remember(q, a)
             com.saathi.app.DebugLog.i("answer", "q=\"$q\" a=\"${a.take(200)}\"")
@@ -1263,6 +1272,8 @@ class Guide(
         if (IntentRouter.isBriefing(g)) return "briefing"
         if (IntentRouter.isObjectHelp(g)) return "skill:learn_app"
         IntentRouter.cameraRead(g)?.let { return "skill:$it" }
+        IntentRouter.settingsTask(g)?.let { return "skill:${it.id}" }
+        IntentRouter.phoneHowTo(svc, g)?.let { return "skill:${it.id}" }
         if (IntentRouter.isQuestion(svc, g)) return "question"
         if (Regex("(?i)^\\s*(remember|note down|याद रखो|याद रखना|గుర్తుంచుకో)\\b").containsMatchIn(g)) return "note"
         Recipes.find(svc, g)?.let { return "recipe" }
