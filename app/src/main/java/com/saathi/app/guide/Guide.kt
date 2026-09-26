@@ -240,7 +240,8 @@ class Guide(
         val q = (u.query ?: goalText).replace(Regex("(?i)^\\s*(please\\s+)?(play|watch|put on|search( for)?|find|show me|listen to|open)\\s+"), "").ifBlank { u.query ?: goalText }
         fun skill(id: String, g: String = goalText) = Skills.byId(id)?.build(svc, SlotExtractor.from(g, Prefs.family(svc)))
         // A precise, reliable skill (torch, font, storage, selfie…) beats the model's broad category.
-        Skills.match(goalText)?.takeIf { it.id in IntentRouter.DIRECT && u.intent !in setOf("weather", "lookup", "question", "watch", "music") }?.let {
+        Skills.match(goalText)?.takeIf { it.id in IntentRouter.DIRECT && (u.intent !in setOf("weather", "lookup", "question", "watch", "music") ||
+            (u.intent == "question" && !IntentRouter.phrasedAsQuestion(goalText))) }?.let {
             begin(goalText, it.build(svc, SlotExtractor.from(goalText, Prefs.family(svc))), autoMode); return true
         }
         if (Coach.wants(goalText, u.intent) || (u.intent == "watch" && u.device == "tv")) { startCoach(goalText); return true }
@@ -254,6 +255,15 @@ class Guide(
             "weather", "lookup" -> { lookUp(goalText, if (u.intent == "weather" && !q.contains("weather", true)) "$q weather" else q); return true }
             "watch", "music" -> {
                 if (u.device == "tv") { watchOnTv("$q on tv ${u.app ?: ""}"); return true }
+                // A named streaming app (Hotstar, Prime, Netflix, Zee5, SonyLIV…) or any other named app wins over the YouTube
+                // default (field test: "Watch my serial on Hotstar" → the model missed Hotstar → YouTube).
+                if (Regex("(?i)hot ?star|prime video|amazon prime|netflix|zee ?5|sony ?liv|jio ?cinema|\\baha\\b|sun ?nxt|mx player|हॉटस्टार|नेटफ्लिक्स|హాట్‌?స్టార్|నెట్‌?ఫ్లిక్స్").containsMatchIn(goalText) ||
+                    u.app?.let { Regex("(?i)hotstar|prime|netflix|zee|sony|jio|aha|sun").containsMatchIn(it) } == true) {
+                    begin(goalText, skill("ott"), autoMode); return true
+                }
+                AppLauncher.findInGoal(svc, goalText)?.takeIf { it.pkg != "com.google.android.youtube" }?.let { app ->
+                    begin(goalText, Skills.byId("learn_app")?.build(svc, SlotExtractor.from("how do I use ${app.label} to $q")), autoMode); return true
+                }
                 // Learning: every step (open, search, type, pick), no jumping straight to the results.
                 if (learn && u.app?.contains("netflix", true) != true) { begin(goalText, skill("youtube", "play $q on youtube"), autoMode); return true }
                 val netflix = u.app?.contains("netflix", true) == true
@@ -619,6 +629,11 @@ class Guide(
             if (f.isDone?.invoke(screen) == true) { complete(f); return }
             // 8. Latest scripted step whose target is visible.
             if (stepHere != null) { showStep(f, screen, stepHere.first, stepHere.second); return }
+            // 8b. Play Store is installing: just wait (no scroll hints, never glow Cancel).
+            if (f.id.startsWith("install_") && Regex("(?i)installing|pending|downloading|\\d{1,3}\\s?%|waiting for").containsMatchIn(screen.allText)) {
+                show(Target(null, say("It's installing. Please wait a moment.", "इंस्टॉल हो रहा है। थोड़ा रुकिए।", "ఇన్‌స్టాల్ అవుతోంది. కొంచెం ఆగండి.").pick(lang), "install_wait", noAct = true))
+                return
+            }
             // 9. The next target is probably just off-screen: ask them to scroll (max 3, trap #13).
             if (f.steps.isNotEmpty() && scrolls < 3 && screen.scrollable() != null) {
                 val next = f.steps.getOrNull(lastStepIdx + 1) ?: f.steps.first()
@@ -716,7 +731,12 @@ class Guide(
         val text = quoteRealLabel(st.say.pick(lang), el).let { t ->
             if (practice) say("Your turn. ", "अब आपकी बारी। ", "ఇప్పుడు మీ వంతు. ").pick(lang) + t + say(" I'll show you if you need.", " ज़रूरत हो तो मैं दिखाऊँगा।", " అవసరమైతే చూపిస్తాను.").pick(lang) else t
         }
-        show(Target(el, text, st.key, st.fill,
+        // Install / Send / Pay / Call / anything the policy keeps manual: no "Do it for me" on the card at all.
+        val manual = com.saathi.app.policy.ActionPolicy.check(com.saathi.app.policy.ActionRequest(
+            if (el.role == "input" && st.fill != null) com.saathi.app.policy.Kind.TYPE else com.saathi.app.policy.Kind.TAP,
+            screen.pkg, el.label, el.role, el.password, st.fill, screen.allText, com.saathi.app.policy.Mode.DO_IT_ONCE, prevExternalPkg))
+            .let { it is com.saathi.app.policy.Verdict.GlowOnly || it is com.saathi.app.policy.Verdict.Block }
+        show(Target(el, text, st.key, st.fill, noAct = manual,
             final = f.isDone == null && i == f.steps.lastIndex,
             tip = if (teach) st.tip?.pick(lang) else null,
             progress = (i + 1) to f.steps.size), practiced = practice || Memory.timesDone(f.id) >= 3)
@@ -1257,15 +1277,47 @@ class Guide(
             "$name ఈ ఫోన్‌లో లేదు.${if (pkg != null) " దాన్ని పొందడానికి Play Store తెరవనా?" else ""}").pick(lang)
         com.saathi.app.DebugLog.i("missing", "app=$pkg flow=${f.id}")
         current = Target(null, t, "missing")
-        if (pkg != null) overlay.showCard(t, Overlay.Mode.ASK, onContinue = {
-            overlay.hideCard()
-            runCatching { svc.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$pkg")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-        }) else overlay.showCard(t, Overlay.Mode.DONE)
+        if (pkg != null) overlay.showCard(t, Overlay.Mode.ASK, onContinue = { overlay.hideCard(); installApp(pkg, name) })
+        else overlay.showCard(t, Overlay.Mode.DONE)
         speaker.say(t, lang)
     }
 
+    /**
+     * Get a missing app, guided: its Play Store page → the person taps Install (never Saathi) → "installing, please
+     * wait" → Open → "want me to show you how to use it?".
+     */
+    private fun installApp(pkg: String, name: String) {
+        // The https form addressed to Play Store avoids vivo's own store intercepting "market://" with a picker.
+        val f = Flow("install_$pkg", { Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=$pkg")).setPackage("com.android.vending") },
+            listOf(
+                // If the phone still asks which store: Android's own picker, explained (the pivot: Saathi explains Android).
+                Step("store", rx("^Google Play Store$", "^Play Store$"), say("Your phone is asking which store to use. Tap Google Play Store.",
+                    "फ़ोन पूछ रहा है कौन-सा स्टोर। Google Play Store दबाइए।", "ఏ స్టోర్ వాడాలని ఫోన్ అడుగుతోంది. Google Play Store నొక్కండి."),
+                    screenHas = Regex("(?i)open with|just once|always")),
+                Step("once", rx("^Just once$"), say("Now tap Just once.", "अब Just once दबाइए।", "ఇప్పుడు Just once నొక్కండి.")),
+                Step("install", rx("^Install$", "^Update$"), say("Tap the green Install button. $name is free; it takes a minute.",
+                    "हरा Install बटन दबाइए। $name मुफ़्त है; एक मिनट लगेगा।", "ఆకుపచ్చ Install బటన్ నొక్కండి. $name ఉచితం; ఒక నిమిషం పడుతుంది.")),
+                Step("open", rx("^Open$", "^Play$"), say("$name is ready. Tap Open.", "$name तैयार है। Open दबाइए।", "$name సిద్ధం. Open నొక్కండి.")),
+            ),
+            { sc -> sc.pkg == pkg },
+            say("$name is open!", "$name खुल गया!", "$name తెరుచుకుంది!"),
+            say("Let's get $name from the Play Store.", "Play Store से $name लेते हैं।", "Play Store నుంచి $name తీసుకుందాం."),
+            teach = true, appPkg = "com.android.vending",
+            onDone = { c -> scope.launch { delay(1800); offerLearn(name) } })
+        begin("install $name", f, autoMode = false)
+    }
+
+    /** After an install: "Want me to show you how to use it?" → the learn guide for that app. */
+    private fun offerLearn(name: String) {
+        val q = say("Want me to show you how to use $name?", "क्या मैं $name चलाना सिखाऊँ?", "$name ఎలా వాడాలో చూపించనా?").pick(lang)
+        current = Target(null, q, "offer_learn"); lastSpokenKey = current?.key
+        overlay.showCard(q, Overlay.Mode.ASK, onContinue = { overlay.hideCard(); learnTask("how do I use $name") })
+        speaker.say(q, lang)
+    }
+
     private val KNOWN_APPS = mapOf("com.whatsapp" to "WhatsApp", "com.google.android.youtube" to "YouTube", "com.netflix.mediaclient" to "Netflix",
-        "in.startv.hotstar" to "JioHotstar", "cris.org.in.prs.ima" to "IRCTC Rail Connect", "com.google.android.apps.maps" to "Google Maps",
+        "in.startv.hotstar" to "JioHotstar", "com.jio.media.ondemand" to "JioCinema", "com.graymatrix.did" to "Zee5",
+        "com.sonyliv" to "SonyLIV", "com.amazon.avod.thirdpartyclient" to "Prime Video", "com.spotify.music" to "Spotify", "com.ubercab" to "Uber", "cris.org.in.prs.ima" to "IRCTC Rail Connect", "com.google.android.apps.maps" to "Google Maps",
         "com.google.android.apps.photos" to "Google Photos", "com.google.android.apps.nbu.paisa.user" to "Google Pay", "com.phonepe.app" to "PhonePe")
 
     /** A question or chit-chat: answer out loud (the Clicky lesson), no screen navigation. */
@@ -1617,7 +1669,9 @@ class Guide(
             val u = Understand.parse(g, svc)
             if (u != null) {
                 if (Coach.wants(g, u.intent) || (u.intent == "watch" && u.device == "tv")) return "coach"
-                Skills.match(g)?.takeIf { it.id in IntentRouter.DIRECT && u.intent !in setOf("weather", "lookup", "question", "watch", "music") }?.let { return "skill:${it.id}" }
+                Skills.match(g)?.takeIf { it.id in IntentRouter.DIRECT && (u.intent !in setOf("weather", "lookup", "question", "watch", "music") ||
+                    (u.intent == "question" && !IntentRouter.phrasedAsQuestion(g))) }?.let { return "skill:${it.id}" }
+                if (u.intent in setOf("watch", "music") && Regex("(?i)hot ?star|prime video|netflix|zee ?5|sony ?liv|jio ?cinema").containsMatchIn(g)) return "skill:ott"
                 if (u.intent in setOf("question", "weather", "lookup", "watch", "music", "call", "video_call", "message", "photo", "alarm", "directions", "setting", "tv"))
                     return "intent:${u.intent}"
             }

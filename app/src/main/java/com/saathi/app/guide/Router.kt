@@ -108,6 +108,9 @@ object IntentRouter {
         "notification sound|vibrat|hotspot|mobile data|data usage|location|gps|software update|system update|about phone|keyboard|auto.?rotate|" +
         "do not disturb|airplane|flight mode|sim|nfc|default app|app permission|eye (protection|comfort)|blue light|night light|reading mode|screen timeout|auto.?lock|रिंगटोन|वॉलपेपर|भाषा|पासवर्ड|रिंगटోన్|రింగ్‌టోన్|వాల్‌పేపర్|భాష|పాస్‌వర్డ్")
 
+    /** Starts like a real question ("what / why / how …", or ends with "?"), not a command like "make the text bigger". */
+    fun phrasedAsQuestion(g: String) = QUESTION.containsMatchIn(g.trim())
+
     /** "Teach me …", "how do I …", "show me how …": learning, so no shortcuts. */
     fun wantsToLearn(g: String) = Regex("(?i)\\b(teach me|show me how|how (do|can|should) i|how to|help me learn|i want to learn)\\b|सिखा|कैसे करते|नेर्प|నేర్ప|ఎలా చేయాలి|ఎలా వాడాలి").containsMatchIn(g)
 
@@ -132,6 +135,8 @@ object IntentRouter {
         if (!HOW_TO.containsMatchIn(goal)) return null
         settingsTask(goal)?.let { return it }
         val slots = SlotExtractor.from(goal)
+        // The specific lessons first (trim a video, edit a photo), then any other matching skill.
+        Skills.all.firstOrNull { it.id in setOf("learn_video", "learn_photo") && Skills.matches(it, goal) }?.let { return it.build(ctx, slots) }
         Skills.match(goal)?.takeIf { it.id != "learn_app" }?.let { return it.build(ctx, slots) }
         AppLauncher.findInGoal(ctx, goal)?.let { app -> return Skills.byId("learn_app")?.build(ctx, SlotExtractor.from("how do I use ${app.label}")) }
         if (PHONE_WORDS.containsMatchIn(goal)) return Skills.byId("learn_app")?.build(ctx, slots)

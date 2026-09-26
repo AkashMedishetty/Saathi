@@ -15,6 +15,6 @@ while IFS=$'\t' read -r utt lang want; do
   got=""; for i in $(seq 1 60); do got=$(adb logcat -d -s SaathiEval:I </dev/null | sed 's/^.*SaathiEval: //' | tail -1); [ -n "$got" ] && break; sleep 0.5; done
   label=$(echo "$got" | cut -f2); ms=$(echo "$got" | cut -f3); brain=$(echo "$got" | cut -f4)
   if echo "|$want|" | grep -q "|$label|"; then ok=$((ok+1)); echo "✅ $utt → $label (${ms}ms ${brain})"; else fails+=("$utt → $label (want $want)"); echo "❌ $utt → $label  (want $want) [${brain}]"; fi
-done < scripts/eval-set.tsv
+done < "${EVAL_SET:-scripts/eval-set.tsv}"
 B --es cmd noop --es lang EN
 echo "── understanding accuracy: $ok / $n = $(( ok * 100 / n ))%"

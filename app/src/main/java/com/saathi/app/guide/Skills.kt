@@ -444,6 +444,8 @@ object Skills {
 
     fun byId(id: String) = all.firstOrNull { it.id == id }
 
+    fun matches(sk: Skill, goal: String): Boolean { val g = " ${goal.lowercase()} "; return sk.keywords.any { g.contains(it.lowercase()) } }
+
     /** Best skill by keyword hits; longer keywords weigh more, so "video call" beats "call ". */
     fun match(goal: String): Skill? {
         val g = " ${goal.lowercase()} "
