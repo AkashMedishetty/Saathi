@@ -81,6 +81,10 @@ class Guide(
     private var prevExternalPkg: String? = null
     /** Settings task: the person opens Settings themselves (trap #45: vivo switches Saathi off if Saathi opens it). */
     private var needSettings = false
+    /** Learn mode: they open the app themselves from its icon (pkg, label); Saathi only points the way. */
+    private var needApp: Pair<String, String>? = null
+    /** Learning (from the Learn section, or "teach me / how do I / show me how"): no shortcuts, every step shown. */
+    var learn = false
     /** Just arrived in Settings: it may reopen on an old sub-page; step back to the main page first (lost-context fix). */
     private var settingsFresh = false
     private var settingsBacks = 0
@@ -127,6 +131,9 @@ class Guide(
     // ───────────────────────── entry points ─────────────────────────
 
     /** A spoken or typed sentence. During a task, short commands steer the task. */
+    /** From the Learn section: teach every step (no shortcuts). */
+    fun learnTask(text: String) = start(text, autoMode = false, learnMode = true)
+
     fun handleUtterance(text: String) {
         val t = text.lowercase().trim()
         fun any(vararg w: String) = w.any { t == it || t.startsWith("$it ") || t.endsWith(" $it") || t.contains(" $it ") }
@@ -159,7 +166,8 @@ class Guide(
         start(text)
     }
 
-    fun start(goalText: String, autoMode: Boolean = Prefs.expert(svc)) {
+    fun start(goalText: String, autoMode: Boolean = Prefs.expert(svc), learnMode: Boolean = false) {
+        learn = learnMode || practice || IntentRouter.wantsToLearn(goalText)
         lang = Prefs.lang(svc)
         hideJob?.cancel()
         stopAuto()
@@ -246,6 +254,8 @@ class Guide(
             "weather", "lookup" -> { lookUp(goalText, if (u.intent == "weather" && !q.contains("weather", true)) "$q weather" else q); return true }
             "watch", "music" -> {
                 if (u.device == "tv") { watchOnTv("$q on tv ${u.app ?: ""}"); return true }
+                // Learning: every step (open, search, type, pick), no jumping straight to the results.
+                if (learn && u.app?.contains("netflix", true) != true) { begin(goalText, skill("youtube", "play $q on youtube"), autoMode); return true }
                 val netflix = u.app?.contains("netflix", true) == true
                 val link = (if (netflix) Understand.netflixSearch(svc, q) else null) ?: Understand.youtubeSearch(svc, q) ?: return false
                 val pkg = link.`package`
@@ -293,7 +303,13 @@ class Guide(
             else null
             overlay.setAura(false)
             if (text.isBlank()) { answerQuestion(goalText); return@launch } // no results (offline): a careful short answer
-            val t = a ?: say("Here are the results. I've opened them for you.", "नतीजे खोल दिए हैं।", "ఫలితాలు తెరిచాను.").pick(lang)
+            // Rules first (the answer card itself), then the model's summary; either must be supported by the page.
+            val page = text.lines().map { it.trim() }.filter { it.isNotBlank() }
+            val candidate = com.saathi.app.policy.Grounded.extract(goalText, page)?.text ?: a
+            val checked = candidate?.let { com.saathi.app.policy.AnswerCheck.verify(goalText, it, text, lang) }
+            com.saathi.app.DebugLog.i("ground", "candidate=${candidate != null} ok=${checked?.ok} ${checked?.reasons}")
+            val t = candidate?.takeIf { checked?.ok == true }
+                ?: say("Here are the results. I've opened them for you.", "नतीजे खोल दिए हैं।", "ఫలితాలు తెరిచాను.").pick(lang)
             com.saathi.app.DebugLog.i("lookup", "q=\"$q\" a=\"${t.take(200)}\"")
             Conversation.remember(goalText, t)
             current = Target(null, t, "lookup")
@@ -345,13 +361,24 @@ class Guide(
             if (toSettings) { settingsFresh = true; settingsBacks = 0 }
             // Settings: never opened by Saathi. Go Home and teach them to open it (they learn where it lives, too).
             val askToOpen = toSettings && !inSettingsAlready
+            val pkgHere = runCatching { svc.rootInActiveWindow?.packageName?.toString() }.getOrNull()
+            val targetPkg = intent?.let { resolvePkg(it) }
+            val learnOpen = learn && !toSettings && targetPkg != null && targetPkg != pkgHere && targetPkg != svc.packageName &&
+                intent.action in setOf(null, Intent.ACTION_MAIN) // a plain app launch (not a dialer/deep link we built)
+            if (learnOpen) {
+                val label = AppLauncher.labelOf(svc, targetPkg!!)
+                needApp = targetPkg to label
+                svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+                hello = say("First, let's find $label. Look for its icon.", "पहले $label ढूँढते हैं। उसका आइकन देखिए।", "ముందు $label ని వెతుకుదాం. దాని ఐకాన్ చూడండి.").pick(lang)
+                com.saathi.app.DebugLog.i("begin", "learn mode: they open $label themselves")
+            }
             if (askToOpen) {
                 needSettings = true
                 svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
                 hello = say("First, open Settings: tap the Settings icon, the grey gear.", "पहले Settings खोलिए: Settings का आइकन, ग्रे गियर, दबाइए।",
                     "ముందు Settings తెరవండి: Settings ఐకాన్, బూడిద రంగు గేర్, నొక్కండి.").pick(lang)
             }
-            val ok = intent != null && (inSettingsAlready || askToOpen || runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+            val ok = intent != null && (inSettingsAlready || askToOpen || learnOpen || runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
                 // Practice starts from the app's first screen, not wherever it was left.
                 (if (practice) Intent.FLAG_ACTIVITY_CLEAR_TASK else 0))) }.isSuccess)
             if (inSettingsAlready) com.saathi.app.DebugLog.i("begin", "already in Settings: guiding from this screen")
@@ -510,6 +537,22 @@ class Guide(
         val f = flow
         // 5. Keyboard, notification shade, permission dialog: just wait.
         if (isTransient(screen.pkg)) return
+
+        // 5a. Learn mode: they open the app from its icon (home screen or all-apps), Saathi points the way.
+        needApp?.let { (pkg, label) ->
+            if (screen.pkg != pkg) {
+                val icon = appIcon(label)
+                show(Target(icon, if (icon != null) say("Tap the glowing $label icon to open it.", "$label खोलने के लिए चमकता आइकन दबाइए।", "$label తెరవడానికి మెరుస్తున్న ఐకాన్ నొక్కండి.").pick(lang)
+                    else say("Put your finger in the middle of the screen and slide it up, to see all your apps. Then find $label.",
+                        "उँगली स्क्रीन के बीच में रखकर ऊपर सरकाइए, सारे ऐप दिखेंगे। फिर $label ढूँढिए।",
+                        "వేలిని స్క్రీన్ మధ్యలో పెట్టి పైకి జరపండి, అన్ని యాప్‌లు కనిపిస్తాయి. తర్వాత $label వెతకండి.").pick(lang),
+                    if (icon != null) "open_app" else "find_app", noAct = true))
+                return
+            }
+            needApp = null
+            com.saathi.app.DebugLog.i("learn", "$label opened by the person")
+            if (practice || learn) speaker.say(say("Well done, you opened $label!", "शाबाश, आपने $label खोल लिया!", "భలే, మీరు $label తెరిచారు!").pick(lang), lang)
+        }
 
         // 5b. Settings tasks: they open Settings themselves; then back out of any old sub-page to the main page.
         if (needSettings) {
@@ -796,11 +839,13 @@ class Guide(
         }
     }
 
-    private fun askConfirm(t: Target) {
+    private var approvedKey: String? = null
+
+    private fun askConfirm(t: Target, ask: String? = null) {
         com.saathi.app.DebugLog.i("auto", "confirm before \"${t.el?.title}\"")
         awaitingConfirm = true
         val label = t.el?.title?.take(30) ?: ""
-        val q = say("Shall I press “$label”?", "क्या मैं “$label” दबाऊँ?", "“$label” నొక్కనా?").pick(lang)
+        val q = ask ?: say("Shall I press “$label”?", "क्या मैं “$label” दबाऊँ?", "“$label” నొక్కనా?").pick(lang)
         overlay.highlight(t.el?.bounds, false)
         overlay.showCard(q, Overlay.Mode.CONFIRM, targetCenterY = t.el?.bounds?.centerY())
         speaker.say(q, lang)
@@ -846,7 +891,7 @@ class Guide(
     /** The card's primary button / "do it" by voice. In auto mode it means "let me do it myself" (pause auto). */
     fun doItForMe() {
         val t = current ?: return
-        if (awaitingConfirm) { awaitingConfirm = false; performStep(t); return }
+        if (awaitingConfirm) { awaitingConfirm = false; approvedKey = t.key; performStep(t); return } // one-use approval
         if (auto) {
             stopAuto()
             speaker.say(say("Okay, your turn. Tap where it glows.", "ठीक है, अब आप दबाइए जहाँ चमक है।", "సరే, ఇప్పుడు మీరు మెరుస్తున్న చోట నొక్కండి.").pick(lang), lang)
@@ -894,6 +939,28 @@ class Guide(
                 "यह बटन काम नहीं कर रहा। कुछ और करते हैं — दूसरे तरीक़े से कहिए, या वापस दबाइए।",
                 "ఈ బటన్ పనిచేయట్లేదు. వేరే విధంగా చెప్పండి, లేదా వెనక్కి నొక్కండి.").pick(lang), lang)
             return
+        }
+        // Final safety gate (policy.ActionPolicy): on the freshly re-read target, every time, before any action.
+        if (fresh == null) return
+        val kind = when {
+            t.fill == "__BACK__" -> com.saathi.app.policy.Kind.BACK
+            el == null || el.role == "slider" -> com.saathi.app.policy.Kind.SCROLL
+            el.role == "input" && t.fill != null -> com.saathi.app.policy.Kind.TYPE
+            else -> com.saathi.app.policy.Kind.TAP
+        }
+        val verdict = com.saathi.app.policy.ActionPolicy.check(com.saathi.app.policy.ActionRequest(kind, fresh.pkg, el?.label, el?.role,
+            el?.password ?: false, if (kind == com.saathi.app.policy.Kind.TYPE) t.fill else null, fresh.allText,
+            if (auto) com.saathi.app.policy.Mode.AUTO else com.saathi.app.policy.Mode.DO_IT_ONCE, prevExternalPkg))
+        when (verdict) {
+            is com.saathi.app.policy.Verdict.Allow -> {}
+            is com.saathi.app.policy.Verdict.Confirm -> if (approvedKey == t.key) approvedKey = null else {
+                stopAuto(); askConfirm(t, verdict.ask.pick(lang)); return }
+            is com.saathi.app.policy.Verdict.GlowOnly -> {
+                stopAuto(); overlay.highlight(el?.bounds, false); speaker.say(verdict.say.pick(lang), lang)
+                com.saathi.app.DebugLog.i("policy", "glow only: ${t.key}"); return }
+            is com.saathi.app.policy.Verdict.Block -> {
+                stopAuto(); speaker.say(verdict.say.pick(lang), lang)
+                com.saathi.app.DebugLog.i("policy", "blocked: ${t.key}"); return }
         }
         com.saathi.app.DebugLog.i("act", "key=${t.key} target=\"${el?.label?.take(60)}\" role=${el?.role} auto=$auto fill=${t.fill != null}")
         if (el == null && t.fill == "__BACK__") {
@@ -957,7 +1024,7 @@ class Guide(
 
     /** "Let me try": the same task from the app's start screen; Saathi prompts, the glow waits (see show()). */
     private fun practise(g: String, f: Flow) {
-        practice = true
+        practice = true; learn = true
         com.saathi.app.DebugLog.i("practice", "start ${f.id}")
         begin(g, f, autoMode = false)
     }
@@ -967,7 +1034,7 @@ class Guide(
         goal?.let { Conversation.remember(it, text) }
         com.saathi.app.DebugLog.i("finish", "\"${text.take(120)}\" goal=\"$goal\"")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
-        goal = null; flow = null; current = null; paused = false; taskPkgs.clear()
+        goal = null; flow = null; current = null; paused = false; taskPkgs.clear(); needApp = null; learn = false
         delayedGlow?.cancel()
         Memory.clearTask()
         overlay.highlight(null, false)
@@ -986,7 +1053,7 @@ class Guide(
         goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
-        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false
+        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false; needApp = null; learn = false
         delayedGlow?.cancel()
         Memory.clearTask()
         clearVisuals()
@@ -1089,12 +1156,13 @@ class Guide(
     fun readMessages() {
         lang = Prefs.lang(svc)
         val list = com.saathi.app.service.MessageListener.latest(3)
-        val t = if (list.isEmpty()) say("No new messages. (If this is wrong, allow Saathi to read notifications in Settings.)",
+        val t0 = if (list.isEmpty()) say("No new messages. (If this is wrong, allow Saathi to read notifications in Settings.)",
             "कोई नया संदेश नहीं। (अगर ग़लत है, तो Settings में Saathi को सूचनाएँ पढ़ने दीजिए।)",
             "కొత్త సందేశాలు లేవు. (తప్పైతే, Settings లో Saathi కి నోటిఫికేషన్ అనుమతి ఇవ్వండి.)").pick(lang)
         else say("${list.size} recent messages. ", "${list.size} नए संदेश। ", "${list.size} కొత్త సందేశాలు. ").pick(lang) +
             list.joinToString(" ") { m -> say("${m.sender} on ${m.app} says: ${m.text.take(160)}.", "${m.app} पर ${m.sender} ने लिखा: ${m.text.take(160)}।", "${m.app} లో ${m.sender}: ${m.text.take(160)}.").pick(lang) }
         com.saathi.app.service.MessageListener.clear() // read aloud → gone from memory
+        val t = com.saathi.app.policy.Redactor.forSpeech(t0, lang) // an OTP or account number is never read aloud
         current = Target(null, t, "messages")
         overlay.highlight(null, false)
         overlay.showCard(t, Overlay.Mode.INFO)
@@ -1292,8 +1360,10 @@ class Guide(
                 when (lang) { Lang.EN -> "Answer in English."; Lang.HI -> "Answer in Hindi (Devanagari)."; Lang.TE -> "Answer in Telugu script." }
             val user = "Paper text:\n$paper\n\nQuestion: $q"
             val raw = if (LlmManager.isReady) LlmManager.generate(sys, user) else com.saathi.app.llm.FastBrain.generate(svc, sys, user)
-            val a = raw?.trim()?.takeIf { it.isNotBlank() && it.length < 400 && !com.saathi.app.llm.Templates.garbled(it) }
-                ?: say("I can't see that on this paper.", "यह इस काग़ज़ पर नहीं दिख रहा।", "ఇది ఈ కాగితం మీద కనిపించట్లేదు.").pick(lang)
+            val notThere = say("I can't see that on this paper.", "यह इस काग़ज़ पर नहीं दिख रहा।", "ఇది ఈ కాగితం మీద కనిపించట్లేదు.").pick(lang)
+            // Grounded or nothing: every name, number and date must be on the paper (policy.AnswerCheck).
+            val a = raw?.trim()?.takeIf { it.isNotBlank() }?.let { c ->
+                if (com.saathi.app.policy.AnswerCheck.verify(q, c, paper, lang).ok) c else null } ?: notThere
             com.saathi.app.DebugLog.i("answer", "paper q=\"$q\" a=\"${a.take(160)}\"")
             finish(a)
         }
@@ -1310,7 +1380,11 @@ class Guide(
             overlay.showCard(say("Let me think…", "सोच रहा हूँ…", "ఆలోచిస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
             var waited = 0
             while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && waited < 6000) { delay(200); waited += 200 }
-            val a = Conversation.answer(q, lang, Prefs.name(svc), svc)
+            val a = Conversation.answer(q, lang, Prefs.name(svc), svc).let { raw ->
+                // No source: only safe, general advice passes; facts, medical, legal, money → the kind fallback.
+                val c = com.saathi.app.policy.AnswerCheck.verify(q, raw, null, lang)
+                if (c.ok || IntentRouter.isGreeting(q)) raw else c.fallback?.pick(lang) ?: raw
+            }
             overlay.setAura(false)
             Conversation.remember(q, a)
             com.saathi.app.DebugLog.i("answer", "q=\"$q\" a=\"${a.take(200)}\"")

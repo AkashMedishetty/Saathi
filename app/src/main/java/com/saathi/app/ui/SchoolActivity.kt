@@ -102,6 +102,6 @@ class SchoolActivity : AppCompatActivity() {
     private fun run(goal: String) {
         val svc = SaathiService.instance ?: return
         SaathiService.ownUiOpen = false
-        svc.guide.handleUtterance(goal)
+        svc.guide.learnTask(goal) // the Learn section teaches every step, no shortcuts
     }
 }

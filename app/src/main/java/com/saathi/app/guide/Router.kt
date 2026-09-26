@@ -108,6 +108,9 @@ object IntentRouter {
         "notification sound|vibrat|hotspot|mobile data|data usage|location|gps|software update|system update|about phone|keyboard|auto.?rotate|" +
         "do not disturb|airplane|flight mode|sim|nfc|default app|app permission|eye (protection|comfort)|blue light|night light|reading mode|screen timeout|auto.?lock|रिंगटोन|वॉलपेपर|भाषा|पासवर्ड|रिंगटోన్|రింగ్‌టోన్|వాల్‌పేపర్|భాష|పాస్‌వర్డ్")
 
+    /** "Teach me …", "how do I …", "show me how …": learning, so no shortcuts. */
+    fun wantsToLearn(g: String) = Regex("(?i)\\b(teach me|show me how|how (do|can|should) i|how to|help me learn|i want to learn)\\b|सिखा|कैसे करते|नेर्प|నేర్ప|ఎలా చేయాలి|ఎలా వాడాలి").containsMatchIn(g)
+
     /** Is this about the phone / an app / a setting (then it's a task to guide, never a "video" or a chat answer)? */
     fun aboutPhone(ctx: Context, g: String) = PHONE_WORDS.containsMatchIn(g) || SETTINGS_TOPIC.containsMatchIn(g) ||
         AppLauncher.findInGoal(ctx, g) != null || Skills.match(g) != null

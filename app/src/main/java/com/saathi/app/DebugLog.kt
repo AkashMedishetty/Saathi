@@ -46,7 +46,8 @@ object DebugLog {
 
     private fun write(area: String, msg: String, sync: Boolean = false) {
         if (!enabled) return
-        val clean = msg.replace(Regex("\\d{5,}"), "#####").replace('\n', ' ').take(2000)
+        // Privacy: OTPs, card/account/Aadhaar/PAN numbers masked before anything is written (policy.Redactor).
+        val clean = com.saathi.app.policy.Redactor.forLog(msg).replace(Regex("\\d{5,}"), "#####").replace('\n', ' ').take(2000)
         Log.i(TAG, "[$area] $clean")
         val line = "${ts.format(Date())} [$area] $clean\n"
         val job = Runnable {

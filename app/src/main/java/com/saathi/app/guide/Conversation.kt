@@ -17,7 +17,10 @@ object Conversation {
     fun paper(): String? = paperText?.takeIf { System.currentTimeMillis() - paperAt < 15 * 60_000L }
 
     @Synchronized fun remember(user: String, saathi: String) {
-        history.addLast(user.take(200) to saathi.take(300))
+        // Never keep an exchange that contains private numbers (OTP, card, account, Aadhaar…): policy.Redactor.
+        val u = com.saathi.app.policy.Redactor.forMemory(user); val a = com.saathi.app.policy.Redactor.forMemory(saathi)
+        if (u.isEmpty() || a.isEmpty()) return
+        history.addLast(u.take(200) to a.take(300))
         while (history.size > 6) history.removeFirst()
     }
 
