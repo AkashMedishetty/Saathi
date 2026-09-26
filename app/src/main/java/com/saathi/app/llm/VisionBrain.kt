@@ -34,6 +34,7 @@ object VisionBrain {
             val out = runCatching { e.describe(jpeg, prompt) }.onFailure { Log.w(TAG, "vision failed", it) }.getOrNull()
             lastMs = SystemClock.elapsedRealtime() - t0
             Log.i(TAG, "vision ${lastMs} ms: ${out?.take(200)}")
+            com.saathi.app.DebugLog.i("vision", "${lastMs} ms: ${out?.take(200)}")
             touch()
             out?.let { Templates.clean(it) }?.takeIf { it.isNotBlank() && !Templates.garbled(it) }
         }

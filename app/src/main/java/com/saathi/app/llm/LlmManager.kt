@@ -68,6 +68,7 @@ object LlmManager {
                 withContext(Dispatchers.IO) { create(ctx, f, backend) }
             } catch (t: Throwable) {
                 Log.w(TAG, "load failed ${f.name} $backend", t)
+                com.saathi.app.DebugLog.w("llm", "load failed ${f.name} $backend", t)
                 errors += "${f.name} $backend: ${t.message?.take(90)}"
                 null
             } finally {
@@ -78,6 +79,7 @@ object LlmManager {
                 touchIdle()
                 _state.value = State.Ready(e.label, e.backend, SystemClock.elapsedRealtime() - t0)
                 Log.i(TAG, "loaded ${e.label} in ${SystemClock.elapsedRealtime() - t0} ms")
+                com.saathi.app.DebugLog.i("llm", "loaded ${e.label} in ${SystemClock.elapsedRealtime() - t0} ms")
                 return@withLock
             }
         }
@@ -108,6 +110,7 @@ object LlmManager {
             lastGenMs = SystemClock.elapsedRealtime() - t0
             touchIdle()
             Log.i(TAG, "gen ${lastGenMs} ms: ${out.take(200).replace('\n', ' ')}")
+            com.saathi.app.DebugLog.i("llm", "gen ${lastGenMs} ms: ${out.take(200)}")
             Templates.clean(out)
         }
     }

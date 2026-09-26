@@ -85,7 +85,7 @@ class RemoteActivity : AppCompatActivity() {
         val nav = hbox()
         listOf(Triple(Key.BACK, s("Back", "वापस", "వెనక్కి"), R.drawable.ic_arrow_back), Triple(Key.HOME, s("Home", "होम", "హోమ్"), R.drawable.ic_home),
             Triple(Key.SOURCE, s("Input", "इनपुट", "ఇన్‌పుట్"), R.drawable.ic_settings_remote)).forEachIndexed { i, (k, l, ic) ->
-            nav.add(primaryButton(l, ic, bg = C.PAPER_2, fg = C.PINE_DEEP) { press(scroll, k) }, top = if (i == 0) 0 else 8, weight = 1f)
+            nav.add(chip(l, false) { press(scroll, k) }.apply { minimumHeight = dp(60) }, top = if (i == 0) 0 else 8, weight = 1f)
         }
         page.add(nav, 14)
 

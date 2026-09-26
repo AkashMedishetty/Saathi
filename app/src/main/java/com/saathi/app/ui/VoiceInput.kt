@@ -74,11 +74,13 @@ class VoiceInput(private val ctx: Context) {
             }
             override fun onResults(b: Bundle?) {
                 listening = false
+                com.saathi.app.DebugLog.i("voice", "heard \"${b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: lastPartial}\" via $t")
                 l.onFinal(b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.takeIf { it.isNotBlank() } ?: lastPartial.ifBlank { null })
             }
             override fun onError(error: Int) {
                 listening = false
                 Log.w("Saathi", "speech error $error (try $attempt: $t)")
+                com.saathi.app.DebugLog.i("voice", "error $error try=$attempt $t partial=${lastPartial.isNotBlank()}")
                 // Never restart inside the dying recogniser's callback (gives error 11): post it.
                 if (attempt + 1 < tries.size && lastPartial.isBlank() && error in RETRYABLE) { main.postDelayed({ start(lang, l, attempt + 1) }, 150); return }
                 if (lastPartial.isNotBlank()) l.onFinal(lastPartial) else l.onFinal(null)

@@ -47,3 +47,7 @@
   Tests: 4 suites green (routing EN/HI/TE, slots, family-help redaction, IR patterns).
 - 13:25 Home polish (segmented EN/हिंदी/తెలుగు control, soft orb halo, status pill). README with architecture, guardrails,
   build steps and third-party attributions. TTS voices on the iQOO: en-IN, hi-IN, te-IN all available. `demo-reset.sh`.
+- 13:50 Auto mode (guardrails), watchdog, off-main-thread reads, recall, SOS + 3 contacts, routines + spoken medicine
+  reminders, briefing, object help + camera "tap here" glow, TV navigation, IRCTC Tatkal guide, expert mode, perf panel,
+  lock-screen handling, Indic \p{M} regex fix. Stress test (2 rounds): no crash, no ANR, service stayed bound.
+  **Field logging**: on-phone log from 14:00 (`scripts/pull-logs.sh`), laptop capture (`scripts/capture-logs.sh`).

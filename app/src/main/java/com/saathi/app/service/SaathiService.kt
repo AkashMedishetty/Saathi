@@ -48,6 +48,8 @@ class SaathiService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Memory.init(this)
+        com.saathi.app.DebugLog.init(this)
+        com.saathi.app.DebugLog.i("service", "connected")
         speaker = Speaker(this)
         val o = Overlay(
             this,
@@ -112,6 +114,7 @@ class SaathiService : AccessibilityService() {
         super.onTrimMemory(level)
         if (level >= TRIM_MEMORY_RUNNING_LOW) {
             Log.i(TAG, "trim memory $level → unloading models")
+            com.saathi.app.DebugLog.i("memory", "trim $level → models unloaded")
             com.saathi.app.llm.LlmManager.unload()
             com.saathi.app.llm.VisionBrain.unload()
         }
@@ -133,6 +136,7 @@ class SaathiService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        com.saathi.app.DebugLog.i("service", "destroyed")
         if (instance === this) instance = null
         debugReceiver?.let { runCatching { unregisterReceiver(it) } }
         overlay?.detach()
@@ -191,6 +195,7 @@ class SaathiService : AccessibilityService() {
                     "stop" -> guide.stop()
                     "aura" -> overlay?.setAura(i.getBooleanExtra("on", true))
                     "dump" -> dumpTree()
+                    "log_from" -> com.saathi.app.DebugLog.setFrom(this@SaathiService, i.getLongExtra("ms", 0L))
                     "ask" -> openAsk(i.getBooleanExtra("listen", false))
                     "routine" -> com.saathi.app.guide.Routines.all(this@SaathiService).firstOrNull()?.let { guide.routineDue(it) }
                     "scam_sms" -> com.saathi.app.guide.MessageScam.check("Dear customer your SBI KYC is pending, account will be blocked today. Update now bit.ly/kyc-sbi")

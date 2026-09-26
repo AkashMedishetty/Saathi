@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Memory.init(this)
+        com.saathi.app.DebugLog.init(this)
         scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false; setBackgroundColor(C.PAPER) }
         setContentView(scroll)
         probe(intent)

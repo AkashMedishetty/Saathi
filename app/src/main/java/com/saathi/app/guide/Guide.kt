@@ -125,6 +125,7 @@ class Guide(
         hideJob?.cancel()
         stopAuto()
         Log.i(TAG, "goal: $goalText (auto=$autoMode)")
+        com.saathi.app.DebugLog.i("goal", "\"$goalText\" lang=$lang auto=$autoMode locked=${svc.isLocked()}")
         if (IntentRouter.isSos(goalText)) { sos(); return }
         Routines.parse(goalText)?.let { (h, m, g) -> addRoutine(h, m, g); return }
         if (IntentRouter.isRecall(goalText)) { recall(goalText); return }
@@ -338,6 +339,7 @@ class Guide(
         val learned = f?.steps?.mapNotNull { Memory.learnedLabel(screen.pkg, it.key) }.orEmpty()
         replan = false
         val d = try { Planner.decide(f?.llmGoal ?: g, screen, history, lang, learned, allowLlm = !lowPower) } finally { thinking = false; overlay.setAura(false) }
+        com.saathi.app.DebugLog.i("plan", "goal=\"${f?.llmGoal ?: g}\" pkg=${screen.pkg} llm=${d.fromLlm} target=${d.targetId?.let { screen.byId(it)?.label?.take(50) }} done=${d.done} noAct=${d.noAct} lowPower=$lowPower")
         if (goal == null) return
         if (settling() > 0 || readScreen()?.signature != screen.signature) {
             lastSig = 0; schedule(200, force = true); return // the screen moved while we thought: look again
@@ -399,6 +401,7 @@ class Guide(
     }
 
     private fun show(t: Target, practiced: Boolean = false) {
+        hideJob?.cancel()
         current = t
         delayedGlow?.cancel()
         val newKey = t.key != lastSpokenKey
@@ -408,6 +411,7 @@ class Guide(
             delayedGlow = scope.launch { delay(3500); if (current?.key == t.key) overlay.highlight(t.el?.bounds, false) }
         } else overlay.highlight(t.el?.bounds, t.warn)
         if (newKey) lastProgress = SystemClock.uptimeMillis()
+        if (newKey) com.saathi.app.DebugLog.i("show", "key=${t.key} el=\"${t.el?.label?.take(60)}\" role=${t.el?.role} bounds=${t.el?.bounds?.toShortString()} warn=${t.warn} final=${t.final} noAct=${t.noAct} auto=$auto text=\"${t.text.take(120)}\" pkg=${taskPkgs.firstOrNull()}")
         val mode = when {
             auto && !t.warn && !t.noAct && (t.el != null || t.scroll) && !t.final -> Overlay.Mode.AUTO
             t.warn -> Overlay.Mode.WARN
@@ -440,6 +444,7 @@ class Guide(
     }
 
     private fun stopAuto() {
+        if (auto) com.saathi.app.DebugLog.i("auto", "stopped at key=${current?.key}")
         auto = false; awaitingConfirm = false
         autoJob?.cancel()
         current?.let { if (active && it.el != null) overlay.showCard(it.text, if (it.noAct) Overlay.Mode.INFO else Overlay.Mode.STEP, targetCenterY = it.el.bounds.centerY(), progress = it.progress) }
@@ -470,6 +475,7 @@ class Guide(
     }
 
     private fun askConfirm(t: Target) {
+        com.saathi.app.DebugLog.i("auto", "confirm before \"${t.el?.title}\"")
         awaitingConfirm = true
         val label = t.el?.title?.take(30) ?: ""
         val q = say("Shall I press “$label”?", "क्या मैं “$label” दबाऊँ?", "“$label” నొక్కనా?").pick(lang)
@@ -486,6 +492,7 @@ class Guide(
 
     private fun pause() {
         if (paused) return
+        com.saathi.app.DebugLog.i("pause", "left task apps $taskPkgs")
         paused = true
         delayedGlow?.cancel()
         overlay.highlight(null, false)
@@ -536,6 +543,7 @@ class Guide(
 
     private fun act(t: Target, fresh: Screen?, el: UiElement?) {
         lastOwnAction = SystemClock.uptimeMillis()
+        com.saathi.app.DebugLog.i("act", "key=${t.key} target=\"${el?.label?.take(60)}\" role=${el?.role} auto=$auto fill=${t.fill != null}")
         if (el == null) {
             // A scroll hint: "Do it" scrolls for them.
             fresh?.scrollable()?.node?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
@@ -583,6 +591,7 @@ class Guide(
     }
 
     private fun finish(text: String) {
+        com.saathi.app.DebugLog.i("finish", "\"${text.take(120)}\" goal=\"$goal\"")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
         goal = null; flow = null; current = null; paused = false; taskPkgs.clear()
         delayedGlow?.cancel()
@@ -596,6 +605,7 @@ class Guide(
     }
 
     fun stop() {
+        if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
         goal = null; flow = null; paused = false; taskPkgs.clear()
         delayedGlow?.cancel()
@@ -649,10 +659,12 @@ class Guide(
      * "bank officer on the line" fraud. Full stop card, spoken, before they type anything.
      */
     fun callAlarm(appLabel: String) {
+        com.saathi.app.DebugLog.i("alert", "on-call alarm for $appLabel")
         lang = Prefs.lang(svc)
         val t = say("Is someone on the phone telling you to open $appLabel? Hang up now. Banks and police never ask you to open apps or share an OTP on a call.",
             "क्या फ़ोन पर कोई आपसे $appLabel खुलवा रहा है? अभी फ़ोन काटिए। बैंक और पुलिस कभी फ़ोन पर ऐप खुलवाते या OTP नहीं माँगते।",
             "ఫోన్‌లో ఎవరైనా $appLabel తెరవమంటున్నారా? వెంటనే ఫోన్ పెట్టేయండి. బ్యాంకులు, పోలీసులు ఎప్పుడూ ఫోన్‌లో యాప్ తెరవమని లేదా OTP అడగరు.").pick(lang)
+        hideJob?.cancel()
         current = Target(null, t, "call_alarm", warn = true)
         overlay.highlight(null, false)
         overlay.showCard(t, Overlay.Mode.ALARM)
@@ -662,9 +674,11 @@ class Guide(
 
     /** An incoming message looks like a scam: say so before they act on it. */
     fun messageAlert(sender: String, app: String, hit: MessageScam.Hit) {
+        com.saathi.app.DebugLog.i("alert", "message scam ${hit.id} from $app")
         lang = Prefs.lang(svc)
         val head = say("A message from $sender on $app.", "$app पर $sender का संदेश।", "$app లో $sender నుంచి సందేశం.").pick(lang)
         val t = "$head ${hit.say.pick(lang)}"
+        hideJob?.cancel()
         current = Target(null, t, "msg_${hit.id}", warn = true)
         overlay.highlight(null, false)
         overlay.showCard(t, Overlay.Mode.WARN)
@@ -799,7 +813,10 @@ class Guide(
     /** A routine's time came: offer it (card + voice). Reminders just remind; tasks run on "Yes". */
     fun routineDue(r: Routines.Routine) {
         lang = Prefs.lang(svc)
+        Log.i(TAG, "routine due: ${r.goal} (active=$active)")
+        com.saathi.app.DebugLog.i("routine", "due ${r.goal} kind=${r.kind} active=$active")
         if (active) return // don't interrupt a task in progress
+        hideJob?.cancel() // a previous "done" card must not hide this offer
         val med = r.kind == "remind"
         val what = r.goal.replace(Regex("(?i)^remind me (to )?"), "")
         val q = if (med) say("It's ${r.time}. Time to $what.", "${r.time} बज गए। $what का समय।", "${r.time} అయింది. $what సమయం.").pick(lang)
