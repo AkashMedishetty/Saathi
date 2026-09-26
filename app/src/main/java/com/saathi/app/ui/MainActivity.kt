@@ -191,7 +191,7 @@ class MainActivity : AppCompatActivity() {
         Memory.task()?.let { t -> add(row(R.drawable.ic_history, say("Continue", "जारी रखें", "కొనసాగించండి").pick(lang), "“${t.goal}”") { run(t.goal) }) }
         Memory.reminders().takeLast(3).forEach { r -> add(row(R.drawable.ic_notifications_active, r, null, C.SAFFRON) { }) }
         com.saathi.app.guide.Routines.all(this).take(3).forEach { r ->
-            add(row(if (r.kind == "remind") R.drawable.ic_medication else R.drawable.ic_alarm, r.goal, say("Every day · ${r.time}", "हर दिन · ${r.time}", "ప్రతి రోజు · ${r.time}").pick(lang), C.SAFFRON) { run(r.goal) })
+            add(row(if (r.kind == "remind") R.drawable.ic_medication else R.drawable.ic_alarm, r.goal, (if (r.kind == "note" || r.kind == "once") say("Once · ${r.time}", "एक बार · ${r.time}", "ఒకసారి · ${r.time}") else say("Every day · ${r.time}", "हर दिन · ${r.time}", "ప్రతి రోజు · ${r.time}")).pick(lang), C.SAFFRON) { run(r.goal) })
         }
         Memory.topPeople(2).forEach { p ->
             add(row(R.drawable.ic_videocam, say("Video call $p", "$p को वीडियो कॉल", "$p కి వీడియో కాల్").pick(lang), null) {

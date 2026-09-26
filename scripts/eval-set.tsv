@@ -83,7 +83,7 @@ video call amma	EN	intent:video_call|skill:wa_video
 tell my son I will be late	EN	intent:message|skill:wa_message|family
 share this picture with my wife	EN	intent:photo|skill:wa_photo
 alarm for 5 30 in the morning	EN	intent:alarm|skill:alarm
-remind me to call the doctor at 4 pm	EN	skill:medicine|intent:alarm|skill:alarm|routine
+remind me to call the doctor at 4 pm	EN	reminder
 directions to the railway station	EN	intent:directions|skill:maps
 the phone is too quiet	EN	skill:volume|intent:setting
 make the screen brighter	EN	skill:brightness|intent:setting
@@ -98,3 +98,9 @@ book a bus ticket to vijayawada	EN	coach
 watch cricket on tv	EN	coach
 thank you	EN	question
 what should I eat for diabetes	EN	question
+# one-time reminders + plain open (added 18:30)
+remind me in 10 minutes to switch off the gas	EN	reminder
+रात 9 बजे दवा की याद दिलाना	HI	reminder
+YouTube खोलो	HI	app:com.google.android.youtube
+open camera	EN	app:com.android.camera|skill:camera|app:com.vivo.camera
+వాట్సాప్ తెరువు	TE	app:com.whatsapp

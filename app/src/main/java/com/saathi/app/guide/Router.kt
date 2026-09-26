@@ -21,7 +21,12 @@ object AppLauncher {
 
     fun isInstalled(ctx: Context, pkg: String) = ctx.packageManager.getLaunchIntentForPackage(pkg) != null
     fun first(ctx: Context, vararg pkgs: String): String? = pkgs.firstOrNull { isInstalled(ctx, it) }
-    fun launch(ctx: Context, pkg: String?): Intent? = pkg?.let { ctx.packageManager.getLaunchIntentForPackage(it) }
+    fun launch(ctx: Context, pkg: String?): Intent? = pkg?.let {
+        // "Open Settings": the Settings search page, never the home page (trap #45).
+        if (it == "com.android.settings") Intent("android.settings.APP_SEARCH_SETTINGS").takeIf { i -> i.resolveActivity(ctx.packageManager) != null }
+            ?: Intent(android.provider.Settings.ACTION_DISPLAY_SETTINGS)
+        else ctx.packageManager.getLaunchIntentForPackage(it)
+    }
     fun labelOf(ctx: Context, pkg: String): String = installed(ctx).firstOrNull { it.pkg == pkg }?.label ?: pkg
 
     /** "open calculator" / "how do I use Instagram" → that app; the longest label match wins. */
@@ -195,6 +200,16 @@ object IntentRouter {
         "dark_mode", "read_this", "scan_medicine", "home", "tv", "internet", "backup", "phone_school", "wa_photo")
 
     fun isScamCheck(goal: String) = goal.lowercase().has("scam", "fraud", "is this safe", "धोखा", "ठगी", "మోసం")
+
+    /** Just "open WhatsApp" / "YouTube खोलो" / "కెమెరా తెరువు": open that app, no model, no guiding loop. */
+    fun openOnly(ctx: Context, goal: String): Flow? {
+        val g = goal.trim().trimEnd('.', '!', '?')
+        if (!Regex("(?i)^(please\\s+)?(open|start|launch)\\s+(the\\s+|my\\s+)?[\\p{L}\\p{M}\\p{N} .&'-]{2,30}?(\\s+app)?(\\s+please)?$|^[\\p{L}\\p{M}\\p{N} .&'-]{2,30}\\s+(खोलो|खोल दो|चालू करो|తెరువు|ఓపెన్ చేయి|ఓపెన్ చెయ్యి)$").matches(g)) return null
+        val app = AppLauncher.findInGoal(ctx, g) ?: return null
+        return Flow("app_${app.pkg}", { c -> AppLauncher.launch(c, app.pkg) }, emptyList(), { _ -> true },
+            say("${app.label} is open.", "${app.label} खुल गया।", "${app.label} తెరుచుకుంది."),
+            say("Opening ${app.label}.", "${app.label} खोल रहा हूँ।", "${app.label} తెరుస్తున్నాను."), llmGoal = goal)
+    }
 
     fun route(ctx: Context, goal: String): Flow? {
         val slots = SlotExtractor.from(goal, Prefs.family(ctx))

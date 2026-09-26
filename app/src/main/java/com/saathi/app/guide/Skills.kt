@@ -400,7 +400,7 @@ object Skills {
             listOf("backup", "back up", "save my photos", "backup whatsapp", "whatsapp backup", "chat backup", "बैकअप", "బ్యాకప్"),
             s3("Back up my WhatsApp chats", "WhatsApp का बैकअप लो", "WhatsApp బ్యాకప్ తీసుకో")) { _, s ->
             if (Regex("(?i)whatsapp|chat|व्हाट्सएप|వాట్సాప్").containsMatchIn(s.raw)) whatsappBackup()
-            else Flow("backup", { Intent(Settings.ACTION_SETTINGS) },
+            else Flow("backup", { Intent(Settings.ACTION_SYNC_SETTINGS) }, // never the Settings home page (trap #45)
                 listOf(
                     Step("google", rx("^Google$", "^Accounts", "^Cloud", "^Backup and restore", "^Back up and restore", "^System$"), s3("Tap Google.", "'Google' दबाइए।", "'Google' నొక్కండి."),
                         tip = s3("Backup keeps a copy of your photos and contacts safe, even if the phone is lost.", "बैकअप से फ़ोन खोने पर भी फोटो और नंबर सुरक्षित रहते हैं।", "ఫోన్ పోయినా బ్యాకప్ వల్ల ఫోటోలు, నంబర్లు సురక్షితం.")),

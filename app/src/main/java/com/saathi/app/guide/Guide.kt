@@ -158,6 +158,8 @@ class Guide(
         com.saathi.app.DebugLog.i("goal", "\"$goalText\" lang=$lang auto=$autoMode locked=${svc.isLocked()}")
         if (IntentRouter.isSos(goalText)) { sos(); return }
         Routines.parse(goalText)?.let { (h, m, g) -> addRoutine(h, m, g); return }
+        java.util.Calendar.getInstance().let { Reminders.parse(goalText, it.get(java.util.Calendar.HOUR_OF_DAY), it.get(java.util.Calendar.MINUTE)) }
+            ?.let { (due, _, what) -> addReminder(due / 60, due % 60, what); return }
         if (IntentRouter.isRecall(goalText)) { recall(goalText); return }
         IntentRouter.systemAction(goalText)?.let { action ->
             stop()
@@ -194,6 +196,7 @@ class Guide(
         }
         // Something a family member taught me? That path wins: it's known to work on this very phone.
         Recipes.find(svc, goalText)?.let { r -> begin(goalText, Recipes.toFlow(r), autoMode); return }
+        IntentRouter.openOnly(svc, goalText)?.let { begin(goalText, it, autoMode); return }
         if (LlmManager.isReady || com.saathi.app.llm.ModelLocator.fast(svc) != null) {
             // Let the model pick the helper (NPU ≈0.25 s); keywords only if it can't.
             overlay.showCard(say("Okay…", "ठीक है…", "సరే…").pick(lang), Overlay.Mode.THINKING)
@@ -214,7 +217,8 @@ class Guide(
 
     /** Returns true if the intent was handled (deep link / answer / skill); false → fall back to routing + agent. */
     private suspend fun handleIntent(goalText: String, u: Understand.Intent2, autoMode: Boolean): Boolean {
-        val q = u.query ?: goalText
+        // The model sometimes keeps the verb ("play hanuman chalisa"): search for the thing itself.
+        val q = (u.query ?: goalText).replace(Regex("(?i)^\\s*(please\\s+)?(play|watch|put on|search( for)?|find|show me|listen to|open)\\s+"), "").ifBlank { u.query ?: goalText }
         fun skill(id: String, g: String = goalText) = Skills.byId(id)?.build(svc, SlotExtractor.from(g, Prefs.family(svc)))
         // A precise, reliable skill (torch, font, storage, selfie…) beats the model's broad category.
         Skills.match(goalText)?.takeIf { it.id in IntentRouter.DIRECT && u.intent !in setOf("weather", "lookup", "question", "watch", "music") }?.let {
@@ -1248,6 +1252,7 @@ class Guide(
     suspend fun decideOnly(g: String): String {
         if (IntentRouter.isSos(g)) return "sos"
         if (Routines.parse(g) != null) return "routine"
+        if (Reminders.parse(g, 12, 0) != null) return "reminder"
         if (IntentRouter.isRecall(g)) return "recall"
         if (IntentRouter.systemAction(g) != null) return "system"
         if (Coach.wants(g, null)) return "coach"
@@ -1261,6 +1266,7 @@ class Guide(
         if (IntentRouter.isQuestion(svc, g)) return "question"
         if (Regex("(?i)^\\s*(remember|note down|याद रखो|याद रखना|గుర్తుంచుకో)\\b").containsMatchIn(g)) return "note"
         Recipes.find(svc, g)?.let { return "recipe" }
+        IntentRouter.openOnly(svc, g)?.let { return "app:${it.id.removePrefix("app_")}" }
         if (LlmManager.isReady || com.saathi.app.llm.FastBrain.isReady || com.saathi.app.llm.ModelLocator.fast(svc) != null) {
             val u = Understand.parse(g, svc)
             if (u != null) {
@@ -1340,15 +1346,26 @@ class Guide(
         finish(say("Done. Every day at ${r.time} I'll ask: “$g”.", "ठीक है। रोज़ ${r.time} बजे मैं पूछूँगा: “$g”।", "సరే. ప్రతి రోజు ${r.time}కి అడుగుతాను: “$g”.").pick(lang))
     }
 
+    /** A one-time reminder: Saathi keeps it itself (offline) and speaks it at the time. */
+    private fun addReminder(h: Int, m: Int, what: String) {
+        val r = Routines.add(svc, h, m, what, "note")
+        com.saathi.app.DebugLog.i("reminder", "set ${r.time} \"$what\"")
+        finish(say("Okay. At ${r.time} I'll remind you: “$what”.", "ठीक है। ${r.time} बजे याद दिलाऊँगा: “$what”।", "సరే. ${r.time}కి గుర్తు చేస్తాను: “$what”.").pick(lang))
+    }
+
     /** A routine's time came: offer it (card + voice). Reminders just remind; tasks run on "Yes". */
     fun routineDue(r: Routines.Routine) {
         lang = Prefs.lang(svc)
         Log.i(TAG, "routine due: ${r.goal} (active=$active)")
         com.saathi.app.DebugLog.i("routine", "due ${r.goal} kind=${r.kind} active=$active")
-        if (active) return // don't interrupt a task in progress
+        val med = r.kind == "remind" || r.kind == "note"
+        val what = r.goal.replace(Regex("(?i)^remind me (to )?"), "").replace(Regex("(?i)\\bmy\\b"), "your")
+        if (active) {
+            // Don't break the task in progress, but a reminder is never dropped: say it out loud.
+            if (med) { speaker.say(say("Reminder: $what.", "याद दिलाना: $what।", "గుర్తు: $what.").pick(lang), lang); svc.buzz(); svc.buzz() }
+            return
+        }
         hideJob?.cancel() // a previous "done" card must not hide this offer
-        val med = r.kind == "remind"
-        val what = r.goal.replace(Regex("(?i)^remind me (to )?"), "")
         val q = if (med) say("It's ${r.time}. Time to $what.", "${r.time} बज गए। $what का समय।", "${r.time} అయింది. $what సమయం.").pick(lang)
             else say("It's ${r.time}. Shall I help you “${r.goal}”?", "${r.time} बज गए। क्या मैं “${r.goal}” में मदद करूँ?", "${r.time} అయింది. “${r.goal}” చేయనా?").pick(lang)
         current = Target(null, q, "routine_${r.id}")

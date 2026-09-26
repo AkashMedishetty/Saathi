@@ -19,7 +19,7 @@ SEL=("$@"); mkdir -p shots
 
 reset; goal "hello"; wait_for "\[answer\]" 20 >/dev/null   # warm the brain
 
-if want 1; then reset; goal "अक्षर बड़े करो" HI;  check "R1 letters bigger (HI) → glow on Display" "\[show\] key=display" 15; fi
+if want 1; then reset; goal "अक्षर बड़े करो" HI;  check "R1 letters bigger (HI) → glow on font size" "\[show\] key=(display|font|slider)" 15; fi
 if want 2; then reset; goal "will it rain today" TE; check "R2 rain (TE) → answer read from results" "\[lookup\] q=.* a=\"[^\"]{8,}" 40; fi
 if want 3; then reset; goal "play guntur karam movie on my tv"
   check "R3a TV coach → looks it up" "\[coach\] step 1: Call\(tool=LOOKUP" 25

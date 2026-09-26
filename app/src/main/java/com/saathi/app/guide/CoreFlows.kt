@@ -10,11 +10,13 @@ object CoreFlows {
 
     fun fontSize() = Flow(
         id = "font_size",
-        launch = { Intent(Settings.ACTION_SETTINGS) },
+        // Straight to Display: Saathi never opens the Settings home page itself (trap #45: the phone's protection
+        // disables an accessibility app that launches the Settings home page, the way malware self-grants permissions).
+        launch = { Intent(Settings.ACTION_DISPLAY_SETTINGS) },
         start = say(
-            "Let's make the letters bigger. I've opened Settings for you.",
-            "चलिए अक्षर बड़े करते हैं। मैंने आपके लिए Settings खोल दी है।",
-            "అక్షరాలు పెద్దవి చేద్దాం. మీ కోసం Settings తెరిచాను."),
+            "Let's make the letters bigger. I've opened the screen settings for you.",
+            "चलिए अक्षर बड़े करते हैं। मैंने स्क्रीन की Settings खोल दी है।",
+            "అక్షరాలు పెద్దవి చేద్దాం. స్క్రీన్ Settings తెరిచాను."),
         steps = listOf(
             Step("display", rx("^Display$", "^Display ?[,&] ?brightness", "^Display and brightness", "^Screen$"), say(
                 "Tap Display.", "'Display' को दबाइए।", "'Display' నొక్కండి."),
