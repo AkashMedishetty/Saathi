@@ -43,8 +43,15 @@ object SlotExtractor {
         // Hindi/Telugu: "बेटे को वीडियो कॉल करो", "కొడుకుకి వీడియో కాల్ చేయి"
         if (contact == null) contact = FAMILY.firstOrNull { f -> f.any { it.code > 0x900 } && g.contains(f) }
         contact = contact?.let { c -> if (c.lowercase() in FAMILY) family.ifBlank { c } else c }
-        val text = Regex("\"([^\"]+)\"").find(g)?.groupValues?.get(1)
+        val text = (Regex("\"([^\"]+)\"").find(g)?.groupValues?.get(1)
             ?: Regex("(?:saying|that says|say|tell (?:him|her|them)|:)\\s+(.+)$", IC).find(g)?.groupValues?.get(1)
+            // Hindi: "बेटे को मैसेज भेजो कि मैं घर पहुँच गया" (field: Hindi/Telugu messages were typed empty).
+            ?: Regex("(?:मैसेज|संदेश|message)\\s+(?:भेजो|भेज दो|करो|लिखो)\\s+(?:कि\\s+)?(.+)$", IC).find(g)?.groupValues?.get(1)
+            ?: Regex("\\sकि\\s+(.+)$").find(g)?.groupValues?.get(1)
+            // Telugu puts the words first: "అబ్బాయికి నేను ఇంటికి చేరుకున్నాను అని మెసేజ్ పంపు".
+            ?: Regex("(?:కి|కు)\\s+(.+?)\\s+అని(?:\\s|$)").find(g)?.groupValues?.get(1)
+            ?: Regex("^(.+?)\\s+అని\\s+(?:మెసేజ్|సందేశం|చెప్పు|పంపు|రాయి)").find(g)?.groupValues?.get(1)
+        )?.replace(Regex("^(?:మెసేజ్|సందేశం)\\s+(?:పంపు|పంపించు|చేయి)\\s+"), "")?.trim()?.ifBlank { null }
         val query = Regex("(?:search(?: for)?|play|watch|find|show me|put on|learn)\\s+(.+?)(?:\\s+(?:on|in)\\s+(?:youtube|netflix|prime(?: video)?|hotstar|jiohotstar|zee5|sony ?liv)\\b.*)?$", IC)
             .find(g)?.groupValues?.get(1)?.trim()
         val place = Regex("(?:navigate|directions|route|way|take me|go|drive)\\s+(?:to\\s+)?(?:the\\s+)?(.+)$", IC).find(g)?.groupValues?.get(1)?.trim()
