@@ -78,6 +78,8 @@ class Guide(
     private var lastFrontPkg: String? = null
     /** Practice run ("Let me try"): Saathi names the step but waits; the glow comes only if they're stuck. */
     private var practice = false
+    /** Repeating the same steps / too many steps → offer another way (policy.LoopGuard; one per task). */
+    private var loop: com.saathi.app.policy.LoopGuard? = null
     /** Online form walk-through (forms.OnlineForm): one field at a time, in screen order. */
     private var form: List<com.saathi.app.forms.FillPlan>? = null
     private var formI = 0
@@ -356,6 +358,7 @@ class Guide(
         }
 
         goal = goalText
+        loop = com.saathi.app.policy.LoopGuard()
         flow = f
         history.clear(); current = null; lastSpokenKey = null; lastSig = 0; warnedSig = 0; lastStepIdx = -1; scrolls = 0
         taskPkgs.clear(); paused = false; pendingLearn = null; adoptPkg = true
@@ -559,6 +562,23 @@ class Guide(
         }
         // 4. No task → nothing more.
         val g = goal ?: return
+        loop?.let { lg ->
+            lg.onScreen(ScreenKinds.fingerprint(screen).toString(), screen.pkg)
+            when (val v = lg.verdict()) {
+                is com.saathi.app.policy.LoopVerdict.Repeating, is com.saathi.app.policy.LoopVerdict.OutOfSteps -> {
+                    val say = when (v) { is com.saathi.app.policy.LoopVerdict.Repeating -> v.say; is com.saathi.app.policy.LoopVerdict.OutOfSteps -> v.say; else -> null }!!
+                    com.saathi.app.DebugLog.i("loop", "${v::class.simpleName} in ${screen.pkg}")
+                    loop = null; stopAuto()
+                    val t = say.pick(lang)
+                    current = Target(null, t, "loop"); lastSpokenKey = current?.key
+                    overlay.highlight(null, false)
+                    overlay.showCard(t, Overlay.Mode.LOST)
+                    speaker.say(t, lang)
+                    return
+                }
+                else -> {}
+            }
+        }
         val f = flow
         // 5. Keyboard, notification shade, permission dialog: just wait.
         if (isTransient(screen.pkg)) return
@@ -998,6 +1018,7 @@ class Guide(
                 stopAuto(); speaker.say(verdict.say.pick(lang), lang)
                 com.saathi.app.DebugLog.i("policy", "blocked: ${t.key}"); return }
         }
+        loop?.onAction(t.key)
         com.saathi.app.DebugLog.i("act", "key=${t.key} target=\"${el?.label?.take(60)}\" role=${el?.role} auto=$auto fill=${t.fill != null}")
         if (el == null && t.fill == "__BACK__") {
             svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
@@ -1089,7 +1110,7 @@ class Guide(
         goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
-        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false; needApp = null; learn = false; form = null
+        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false; needApp = null; learn = false; form = null; loop = null
         delayedGlow?.cancel()
         Memory.clearTask()
         clearVisuals()
