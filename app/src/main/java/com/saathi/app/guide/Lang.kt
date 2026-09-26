@@ -64,6 +64,9 @@ object Prefs {
     fun setCardPos(c: Context, v: String) = sp(c).edit().putString("card_pos", v).apply()
     fun setupDone(c: Context): Boolean = sp(c).getBoolean("setup_done", false)
     fun setSetupDone(c: Context) = sp(c).edit().putBoolean("setup_done", true).apply()
+    /** Press TV buttons through the phone's IR blaster (off: coach the person to press their own remote). */
+    fun tvIr(c: Context): Boolean = sp(c).getBoolean("tv_ir", false)
+    fun setTvIr(c: Context, v: Boolean) = sp(c).edit().putBoolean("tv_ir", v).apply()
     fun teach(c: Context): Boolean = sp(c).getBoolean("teach", true)
     fun setTeach(c: Context, v: Boolean) = sp(c).edit().putBoolean("teach", v).apply()
     fun dim(c: Context): Boolean = sp(c).getBoolean("dim", true)

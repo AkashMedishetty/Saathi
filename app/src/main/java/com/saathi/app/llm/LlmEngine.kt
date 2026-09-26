@@ -187,6 +187,7 @@ object ModelLocator {
         if (n.endsWith(".litertlm")) s += 1_000
         if ("sm8850" in n) s += 5_000
         if ("gemma-4" in n || "gemma4" in n) s += 600
+        if ("e4b" in n) s += 200 // the bigger Gemma 4 thinks better (coach, planning); E2B is the fallback
         if ("gemma" in n) s += 300
         if ("1.5b" in n || "1b" in n) s += 100
         return s * 100 + f.length() / 100_000_000

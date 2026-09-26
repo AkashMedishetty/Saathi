@@ -128,6 +128,7 @@ class SettingsActivity : AppCompatActivity() {
         look.add(toggle(s("Warn me about scams", "धोखे से सावधान करें", "మోసాల గురించి హెచ్చరించండి"), Prefs.scamGuard(this)) { Prefs.setScamGuard(this, it) }, 6)
         look.add(toggle(s("Expert mode: do whole tasks for me (still asks before anything important)", "एक्सपर्ट मोड: पूरा काम कर दो (ज़रूरी चीज़ से पहले पूछे)",
             "నిపుణ మోడ్: పూర్తి పని చేయి (ముఖ్యమైనదానికి ముందు అడుగుతుంది)"), Prefs.expert(this)) { Prefs.setExpert(this, it) }, 6)
+        look.add(toggle(s("Press TV buttons through this phone (IR blaster)", "इस फ़ोन से टीवी बटन दबाएँ (IR)", "ఈ ఫోన్ నుంచే టీవీ బటన్లు నొక్కు (IR)"), Prefs.tvIr(this)) { Prefs.setTvIr(this, it) }, 6)
         look.add(toggle(s("Explain why (teaching tips)", "क्यों, यह भी समझाएँ", "ఎందుకో కూడా చెప్పండి"), Prefs.teach(this)) { Prefs.setTeach(this, it) }, 6)
         look.add(primaryButton(s("Let Saathi read my messages aloud", "Saathi मेरे संदेश पढ़कर सुनाए", "Saathi నా సందేశాలు చదివి వినిపించాలి"), R.drawable.ic_sms, bg = C.PAPER_2, fg = C.PINE_DEEP) {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))

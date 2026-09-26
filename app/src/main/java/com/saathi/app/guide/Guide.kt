@@ -1144,12 +1144,14 @@ class Guide(
         when (c.tool) {
             "ASK" -> {
                 coachWaiting = true
+                TvSession.screen?.let { it.instruct(c.arg, question = true); return }
                 current = Target(null, c.arg, "coach_ask_$coachSteps"); lastSpokenKey = current?.key
                 overlay.showCard(c.arg, Overlay.Mode.INFO)
                 speaker.say(c.arg, lang)
                 Conversation.remember(coachGoal ?: "", c.arg)
             }
             "SAY" -> {
+                TvSession.screen?.let { it.instruct(c.arg, question = false); delay(2200L + c.arg.length * 45L); coachTurn("Result: you said it."); return }
                 current = Target(null, c.arg, "coach_say_$coachSteps")
                 overlay.showCard(c.arg, Overlay.Mode.INFO)
                 speaker.say(c.arg, lang)
@@ -1170,17 +1172,29 @@ class Guide(
                 coachTurn(if (ok) "Result: opened ${app!!.label}" else "Result: ${c.arg} is not installed on this phone")
             }
             "TV" -> {
-                val key = runCatching { IrRemote.Key.valueOf(c.arg.uppercase().replace(' ', '_').replace("VOLUME", "VOL")) }.getOrNull() ?: IrRemote.keyFor(c.arg)
-                val ok = key != null && IrRemote.send(svc, key)
-                val name = key?.name?.replace('_', ' ')?.lowercase() ?: c.arg.lowercase()
-                // Say it out loud too: someone holding a normal remote (or playing the TV simulator) can follow along.
-                val t = if (ok) say("Pressing “$name” on your TV.", "टीवी पर “$name” दबा रहा हूँ।", "టీవీలో “$name” నొక్కుతున్నాను.").pick(lang)
-                    else say("Press “$name” on your TV remote.", "रिमोट पर “$name” दबाइए।", "రిమోట్‌లో “$name” నొక్కండి.").pick(lang)
-                overlay.showCard(t, Overlay.Mode.INFO); speaker.say(t, lang)
-                delay(if (ok) 1800 else 4000)
-                coachTurn(if (ok) "Result: pressed ${key!!.name}" else "Result: asked them to press $name on their own remote")
+                val keyName = c.arg.uppercase().replace(' ', '_').replace("VOLUME", "VOL").substringBefore('_').let { if (it == "VOL") c.arg.uppercase().replace(' ', '_').replace("VOLUME", "VOL") else it }
+                if (Prefs.tvIr(svc) && IrRemote.available(svc)) {
+                    // Optional: the phone presses it (IR). Then look again.
+                    val key = runCatching { IrRemote.Key.valueOf(keyName) }.getOrNull() ?: IrRemote.keyFor(c.arg)
+                    val ok = key != null && IrRemote.send(svc, key)
+                    delay(1500)
+                    TvSession.screen?.lookNow() ?: coachTurn(if (ok) "Result: pressed ${key!!.name}" else "Result: could not press that")
+                    return
+                }
+                // Default: coach THEM to press it on their own remote; the camera then checks what happened.
+                val t = say("Press ${TvSession.buttonWords(keyName, Lang.EN)} on your remote.", "रिमोट पर ${TvSession.buttonWords(keyName, Lang.HI)} दबाइए।",
+                    "రిమోట్‌లో ${TvSession.buttonWords(keyName, Lang.TE)} నొక్కండి.").pick(lang)
+                lastTvKey = keyName
+                val scr = TvSession.screen
+                if (scr != null) scr.instruct(t, question = false)
+                else {
+                    runCatching { svc.startActivity(Intent(svc, com.saathi.app.ui.ReadActivity::class.java)
+                        .putExtra(com.saathi.app.ui.ReadActivity.EXTRA_MODE, com.saathi.app.ui.ReadActivity.MODE_TV)
+                        .putExtra("instruction", t).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }
             }
             "LOOK_TV" -> {
+                TvSession.screen?.let { it.lookNow(); return }
                 val t = say("Point the camera at your TV screen and tap the big button.", "कैमरा टीवी की स्क्रीन की ओर करके बड़ा बटन दबाइए।", "కెమెరాను టీవీ స్క్రీన్ వైపు పెట్టి పెద్ద బటన్ నొక్కండి.").pick(lang)
                 speaker.say(t, lang); overlay.hideCard()
                 runCatching { svc.startActivity(Intent(svc, com.saathi.app.ui.ReadActivity::class.java)
@@ -1199,13 +1213,18 @@ class Guide(
         }
     }
 
-    /** The camera looked at the TV (FastVLM on the NPU): tell the coach what it saw. */
+    private var lastTvKey: String? = null
+
+    /** The camera looked at the TV (FastVLM on the NPU): tell the coach what it saw (after which button). */
     fun coachObserve(description: String) {
         if (coachGoal == null) return
-        coachTurn("Result: the TV shows: ${description.take(600)}")
+        val after = lastTvKey?.let { "after they pressed $it, " } ?: ""
+        lastTvKey = null
+        coachTurn("Result: ${after}the TV shows: ${description.take(600)}")
     }
 
     private fun endCoach(text: String?) {
+        TvSession.screen?.end(text ?: say("Okay, stopping.", "ठीक है, रुकते हैं।", "సరే, ఆపుతున్నాను.").pick(lang))
         coachGoal = null; coachWaiting = false
         LlmManager.endChat()
         if (text != null) finish(text) else stop()

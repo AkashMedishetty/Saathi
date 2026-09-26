@@ -58,7 +58,7 @@ import kotlin.coroutines.resume
  * Offline OCR (Latin + Devanagari) reads the words; FastVLM on the Snapdragon NPU explains the photo;
  * Gemma (text) or a template takes over if needed. Nothing leaves the phone.
  */
-class ReadActivity : AppCompatActivity() {
+class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen {
     companion object { const val EXTRA_MODE = "mode"; const val MODE_READ = "read"; const val MODE_MEDICINE = "medicine"; const val MODE_OBJECT = "object"; const val MODE_TV = "tv" }
 
     private lateinit var preview: PreviewView
@@ -84,9 +84,14 @@ class ReadActivity : AppCompatActivity() {
         speaker = Speaker(this)
         Memory.init(this)
         build()
+        if (mode == MODE_TV) {
+            com.saathi.app.guide.TvSession.screen = this
+            val first = intent.getStringExtra("instruction")
+            sheet.post { if (first != null) instruct(first, false) else { showSheet(s("Keep the camera on your TV. I'm looking…", "कैमरा टीवी पर रखिए। मैं देख रहा हूँ…", "కెమెరాను టీవీ మీద ఉంచండి. చూస్తున్నాను…")); autoLook(2500) } }
+        }
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera()
         else requestPermissions(arrayOf(Manifest.permission.CAMERA), 4)
-        val hello = if (mode == MODE_TV) s("Point the camera at your TV screen and tap the big button.", "कैमरा टीवी की स्क्रीन की ओर करके बड़ा बटन दबाइए।", "కెమెరాను టీవీ స్క్రీన్ వైపు పెట్టి పెద్ద బటన్ నొక్కండి.")
+        val hello = if (mode == MODE_TV) s("Point the camera at your TV and keep it there. I'll tell you which button to press on your remote.", "कैमरा टीवी की स्क्रीन की ओर करके बड़ा बटन दबाइए।", "కెమెరాను టీవీ స్క్రీన్ వైపు పెట్టి పెద్ద బటన్ నొక్కండి.")
         else if (mode == MODE_OBJECT) s("Point the camera at the machine or thing, and tap the big button. I'll tell you how to use it.",
             "मशीन या चीज़ की ओर कैमरा कीजिए और बड़ा बटन दबाइए। मैं बताऊँगा कैसे चलाते हैं।",
             "యంత్రం లేదా వస్తువు వైపు కెమెరా పెట్టి పెద్ద బటన్ నొక్కండి. ఎలా వాడాలో చెబుతాను.")
@@ -99,7 +104,43 @@ class ReadActivity : AppCompatActivity() {
 
     override fun onResume() { super.onResume(); SaathiService.ownUiOpen = true }
     override fun onPause() { SaathiService.ownUiOpen = false; super.onPause() }
-    override fun onDestroy() { speaker?.shutdown(); super.onDestroy() }
+    override fun onDestroy() {
+        if (com.saathi.app.guide.TvSession.screen === this) com.saathi.app.guide.TvSession.screen = null
+        handler.removeCallbacksAndMessages(null)
+        speaker?.shutdown(); super.onDestroy()
+    }
+
+    // ── Live TV coaching: instruction → they press it on their remote → look again → next instruction ──
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private fun autoLook(ms: Long) { handler.removeCallbacksAndMessages(null); handler.postDelayed({ lookNow() }, ms) }
+
+    override fun instruct(text: String, question: Boolean) = runOnUiThread {
+        handler.removeCallbacksAndMessages(null)
+        busy = false
+        val actions = if (question) listOf(
+            primaryButton(s("Yes", "हाँ", "అవును"), R.drawable.ic_check) { answer("yes") },
+            primaryButton(s("No", "नहीं", "కాదు"), R.drawable.ic_close, bg = C.PAPER_2, fg = C.PINE_DEEP) { answer("no") },
+            stopCoach())
+        else listOf(
+            primaryButton(s("Done, I pressed it", "दबा दिया", "నొక్కాను"), R.drawable.ic_check) { lookNow() },
+            stopCoach())
+        showSheet(text, if (question) "" else s("I'll look at the TV again in a moment.", "मैं थोड़ी देर में टीवी फिर देखूँगा।", "కొద్దిసేపట్లో టీవీని మళ్ళీ చూస్తాను."), actions)
+        speaker?.say(text, lang)
+        if (!question) autoLook(7000L + text.length * 40L)
+    }
+
+    override fun lookNow() = runOnUiThread { handler.removeCallbacksAndMessages(null); if (!busy) snap() }
+
+    override fun end(text: String) = runOnUiThread {
+        handler.removeCallbacksAndMessages(null)
+        showSheet(text, "", listOf(close()))
+        speaker?.say(text, lang)
+        handler.postDelayed({ finish() }, 6000)
+    }
+
+    private fun answer(a: String) { showSheet(s("Okay…", "ठीक है…", "సరే…")); SaathiService.instance?.guide?.handleUtterance(a) }
+    private fun stopCoach() = body(s("Stop", "रोकें", "ఆపండి"), 18f, C.PINE_DEEP, bold = true).apply { gravity = Gravity.CENTER; minHeight = dp(52) }
+        .pressable { SaathiService.instance?.guide?.handleUtterance("stop"); finish() }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -277,8 +318,9 @@ class ReadActivity : AppCompatActivity() {
                     "which item looks highlighted or selected, and the visible tiles, buttons or rows in order from left to right, top to bottom.")
                 ?: plain.lines().take(12).joinToString("; ").ifBlank { "nothing readable" }
             aura.setAura(false)
+            frozen.clear(); controls.visibility = View.VISIBLE
+            showSheet(s("Got it. Thinking about the next step…", "समझ गया। अगला क़दम सोच रहा हूँ…", "అర్థమైంది. తర్వాతి అడుగు ఆలోచిస్తున్నాను…"))
             SaathiService.instance?.guide?.coachObserve(d)
-            finish()
             return
         }
         // A medicine strip in "Read" mode? Treat it as one (the person shouldn't have to pick the right mode).
