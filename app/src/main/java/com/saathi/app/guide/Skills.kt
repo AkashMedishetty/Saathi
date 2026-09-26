@@ -409,7 +409,7 @@ object Skills {
         },
 
         Skill("backup", Cat.FIX, R.drawable.ic_cloud_upload, s3("Back up my phone", "फ़ोन का बैकअप लें", "ఫోన్ బ్యాకప్ తీసుకోండి"),
-            listOf("backup", "back up", "save my photos", "backup whatsapp", "whatsapp backup", "chat backup", "बैकअप", "బ్యాకప్"),
+            listOf("backup", "back up", "save my photos", "backup whatsapp", "whatsapp backup", "chat backup", "back up my whatsapp", "backup my whatsapp", "whatsapp chats backup", "बैकअप", "బ్యాకప్"),
             s3("Back up my WhatsApp chats", "WhatsApp का बैकअप लो", "WhatsApp బ్యాకప్ తీసుకో")) { _, s ->
             if (Regex("(?i)whatsapp|chat|व्हाट्सएप|వాట్సాప్").containsMatchIn(s.raw)) whatsappBackup()
             else Flow("backup", { Intent(Settings.ACTION_SYNC_SETTINGS) }, // never the Settings home page (trap #45)

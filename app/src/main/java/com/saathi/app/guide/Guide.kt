@@ -258,6 +258,9 @@ class Guide(
             "question" -> { respond(goalText); return true }
             "weather", "lookup" -> { lookUp(goalText, if (u.intent == "weather" && !q.contains("weather", true)) "$q weather" else q); return true }
             "watch", "music" -> {
+                // "Turn the TV volume up" / "TV channel 5": the TV-remote skill, not watching something.
+                if (Regex("(?i)\\b(volume|channel|remote|mute|turn (the )?tv (on|off))\\b|आवाज़|चैनल|వాల్యూమ్|ఛానెల్").containsMatchIn(goalText))
+                    Skills.byId("tv")?.let { begin(goalText, skill("tv"), autoMode); return true }
                 if (u.device == "tv") { watchOnTv("$q on tv ${u.app ?: ""}"); return true }
                 // A named streaming app (Hotstar, Prime, Netflix, Zee5, SonyLIV…) or any other named app wins over the YouTube
                 // default (field test: "Watch my serial on Hotstar" → the model missed Hotstar → YouTube).
