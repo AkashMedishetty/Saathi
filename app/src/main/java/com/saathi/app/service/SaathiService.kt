@@ -57,6 +57,9 @@ class SaathiService : AccessibilityService() {
         com.saathi.app.DebugLog.i("service", "connected")
         com.saathi.app.llm.Brain.connect(this) // the models live in the ":brain" process
         A11yGuard.start(this)
+        // Know which pictures are documents before anyone asks (on the phone, ids + kinds only; see DocFinder).
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            kotlinx.coroutines.delay(20_000); runCatching { com.saathi.app.guide.DocFinder.index(this@SaathiService) } }
         speaker = Speaker(this)
         val o = Overlay(
             this,

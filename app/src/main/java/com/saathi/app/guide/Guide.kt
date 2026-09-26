@@ -299,6 +299,8 @@ class Guide(
         Routines.parse(goalText)?.let { (h, m, g) -> addRoutine(h, m, g); return }
         java.util.Calendar.getInstance().let { Reminders.parse(goalText, it.get(java.util.Calendar.HOUR_OF_DAY), it.get(java.util.Calendar.MINUTE)) }
             ?.let { (due, _, what) -> addReminder(due / 60, due % 60, what); return }
+        // "Where is my Aadhaar card?" / "send my Aadhaar to my son": their own pictures, read on the phone.
+        DocFinder.ask(goalText)?.let { a -> docRequest(goalText, a); return }
         if (IntentRouter.isRecall(goalText)) { recall(goalText); return }
         IntentRouter.systemAction(goalText)?.let { action ->
             stop()
@@ -1279,7 +1281,8 @@ class Guide(
         speaker.say(text, lang)
         svc.buzz()
         hideJob?.cancel()
-        hideJob = scope.launch { delay(20_000); if (goal == null) overlay.hideCard() }
+        // A choice waits longer (older people read slowly; field: "Send to Akash" was gone before the tap).
+        hideJob = scope.launch { delay(if (first != null) 60_000 else 20_000); if (goal == null) overlay.hideCard() }
     }
 
     fun stop() {
@@ -1668,8 +1671,14 @@ class Guide(
     }.onFailure { com.saathi.app.DebugLog.w("share", "screenshot lookup failed", it) }.getOrNull()
 
     /** "…send it to my son on WhatsApp": WhatsApp's own picker with the screenshot → tap him → the green arrow (theirs). */
-    private fun screenshotShareFlow(g: String): Flow? {
-        val uri = latestScreenshot() ?: return null
+    private fun screenshotShareFlow(g: String): Flow? = latestScreenshot()?.let { uri ->
+        shareImageFlow(uri, g, say("It's your screenshot. Tap the green send arrow.", "यह आपका स्क्रीनशॉट है। हरा भेजें वाला तीर दबाइए।",
+            "ఇది మీ స్క్రీన్‌షాట్. ఆకుపచ్చ పంపు బాణం నొక్కండి."), say("Here's your screenshot in WhatsApp.", "WhatsApp में आपका स्क्रीनशॉट तैयार है।",
+            "WhatsApp లో మీ స్క్రీన్‌షాట్ సిద్ధంగా ఉంది."))
+    }
+
+    /** A picture on the phone → WhatsApp's own Send-to picker → tap them → the green arrow (always their tap). */
+    private fun shareImageFlow(uri: android.net.Uri, g: String, sendSay: Say, startSay: Say): Flow? {
         val wa = AppLauncher.first(svc, "com.whatsapp", "com.whatsapp.w4b") ?: return null
         val who = SlotExtractor.from(g, Prefs.family(svc)).contact ?: Prefs.family(svc).ifBlank { null }
         com.saathi.app.DebugLog.i("share", "screenshot → $wa for ${who ?: "(they choose)"}")
@@ -1678,15 +1687,50 @@ class Guide(
         val steps = listOfNotNull(
             who?.let { w -> Step("pick", listOf(Regex("(?i)^" + Regex.escape(w))), say("Tap $w in the list.", "सूची में $w को दबाइए।", "జాబితాలో $w ని నొక్కండి."),
                 unlessVisible = listOf(Regex("(?i)^(Add a caption|Add caption)"))) },
-            Step("send", listOf(Regex("(?i)^Send$")), say("It's your screenshot. Tap the green send arrow.", "यह आपका स्क्रीनशॉट है। हरा भेजें वाला तीर दबाइए।",
-                "ఇది మీ స్క్రీన్‌షాట్. ఆకుపచ్చ పంపు బాణం నొక్కండి.")),
+            Step("send", listOf(Regex("(?i)^Send$")), sendSay),
         )
         return Flow("share_screenshot", { send }, steps,
             { sc -> sc.pkg.startsWith("com.whatsapp") && sc.elements.any { Regex("(?i)^(Message|Type a message)$").matches(it.label) } &&
                 sc.elements.none { Regex("(?i)^(Add a caption|Add caption)").containsMatchIn(it.label) } },
             say("Sent! It's in the chat now.", "भेज दिया! अब चैट में है।", "పంపారు! ఇప్పుడు చాట్‌లో ఉంది."),
-            say("Here's your screenshot in WhatsApp.", "WhatsApp में आपका स्क्रीनशॉट तैयार है।", "WhatsApp లో మీ స్క్రీన్‌షాట్ సిద్ధంగా ఉంది."),
-            llmGoal = g, appPkg = wa)
+            startSay, llmGoal = g, appPkg = wa)
+    }
+
+    /** "Show / send my Aadhaar card": find the picture (reading the phone's photos if needed), then Photos or WhatsApp. */
+    private fun docRequest(g: String, a: DocFinder.Ask) {
+        lang = Prefs.lang(svc)
+        stop()
+        val name = a.kind.name(lang)
+        overlay.showCard(say("Looking through your photos for your $name…", "आपकी फ़ोटो में $name ढूँढ रहा हूँ…", "మీ ఫోటోల్లో $name వెతుకుతున్నాను…").pick(lang), Overlay.Mode.THINKING)
+        scope.launch {
+            var uri = DocFinder.find(svc, a.kind)
+            if (uri == null) { DocFinder.index(svc); uri = DocFinder.find(svc, a.kind) }
+            com.saathi.app.DebugLog.i("docs", "${a.kind} → ${uri != null} send=${a.send}")
+            if (uri == null) {
+                finish(say("I couldn't find a photo of your $name on this phone. If you have it on paper, I can read it with the camera.",
+                    "इस फ़ोन में आपके $name की फ़ोटो नहीं मिली। काग़ज़ पर है तो मैं कैमरे से पढ़ सकता हूँ।",
+                    "ఈ ఫోన్‌లో మీ $name ఫోటో దొరకలేదు. కాగితం మీద ఉంటే కెమెరాతో చదవగలను.").pick(lang))
+                return@launch
+            }
+            val secret = a.kind == DocFinder.Kind.AADHAAR || a.kind == DocFinder.Kind.PAN || a.kind == DocFinder.Kind.VOTER || a.kind == DocFinder.Kind.LICENCE
+            val careful = if (secret) say("This is your $name. Send it only to family you trust. ", "यह आपका $name है। सिर्फ़ भरोसेमंद परिवार को भेजिए। ",
+                "ఇది మీ $name. నమ్మకమైన కుటుంబానికి మాత్రమే పంపండి. ") else say("This is your $name. ", "यह आपका $name है। ", "ఇది మీ $name. ")
+            val sendIt = {
+                shareImageFlow(uri, g, careful.mapValues { (l, v) -> v + say("Tap the green send arrow.", "हरा भेजें वाला तीर दबाइए।", "ఆకుపచ్చ పంపు బాణం నొక్కండి.")[l] },
+                    say("Here's your $name in WhatsApp.", "WhatsApp में आपका $name तैयार है।", "WhatsApp లో మీ $name సిద్ధంగా ఉంది."))?.let { begin(g, it, false) }
+            }
+            if (a.send) { overlay.hideCard(); sendIt(); return@launch }
+            // Show it in their own gallery app (Google Photos), then offer the natural next step.
+            val photos = AppLauncher.first(svc, "com.google.android.apps.photos")
+            val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "image/*")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { photos?.let { setPackage(it) } }
+            runCatching { svc.startActivity(view) }.onFailure { runCatching { svc.startActivity(view.setPackage(null)) } }
+            delay(1200)
+            val fam = Prefs.family(svc).ifBlank { null }
+            val text = say("Here's your $name. It's in your photos, so you can find it here any time.", "यह रहा आपका $name। यह आपकी फ़ोटो में है, कभी भी यहाँ देख सकते हैं।",
+                "ఇదిగో మీ $name. ఇది మీ ఫోటోల్లో ఉంది, ఎప్పుడైనా ఇక్కడ చూడవచ్చు.").pick(lang)
+            finish(text, fam?.let { f -> Triple(say("Send to $f", "$f को भेजें", "$f కి పంపు").pick(lang), com.saathi.app.R.drawable.ic_send, { sendIt(); Unit }) })
+        }
     }
 
     /** "take a screenshot and send it to Akash on WhatsApp" → "send this photo to Akash on WhatsApp"; null = nothing after. */
