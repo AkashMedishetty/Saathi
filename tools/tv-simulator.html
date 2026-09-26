@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TV Simulator</title>
+<style>
+  :root { --bg:#0b0f14; --tile:#1a2230; --ink:#e9eef5; --muted:#8a96a8; --focus:#ffffff; }
+  * { box-sizing:border-box; margin:0; }
+  html,body { height:100%; background:var(--bg); color:var(--ink); font-family: -apple-system, "Segoe UI", Roboto, sans-serif; overflow:hidden; }
+  .screen { position:absolute; inset:0; padding:5vh 6vw; display:none; }
+  .screen.on { display:block; }
+  .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:5vh; }
+  .brand { font-size:3vw; font-weight:700; letter-spacing:.02em; }
+  .clock { font-size:2.2vw; color:var(--muted); }
+  h2 { font-size:2.4vw; font-weight:600; margin:3vh 0 2vh; color:var(--muted); }
+  .row { display:flex; gap:2vw; }
+  .tile { width:17vw; height:11vw; border-radius:1.2vw; background:var(--tile); display:flex; align-items:center; justify-content:center;
+          font-size:2.4vw; font-weight:700; border:.4vw solid transparent; transition:transform .12s, border-color .12s; }
+  .tile.focus { border-color:var(--focus); transform:scale(1.08); box-shadow:0 0 3vw rgba(255,255,255,.25); }
+  .netflix { color:#e50914; } .youtube { color:#ff3b30; } .prime { color:#1fa6ff; } .hotstar { color:#7b5cff; } .settings { color:#c8d0dc; }
+  .search { width:60vw; height:7vw; border-radius:1vw; background:var(--tile); display:flex; align-items:center; padding:0 2vw; font-size:2.4vw; border:.4vw solid transparent; }
+  .search.focus { border-color:var(--focus); }
+  .keys { display:grid; grid-template-columns:repeat(9, 5.5vw); gap:.8vw; margin-top:3vh; }
+  .key { height:5.5vw; border-radius:.8vw; background:var(--tile); display:flex; align-items:center; justify-content:center; font-size:2.2vw; border:.35vw solid transparent; }
+  .key.focus { border-color:var(--focus); background:#2a3548; }
+  .poster { width:22vw; height:13vw; border-radius:1.2vw; background:linear-gradient(135deg,#3b1d12,#b8641f); display:flex; align-items:flex-end; padding:1vw;
+            font-size:2vw; font-weight:800; border:.4vw solid transparent; }
+  .poster.focus { border-color:var(--focus); transform:scale(1.06); }
+  .playing { display:flex; align-items:center; justify-content:center; font-size:4vw; height:80vh; }
+  .hint { position:absolute; bottom:2vh; right:3vw; color:#566; font-size:1.2vw; }
+</style>
+</head>
+<body>
+<!-- A stand-in smart TV for testing Saathi's TV coach at the venue. Keys: arrows, Enter=OK, Esc/Backspace=Back, H=Home. -->
+<section class="screen on" id="home">
+  <div class="top"><div class="brand">Smart TV</div><div class="clock" id="clock"></div></div>
+  <h2>Apps</h2>
+  <div class="row" data-grid="home">
+    <div class="tile youtube">YouTube</div>
+    <div class="tile netflix">NETFLIX</div>
+    <div class="tile prime">prime video</div>
+    <div class="tile hotstar">JioHotstar</div>
+    <div class="tile settings">Settings</div>
+  </div>
+</section>
+
+<section class="screen" id="netflix">
+  <div class="top"><div class="brand netflix">NETFLIX</div><div class="clock">Profiles · Home</div></div>
+  <div class="row" data-grid="nfnav">
+    <div class="search">🔍 Search</div>
+  </div>
+  <h2>Trending Now</h2>
+  <div class="row" data-grid="nfrow">
+    <div class="poster">Pushpa 2</div><div class="poster">RRR</div><div class="poster">Kalki 2898 AD</div>
+  </div>
+</section>
+
+<section class="screen" id="search">
+  <div class="top"><div class="brand netflix">NETFLIX · Search</div></div>
+  <div class="search" id="query">🔍 <span id="q"></span></div>
+  <div class="keys" id="keys"></div>
+  <h2>Results</h2>
+  <div class="row" id="results"></div>
+</section>
+
+<section class="screen" id="play"><div class="playing">▶ Now playing: <b>&nbsp;Guntur Kaaram</b></div></section>
+<div class="hint">arrows · Enter = OK · Esc = Back · H = Home</div>
+
+<script>
+const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ".split("").concat(["⌫"]);
+const keysEl = document.getElementById("keys");
+letters.forEach(l => { const d = document.createElement("div"); d.className = "key"; d.textContent = l === " " ? "␣" : l; keysEl.appendChild(d); });
+let screen = "home", q = "", focusIdx = 0, zone = 0;
+const clock = () => document.getElementById("clock").textContent = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+setInterval(clock, 10000); clock();
+
+function zones() {
+  if (screen === "home") return [[...document.querySelectorAll("#home .tile")]];
+  if (screen === "netflix") return [[...document.querySelectorAll("#netflix .search")], [...document.querySelectorAll("#netflix .poster")]];
+  if (screen === "search") return [[...document.querySelectorAll("#keys .key")], [...document.querySelectorAll("#results .poster")]];
+  return [[]];
+}
+function paint() {
+  document.querySelectorAll(".focus").forEach(e => e.classList.remove("focus"));
+  const z = zones()[zone] || []; if (z[focusIdx]) z[focusIdx].classList.add("focus");
+}
+function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); screen = id; zone = 0; focusIdx = 0; paint(); }
+function results() {
+  const r = document.getElementById("results"); r.innerHTML = "";
+  if (q.replace(/ /g, "").length >= 3 && "GUNTURKAARAM".startsWith(q.replace(/ /g, "").slice(0, 12)) || q.startsWith("GUN")) {
+    const p = document.createElement("div"); p.className = "poster"; p.textContent = "Guntur Kaaram"; r.appendChild(p);
+  }
+  document.getElementById("q").textContent = q;
+}
+document.addEventListener("keydown", e => {
+  const zs = zones(), z = zs[zone] || [];
+  const cols = screen === "search" && zone === 0 ? 9 : z.length;
+  switch (e.key) {
+    case "ArrowRight": focusIdx = Math.min(focusIdx + 1, z.length - 1); break;
+    case "ArrowLeft": focusIdx = Math.max(focusIdx - 1, 0); break;
+    case "ArrowDown":
+      if (screen === "search" && zone === 0 && focusIdx + cols < z.length) focusIdx += cols;
+      else if (zone + 1 < zs.length && zs[zone + 1].length) { zone++; focusIdx = 0; } break;
+    case "ArrowUp":
+      if (screen === "search" && zone === 0 && focusIdx - cols >= 0) focusIdx -= cols;
+      else if (zone > 0) { zone--; focusIdx = 0; } break;
+    case "Enter":
+      if (screen === "home") { const t = z[focusIdx].textContent; if (t === "NETFLIX") show("netflix"); }
+      else if (screen === "netflix") { if (zone === 0) { show("search"); results(); } }
+      else if (screen === "search") {
+        if (zone === 0) { const l = letters[focusIdx]; q = l === "⌫" ? q.slice(0, -1) : q + l; results(); }
+        else show("play");
+      } break;
+    case "Escape": case "Backspace": show(screen === "search" ? "netflix" : "home"); break;
+    case "h": case "H": show("home"); break;
+    default: return;
+  }
+  e.preventDefault(); paint();
+});
+paint();
+</script>
+</body>
+</html>

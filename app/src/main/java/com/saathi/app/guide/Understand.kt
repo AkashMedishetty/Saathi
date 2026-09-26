@@ -24,10 +24,10 @@ object Understand {
     private const val SYSTEM =
         "You understand what an elderly person in India wants from their phone, even when they say it vaguely or in Hindi/Telugu. " +
         "Reply with exactly one line of key=value pairs separated by ' | ', nothing else.\n" +
-        "Keys: INTENT (one of: weather, lookup, watch, music, call, video_call, message, photo, alarm, reminder, directions, open_app, setting, question, tv, other), " +
+        "Keys: INTENT (one of: book, weather, lookup, watch, music, call, video_call, message, photo, alarm, reminder, directions, open_app, setting, question, tv, other), " +
         "QUERY (what to search/play/find, in English, short), APP (app name if they said one, else none), DEVICE (tv or phone), PERSON (who, if any, else none).\n" +
         "lookup = live facts from the internet (cricket score, gold price, news, train status, prices). question = general knowledge or advice. " +
-        "watch = a movie/serial/video. music = songs/bhajans.\n" +
+        "watch = a movie/serial/video. music = songs/bhajans. book = booking tickets (train, bus, flight, movie).\n" +
         "Examples:\n" +
         "will it rain today -> INTENT=weather | QUERY=will it rain today | APP=none | DEVICE=phone | PERSON=none\n" +
         "guntur karam movie on tv -> INTENT=watch | QUERY=Guntur Kaaram | APP=none | DEVICE=tv | PERSON=none\n" +

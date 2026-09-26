@@ -127,6 +127,11 @@ class Guide(
             if (rest.length > 3) { start(rest, autoMode = true); return }
             if (active) { enableAuto(); return }
         }
+        // The coach asked them something: their reply continues the coaching conversation.
+        if (coachWaiting && coachGoal != null) {
+            if (Regex("(?i)^(stop|cancel|bas|बस|रुको|ఆపు)\\b").containsMatchIn(text.trim())) { endCoach(null); return }
+            coachWaiting = false; coachTurn("Person: ${text.trim()}"); return
+        }
         // Saathi asked them something ("Which contact?"): their reply refines the same task, it isn't a new one.
         if (active && current?.key?.startsWith("ask_") == true) {
             goal = "$goal (${text.trim()})"
@@ -161,7 +166,7 @@ class Guide(
             return
         }
         if (IntentRouter.isQuestion(svc, goalText)) { answerQuestion(goalText); return }
-        if (tvWatchIntent(goalText)) { watchOnTv(goalText); return }
+        if (Coach.wants(goalText, null)) { startCoach(goalText); return }
         if (IntentRouter.isScamCheck(goalText)) { scamCheck(); return }
         if (IntentRouter.isFamilyHelp(goalText)) { askFamily(); return }
         if (IntentRouter.isReadMessages(goalText)) { readMessages(); return }
@@ -209,6 +214,7 @@ class Guide(
     private suspend fun handleIntent(goalText: String, u: Understand.Intent2, autoMode: Boolean): Boolean {
         val q = u.query ?: goalText
         fun skill(id: String, g: String = goalText) = Skills.byId(id)?.build(svc, SlotExtractor.from(g, Prefs.family(svc)))
+        if (Coach.wants(goalText, u.intent) || (u.intent == "watch" && u.device == "tv")) { startCoach(goalText); return true }
         when (u.intent) {
             "question" -> { answerQuestion(goalText); return true }
             "weather", "lookup" -> { lookUp(goalText, if (u.intent == "weather" && !q.contains("weather", true)) "$q weather" else q); return true }
@@ -1094,6 +1100,116 @@ class Guide(
     /** Apps that tasks legitimately hop into: sign-in, browser tabs, the store, pickers, camera, payment sheets. */
     private fun helperApp(pkg: String) = Regex("gms|chrome|browser|vending|appstore|packageinstaller|documentsui|photopicker|camera|gallery|" +
         "providers|webview|auth|login|paisa|phonepe|paytm|npci|contacts|dialer|incallui|telecom").containsMatchIn(pkg)
+
+    // ───────────────────────── the coach (think → check → ask → guide) ─────────────────────────
+
+    private var coachGoal: String? = null
+    private var coachKey = ""
+    private var coachSteps = 0
+    @Volatile private var coachWaiting = false
+
+    fun startCoach(g: String) {
+        stop()
+        lang = Prefs.lang(svc)
+        coachGoal = g; coachKey = "coach_${SystemClock.uptimeMillis()}"; coachSteps = 0; coachWaiting = false
+        LlmManager.endChat()
+        com.saathi.app.DebugLog.i("coach", "start \"$g\"")
+        if (!LlmManager.isReady) LlmManager.loadAsync(svc)
+        val facts = Memory.relevant(g)
+        coachTurn(Coach.EXAMPLE + (if (facts.isNotEmpty()) "What you know about them: ${facts.joinToString("; ")}\n" else "") +
+            "Their language: ${lang.label}. Say things in simple ${if (lang == Lang.EN) "English" else lang.label}.\n" +
+            "Now the real task: $g")
+    }
+
+    private fun coachTurn(msg: String) {
+        val g = coachGoal ?: return
+        scope.launch {
+            if (++coachSteps > 18) { endCoach(say("Let's stop here for now. Ask me again any time.", "अभी यहीं रुकते हैं। कभी भी फिर पूछिए।", "ఇప్పుడు ఇక్కడ ఆపుదాం. ఎప్పుడైనా మళ్ళీ అడగండి.").pick(lang)); return@launch }
+            overlay.setAura(true)
+            overlay.showCard(say("Thinking…", "सोच रहा हूँ…", "ఆలోచిస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
+            var waited = 0
+            while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && waited < 12000) { delay(200); waited += 200 }
+            LlmManager.lastChatKey = coachKey
+            val raw = LlmManager.chat(coachKey, Coach.SYSTEM, msg)
+            overlay.setAura(false)
+            val call = raw?.let { Coach.parse(it) }
+            com.saathi.app.DebugLog.i("coach", "step $coachSteps: ${call ?: raw?.take(120)}")
+            if (coachGoal != g) return@launch
+            if (call == null) { endCoach(say("I'm not sure how to go on. Tell me again in other words?", "आगे कैसे करें, पक्का नहीं। दूसरे शब्दों में फिर बताइए?", "ఎలా కొనసాగించాలో తెలియట్లేదు. వేరే మాటల్లో చెప్పండి?").pick(lang)); return@launch }
+            runTool(call)
+        }
+    }
+
+    private suspend fun runTool(c: Coach.Call) {
+        when (c.tool) {
+            "ASK" -> {
+                coachWaiting = true
+                current = Target(null, c.arg, "coach_ask_$coachSteps"); lastSpokenKey = current?.key
+                overlay.showCard(c.arg, Overlay.Mode.INFO)
+                speaker.say(c.arg, lang)
+                Conversation.remember(coachGoal ?: "", c.arg)
+            }
+            "SAY" -> {
+                current = Target(null, c.arg, "coach_say_$coachSteps")
+                overlay.showCard(c.arg, Overlay.Mode.INFO)
+                speaker.say(c.arg, lang)
+                delay(2200L + c.arg.length * 45L)
+                coachTurn("Result: you said it.")
+            }
+            "LOOKUP" -> {
+                overlay.showCard(say("Checking…", "पता कर रहा हूँ…", "తెలుసుకుంటున్నాను…").pick(lang), Overlay.Mode.THINKING)
+                runCatching { svc.startActivity(Understand.webSearch(svc, c.arg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                var text = ""
+                for (i in 0 until 8) { delay(800); val sc = readScreen() ?: continue; if (sc.pkg != svc.packageName && sc.allText.length > 200) { text = sc.allText; if (i >= 2) break } }
+                coachTurn("Result: " + (text.take(1400).ifBlank { "no results could be read" }))
+            }
+            "OPEN" -> {
+                val app = AppLauncher.findInGoal(svc, "open ${c.arg}")
+                val ok = app != null && runCatching { svc.startActivity(AppLauncher.launch(svc, app.pkg)!!.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+                delay(1500)
+                coachTurn(if (ok) "Result: opened ${app!!.label}" else "Result: ${c.arg} is not installed on this phone")
+            }
+            "TV" -> {
+                val key = runCatching { IrRemote.Key.valueOf(c.arg.uppercase().replace(' ', '_').replace("VOLUME", "VOL")) }.getOrNull() ?: IrRemote.keyFor(c.arg)
+                val ok = key != null && IrRemote.send(svc, key)
+                val name = key?.name?.replace('_', ' ')?.lowercase() ?: c.arg.lowercase()
+                // Say it out loud too: someone holding a normal remote (or playing the TV simulator) can follow along.
+                val t = if (ok) say("Pressing “$name” on your TV.", "टीवी पर “$name” दबा रहा हूँ।", "టీవీలో “$name” నొక్కుతున్నాను.").pick(lang)
+                    else say("Press “$name” on your TV remote.", "रिमोट पर “$name” दबाइए।", "రిమోట్‌లో “$name” నొక్కండి.").pick(lang)
+                overlay.showCard(t, Overlay.Mode.INFO); speaker.say(t, lang)
+                delay(if (ok) 1800 else 4000)
+                coachTurn(if (ok) "Result: pressed ${key!!.name}" else "Result: asked them to press $name on their own remote")
+            }
+            "LOOK_TV" -> {
+                val t = say("Point the camera at your TV screen and tap the big button.", "कैमरा टीवी की स्क्रीन की ओर करके बड़ा बटन दबाइए।", "కెమెరాను టీవీ స్క్రీన్ వైపు పెట్టి పెద్ద బటన్ నొక్కండి.").pick(lang)
+                speaker.say(t, lang); overlay.hideCard()
+                runCatching { svc.startActivity(Intent(svc, com.saathi.app.ui.ReadActivity::class.java)
+                    .putExtra(com.saathi.app.ui.ReadActivity.EXTRA_MODE, com.saathi.app.ui.ReadActivity.MODE_TV).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                // coachObserve() continues when the photo is understood
+            }
+            "GUIDE" -> {
+                val g = c.arg.ifBlank { coachGoal ?: "" }
+                com.saathi.app.DebugLog.i("coach", "handoff to guide: $g")
+                coachGoal = null; coachWaiting = false
+                val u = Understand.parse(g)
+                if (u == null || !handleIntent(g, u, false)) begin(g, IntentRouter.route(svc, g), false)
+            }
+            "DONE" -> endCoach(c.arg.ifBlank { say("Done!", "हो गया!", "అయింది!").pick(lang) })
+            else -> endCoach(null)
+        }
+    }
+
+    /** The camera looked at the TV (FastVLM on the NPU): tell the coach what it saw. */
+    fun coachObserve(description: String) {
+        if (coachGoal == null) return
+        coachTurn("Result: the TV shows: ${description.take(600)}")
+    }
+
+    private fun endCoach(text: String?) {
+        coachGoal = null; coachWaiting = false
+        LlmManager.endChat()
+        if (text != null) finish(text) else stop()
+    }
 
     // ───────────────────────── watchdog ─────────────────────────
 

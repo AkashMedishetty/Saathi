@@ -59,7 +59,7 @@ import kotlin.coroutines.resume
  * Gemma (text) or a template takes over if needed. Nothing leaves the phone.
  */
 class ReadActivity : AppCompatActivity() {
-    companion object { const val EXTRA_MODE = "mode"; const val MODE_READ = "read"; const val MODE_MEDICINE = "medicine"; const val MODE_OBJECT = "object" }
+    companion object { const val EXTRA_MODE = "mode"; const val MODE_READ = "read"; const val MODE_MEDICINE = "medicine"; const val MODE_OBJECT = "object"; const val MODE_TV = "tv" }
 
     private lateinit var preview: PreviewView
     private lateinit var aura: GlowView
@@ -86,7 +86,8 @@ class ReadActivity : AppCompatActivity() {
         build()
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera()
         else requestPermissions(arrayOf(Manifest.permission.CAMERA), 4)
-        val hello = if (mode == MODE_OBJECT) s("Point the camera at the machine or thing, and tap the big button. I'll tell you how to use it.",
+        val hello = if (mode == MODE_TV) s("Point the camera at your TV screen and tap the big button.", "कैमरा टीवी की स्क्रीन की ओर करके बड़ा बटन दबाइए।", "కెమెరాను టీవీ స్క్రీన్ వైపు పెట్టి పెద్ద బటన్ నొక్కండి.")
+        else if (mode == MODE_OBJECT) s("Point the camera at the machine or thing, and tap the big button. I'll tell you how to use it.",
             "मशीन या चीज़ की ओर कैमरा कीजिए और बड़ा बटन दबाइए। मैं बताऊँगा कैसे चलाते हैं।",
             "యంత్రం లేదా వస్తువు వైపు కెమెరా పెట్టి పెద్ద బటన్ నొక్కండి. ఎలా వాడాలో చెబుతాను.")
         else if (mode == MODE_MEDICINE) s("Hold the medicine strip flat, name side up, and tap the big button.",
@@ -268,6 +269,18 @@ class ReadActivity : AppCompatActivity() {
             return
         }
 
+        // The coach asked us to look at the TV: describe it (FastVLM on the NPU) and hand it back.
+        if (mode == MODE_TV) {
+            val jpeg = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
+            val d = VisionBrain.describe(applicationContext, jpeg,
+                "This is a photo of a TV screen. For someone using a TV remote, describe: which app or menu is showing, " +
+                    "which item looks highlighted or selected, and the visible tiles, buttons or rows in order from left to right, top to bottom.")
+                ?: plain.lines().take(12).joinToString("; ").ifBlank { "nothing readable" }
+            aura.setAura(false)
+            SaathiService.instance?.guide?.coachObserve(d)
+            finish()
+            return
+        }
         // A medicine strip in "Read" mode? Treat it as one (the person shouldn't have to pick the right mode).
         if (mode == MODE_READ && Regex("(?i)\\b\\d+\\s?mg\\b|tablets?\\s+i\\.?p|\\bcapsules?\\b|\\bI\\.P\\.|\\bRx\\b").containsMatchIn(plain)) mode = MODE_MEDICINE
         if (mode == MODE_MEDICINE) { medicine(lines.map { it.text to (it.boundingBox?.height() ?: 0) }); return }
