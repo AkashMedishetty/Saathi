@@ -78,6 +78,10 @@ class Guide(
     private var lastFrontPkg: String? = null
     /** Practice run ("Let me try"): Saathi names the step but waits; the glow comes only if they're stuck. */
     private var practice = false
+    /** App-map route in progress (maps.AppMaps): known screens, deterministic steps; the planner only if unmapped. */
+    private var mapRoute: com.saathi.app.maps.Route? = null
+    private var mapSlots: Map<String, String> = emptyMap()
+    private var mapStep = -1
     /** Repeating the same steps / too many steps → offer another way (policy.LoopGuard; one per task). */
     private var loop: com.saathi.app.policy.LoopGuard? = null
     /** Online form walk-through (forms.OnlineForm): one field at a time, in screen order. */
@@ -199,6 +203,7 @@ class Guide(
         IntentRouter.cameraRead(goalText)?.let { id -> begin(goalText, Skills.byId(id)?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
         if (IntentRouter.isFormHelp(goalText)) { formHelp(); return }
         IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
+        mapRouteFor(goalText)?.let { r -> beginMap(goalText, r, autoMode); return }
         IntentRouter.phoneHowTo(svc, goalText)?.let { begin(goalText, it, autoMode); return }
         if (IntentRouter.isQuestion(svc, goalText)) { respond(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
@@ -580,6 +585,8 @@ class Guide(
             }
         }
         val f = flow
+        // 4b. App-map route: known screens → the exact next step (Kiro's maps). Unknown screens fall through.
+        mapRoute?.let { r -> if (mapTick(r, screen)) return }
         // 5. Keyboard, notification shade, permission dialog: just wait.
         if (isTransient(screen.pkg)) return
 
@@ -970,6 +977,15 @@ class Guide(
                     "ఇక్కడ మీరే నొక్కండి. Settings మీ వేలినే ఒప్పుకుంటుంది.").pick(lang), lang)
                 return@launch
             }
+            if (t.key.startsWith("map_")) {
+                val r = mapRoute ?: return@launch
+                val live = MapBridge.read(svc.rootInActiveWindow)
+                val d = com.saathi.app.maps.AppMaps.next(r, fresh?.pkg ?: "", live.nodes, maxOf(mapStep, 0), mapSlots)
+                if (d is com.saathi.app.maps.Decision.Glow) {
+                    act(t.copy(fill = d.fill), fresh, MapBridge.uiElement(d.node, live.infoFor(d.node), if (d.node.editable) "input" else "button"))
+                } else { lastSig = 0; schedule(200, force = true) }
+                return@launch
+            }
             val el = t.el?.let { old ->
                 fresh?.elements?.firstOrNull { it.label == old.label && it.role == old.role }
                     ?: run { lastSig = 0; schedule(200, force = true); return@launch }
@@ -1072,7 +1088,7 @@ class Guide(
         val wasPractice = practice
         practice = false
         // A task that teaches something can be practised: same task again, the person leads.
-        val canPractise = g != null && f.steps.size >= 2 && f.launch != null && f.id !in setOf("phone_video", "wa_video", "call")
+        val canPractise = g != null && (f.steps.size >= 2 || f.id.startsWith("map_")) && f.launch != null && f.id !in setOf("phone_video", "wa_video", "call")
         val tryIt = if (canPractise) Triple(say("Let me try", "मैं ख़ुद करूँ", "నేనే చేస్తాను").pick(lang), com.saathi.app.R.drawable.ic_touch_app,
             { practise(g!!, f) }) else null
         val praise = if (wasPractice) say("You did it yourself! ", "आपने ख़ुद कर लिया! ", "మీరే చేశారు! ").pick(lang) else ""
@@ -1083,6 +1099,8 @@ class Guide(
     private fun practise(g: String, f: Flow) {
         practice = true; learn = true
         com.saathi.app.DebugLog.i("practice", "start ${f.id}")
+        if (f.id.startsWith("map_")) com.saathi.app.maps.AppMaps.routeById(f.id.removePrefix("map_"))?.let { r ->
+            mapRoute = r; mapSlots = MapBridge.slots(g, SlotExtractor.from(g, Prefs.family(svc))); mapStep = -1 }
         begin(g, f, autoMode = false)
     }
 
@@ -1110,7 +1128,7 @@ class Guide(
         goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
-        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false; needApp = null; learn = false; form = null; loop = null
+        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false; needApp = null; learn = false; form = null; loop = null; mapRoute = null; mapStep = -1
         delayedGlow?.cancel()
         Memory.clearTask()
         clearVisuals()
@@ -1365,6 +1383,53 @@ class Guide(
         val focus = if (ime != null) svc.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             ?.let { n -> android.graphics.Rect().also { n.getBoundsInScreen(it) } } else null
         overlay.setImeVisible(ime != null, imeTop, focus)
+    }
+
+    /** A mapped route for this request, if its app is on the phone (or it's the Play Store journey). */
+    private fun mapRouteFor(g: String): com.saathi.app.maps.Route? = runCatching {
+        com.saathi.app.maps.AppMaps.route(g)?.takeIf { r -> AppLauncher.isInstalled(svc, r.pkg) }
+    }.getOrNull()
+
+    private fun beginMap(g: String, r: com.saathi.app.maps.Route, autoMode: Boolean) {
+        val map = com.saathi.app.maps.AppMaps.mapOf(r)
+        com.saathi.app.DebugLog.i("map", "route ${r.id} (${map?.name})")
+        mapRoute = r; mapSlots = MapBridge.slots(g, SlotExtractor.from(g, Prefs.family(svc))); mapStep = -1
+        // Reuse the flow machinery for launch / learn-mode / Settings rules; steps come from the map.
+        val f = Flow("map_${r.id}", { c -> AppLauncher.launch(c, r.pkg) }, emptyList(), null,
+            r.doneSay, r.start ?: say("Let's do it together. Watch for the ring.", "साथ में करते हैं। घेरे को देखिए।", "కలిసి చేద్దాం. రింగ్ చూడండి."),
+            teach = true, llmGoal = g, appPkg = r.pkg)
+        begin(g, f, autoMode)
+        r.steps.mapNotNull { it.pkg }.forEach { taskPkgs += it }
+    }
+
+    /** One map decision for this screen. true = handled (shown / waited / done); false = not mapped → planner. */
+    private fun mapTick(r: com.saathi.app.maps.Route, screen: Screen): Boolean {
+        val live = MapBridge.read(svc.rootInActiveWindow)
+        val d = runCatching { com.saathi.app.maps.AppMaps.next(r, screen.pkg, live.nodes, maxOf(mapStep, 0), mapSlots) }.getOrNull() ?: return false
+        when (d) {
+            is com.saathi.app.maps.Decision.Glow -> {
+                if (d.step > mapStep) mapStep = d.step
+                val el = MapBridge.uiElement(d.node, live.infoFor(d.node), if (d.node.editable) "input" else "button")
+                    .copy(bounds = android.graphics.Rect(d.box.l, d.box.t, d.box.r, d.box.b))
+                val teach = Prefs.teach(svc) || learn
+                val text = d.say.pick(lang).let { t -> if (practice) say("Your turn. ", "अब आपकी बारी। ", "ఇప్పుడు మీ వంతు. ").pick(lang) + t else t }
+                show(Target(el, text, "map_${r.id}_${d.step}", d.fill, noAct = d.risky,
+                    tip = if (teach) d.why?.pick(lang) else null, progress = (d.step + 1) to r.steps.size), practiced = practice)
+            }
+            is com.saathi.app.maps.Decision.Scroll -> show(Target(null, d.hint.pick(lang), "map_scroll_${d.step}", scroll = true))
+            is com.saathi.app.maps.Decision.WrongScreen -> {
+                val back = d.node?.let { MapBridge.uiElement(it, live.infoFor(it), "button") }
+                show(Target(back, d.backHint.pick(lang), "map_back_${d.expect}", noAct = true))
+            }
+            is com.saathi.app.maps.Decision.Wait -> show(Target(null, d.say.pick(lang), "map_wait", noAct = true))
+            is com.saathi.app.maps.Decision.Done -> {
+                com.saathi.app.DebugLog.i("map", "done ${r.id}")
+                val f = flow; mapRoute = null
+                if (f != null) complete(f) else finish(r.doneSay.pick(lang))
+            }
+            is com.saathi.app.maps.Decision.Unknown -> return false
+        }
+        return true
     }
 
     /** "Help me fill this form": a form on screen → guide it box by box; otherwise the paper-form camera. */
@@ -1758,6 +1823,7 @@ class Guide(
         IntentRouter.cameraRead(g)?.let { return "skill:$it" }
         if (IntentRouter.isFormHelp(g)) return "form"
         IntentRouter.settingsTask(g)?.let { return "skill:${it.id}" }
+        mapRouteFor(g)?.let { return "map:${it.id}" }
         IntentRouter.phoneHowTo(svc, g)?.let { return "skill:${it.id}" }
         if (IntentRouter.isQuestion(svc, g)) return "question"
         if (Regex("(?i)^\\s*(remember|note down|याद रखो|याद रखना|గుర్తుంచుకో)\\b").containsMatchIn(g)) return "note"
