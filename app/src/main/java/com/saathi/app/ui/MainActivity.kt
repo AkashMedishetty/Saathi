@@ -74,19 +74,15 @@ class MainActivity : AppCompatActivity() {
         lang = Prefs.lang(this)
         val page = vbox(22, 18)
 
-        // ── Top bar: date · language · settings ──
+        // ── Top bar: date · settings ──
         val top = hbox()
-        val date = SimpleDateFormat("EEE, d MMM", lang.locale).format(Date())
+        val date = SimpleDateFormat("EEEE, d MMMM", lang.locale).format(Date())
         top.add(overline(date), weight = 1f)
-        Lang.entries.forEach { x ->
-            val short = when (x) { Lang.EN -> "EN"; Lang.HI -> "हिं"; Lang.TE -> "తె" }
-            top.add(chip(short, x == lang) { Prefs.setLang(this, x); render() }, top = 6, w = ViewGroup.LayoutParams.WRAP_CONTENT)
-        }
         val gear = FrameLayout(this).apply { background = rounded(C.PAPER_2, dpf(24)); contentDescription = say("Settings", "सेटिंग", "సెట్టింగ్స్").pick(lang) }
         gear.addView(ImageView(this).apply { setImageResource(R.drawable.ic_settings); imageTintList = ColorStateList.valueOf(C.PINE_DEEP) },
             FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
         gear.pressable { startActivity(Intent(this, SettingsActivity::class.java)) }
-        top.addView(gear, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginStart = dp(8) })
+        top.addView(gear, LinearLayout.LayoutParams(dp(52), dp(52)))
         page.add(top, 4)
 
         // ── Greeting ──
@@ -99,14 +95,24 @@ class MainActivity : AppCompatActivity() {
         }.pick(lang)
         page.add(display(if (name.isBlank()) "$greet." else "$greet,\n$name ji.", 38f), 26)
 
-        // ── Helper status ──
+        // ── Helper status + language (one segmented control) ──
         val on = SaathiService.isEnabled(this)
-        page.add(statusLine(on), 12)
+        page.add(statusLine(on), 14)
+        val seg = hbox().apply { background = rounded(C.PAPER_2, dpf(28)); setPadding(dp(4), dp(4), dp(4), dp(4)) }
+        Lang.entries.forEach { x ->
+            val sel = x == lang
+            seg.add(body(x.label, 18f, if (sel) C.WHITE else C.PINE_DEEP, bold = true).apply {
+                gravity = Gravity.CENTER; minHeight = dp(48)
+                background = if (sel) rounded(C.PINE_DEEP, dpf(24)) else null
+                contentDescription = x.label
+            }.pressable { Prefs.setLang(this, x); render() }, weight = 1f)
+        }
+        page.add(seg, 16)
 
         // ── The light: tap and speak ──
         val hero = vbox().apply { gravity = Gravity.CENTER_HORIZONTAL }
         val orb = OrbView(this)
-        hero.addView(orb, LinearLayout.LayoutParams(dp(210), dp(210)))
+        hero.addView(orb, LinearLayout.LayoutParams(dp(250), dp(250)))
         orb.pressable { openAsk(true) }
         orb.contentDescription = say("Tap and speak to Saathi", "छूकर साथी से बोलिए", "తాకి సాథీతో మాట్లాడండి").pick(lang)
         hero.add(body(say("Tap the light and speak", "रोशनी छूकर बोलिए", "వెలుగును తాకి మాట్లాడండి").pick(lang), 20f, C.INK, bold = true).apply { gravity = Gravity.CENTER }, 6)
@@ -157,9 +163,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun statusLine(on: Boolean): View {
         if (on) return hbox().apply {
+            background = rounded(0x1A2E7550, dpf(20)); setPadding(dp(14), dp(10), dp(16), dp(10))
             addView(View(context).apply { background = rounded(C.LEAF, dpf(5)) }, LinearLayout.LayoutParams(dp(10), dp(10)))
-            add(body(say("Helper is on · works without internet", "मदद चालू है · बिना इंटरनेट चलता है", "సహాయం ఆన్ · ఇంటర్నెట్ లేకుండా పనిచేస్తుంది").pick(lang), 16f, C.LEAF, bold = true), top = 8)
-        }
+            add(body(say("Helper on · works offline", "मदद चालू · बिना इंटरनेट", "సహాయం ఆన్ · ఆఫ్‌లైన్").pick(lang), 16f, C.LEAF, bold = true), top = 10)
+        }.also { it.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT) }
         return vbox(18, 16).apply {
             background = rounded(0xFFFFF1DC.toInt(), dpf(24))
             add(body(say("Saathi's helper is off. Turn it on so I can show you where to tap.",

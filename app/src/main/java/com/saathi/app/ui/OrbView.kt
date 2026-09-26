@@ -68,14 +68,14 @@ class OrbView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = nul
         val max = min(width, height) / 2f
         val active = mood == Mood.ACTIVE
         val breath = if (active) 0.5f + 0.5f * sin(t * 7f) else 0.5f + 0.5f * sin(t * 2.2f)
-        val r = max * (0.72f + 0.06f * breath + 0.18f * level)
+        val r = max * (0.62f + 0.05f * breath + 0.16f * level)
 
         // Shaders are built once per size/mood at a reference radius; breathing is a canvas scale (no per-frame allocs).
-        val r0 = max * 0.8f
+        val r0 = max * 0.7f
         if (built != max || builtMood != mood) {
             val p = palette()
             body.shader = RadialGradient(cx - r0 * 0.3f, cy - r0 * 0.35f, r0 * 1.5f, p, floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
-            halo.shader = RadialGradient(cx, cy, max, intArrayOf(p[1] and 0x66FFFFFF, p[1] and 0x00FFFFFF), null, Shader.TileMode.CLAMP)
+            halo.shader = RadialGradient(cx, cy, max, intArrayOf(p[0] and 0x88FFFFFF.toInt(), p[1] and 0x44FFFFFF, p[1] and 0x00FFFFFF), floatArrayOf(0.45f, 0.7f, 1f), Shader.TileMode.CLAMP)
             sheen.shader = SweepGradient(cx, cy, intArrayOf(0x00FFFFFF, 0x55FFFFFF, 0x00FFFFFF, 0x33FFF1D6, 0x00FFFFFF), null)
             built = max; builtMood = mood
         }

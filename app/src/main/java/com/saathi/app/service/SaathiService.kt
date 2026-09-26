@@ -174,6 +174,7 @@ class SaathiService : AccessibilityService() {
                     "aura" -> overlay?.setAura(i.getBooleanExtra("on", true))
                     "dump" -> dumpTree()
                     "ask" -> openAsk(i.getBooleanExtra("listen", false))
+                    "tts" -> Log.i(TAG, "tts: " + Lang.entries.joinToString { "${it.tag}=${speaker.supports(it)}" })
                     null -> i.getStringExtra("goal")?.let { guide.handleUtterance(it) }
                     else -> Log.w(TAG, "unknown cmd $cmd")
                 }
