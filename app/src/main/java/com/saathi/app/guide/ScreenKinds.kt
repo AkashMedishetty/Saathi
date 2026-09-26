@@ -48,7 +48,11 @@ object ScreenKinds {
     private val NAG_DECLINE = rx("^Maybe later$", "^Not now$", "^No,? thanks$", "^Later$", "^Skip for now$", "^Remind me later$", "^Dismiss$", "^Don.t allow$")
 
     /** A nag popup covering the page (field: JioHotstar's "Allow Notifications / Maybe Later" sheet hid the Search tab). */
-    fun nag(s: Screen): UiElement? = s.find(NAG_DECLINE)
+    fun nag(s: Screen): UiElement? {
+        // On screen only (field: Photos keeps a "Not now" card off to the right, x = 1921 on a 1440-wide phone).
+        val m = android.content.res.Resources.getSystem().displayMetrics
+        return s.find(NAG_DECLINE)?.takeIf { e -> e.bounds.left >= 0 && e.bounds.right <= m.widthPixels && e.bounds.top >= 0 && e.bounds.bottom <= m.heightPixels }
+    }
 
     // ── Places a guide should not take people unless they asked for them ──
     private val AVOID = Regex("(?i)^(help|help cent(er|re)|need help\\??|about|about (us|this app)|privacy|privacy policy|terms|terms of (service|use)|" +

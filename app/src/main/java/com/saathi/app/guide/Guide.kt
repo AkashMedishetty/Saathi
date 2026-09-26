@@ -308,7 +308,9 @@ class Guide(
             // sending half was dropped). The new screenshot is the newest photo, so the rest is a normal photo send.
             if (action == android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) screenshotThen(goalText)?.let { rest ->
                 com.saathi.app.DebugLog.i("system", "then: \"$rest\"")
-                scope.launch { delay(2200); start(rest, autoMode, learnMode) }
+                // That exact screenshot, straight into the messaging app's own "Send to…" screen; a gallery's
+                // "newest photo" isn't the screenshot on every phone (field: Photos opened an old camera photo).
+                scope.launch { delay(2200); screenshotShareFlow(rest)?.let { begin(rest, it, autoMode) } ?: start(rest, autoMode, learnMode) }
             }
             return
         }
@@ -1654,6 +1656,39 @@ class Guide(
         return false
     }
 
+    /** The newest screenshot on the phone (last 2 minutes), or null. Needs READ_MEDIA_IMAGES (granted at install). */
+    private fun latestScreenshot(): android.net.Uri? = runCatching {
+        val col = android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val since = System.currentTimeMillis() / 1000 - 120
+        svc.contentResolver.query(col, arrayOf(android.provider.MediaStore.Images.Media._ID),
+            "${android.provider.MediaStore.Images.Media.DATE_ADDED} >= ? AND (${android.provider.MediaStore.Images.Media.RELATIVE_PATH} LIKE ? OR ${android.provider.MediaStore.Images.Media.DISPLAY_NAME} LIKE ?)",
+            arrayOf(since.toString(), "%Screenshot%", "%Screenshot%"), "${android.provider.MediaStore.Images.Media.DATE_ADDED} DESC")?.use { c ->
+            if (c.moveToFirst()) android.content.ContentUris.withAppendedId(col, c.getLong(0)) else null
+        }
+    }.onFailure { com.saathi.app.DebugLog.w("share", "screenshot lookup failed", it) }.getOrNull()
+
+    /** "…send it to my son on WhatsApp": WhatsApp's own picker with the screenshot → tap him → the green arrow (theirs). */
+    private fun screenshotShareFlow(g: String): Flow? {
+        val uri = latestScreenshot() ?: return null
+        val wa = AppLauncher.first(svc, "com.whatsapp", "com.whatsapp.w4b") ?: return null
+        val who = SlotExtractor.from(g, Prefs.family(svc)).contact ?: Prefs.family(svc).ifBlank { null }
+        com.saathi.app.DebugLog.i("share", "screenshot → $wa for ${who ?: "(they choose)"}")
+        val send = Intent(Intent.ACTION_SEND).setType("image/*").putExtra(Intent.EXTRA_STREAM, uri).setPackage(wa)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val steps = listOfNotNull(
+            who?.let { w -> Step("pick", listOf(Regex("(?i)^" + Regex.escape(w))), say("Tap $w in the list.", "सूची में $w को दबाइए।", "జాబితాలో $w ని నొక్కండి."),
+                unlessVisible = listOf(Regex("(?i)^(Add a caption|Add caption)"))) },
+            Step("send", listOf(Regex("(?i)^Send$")), say("It's your screenshot. Tap the green send arrow.", "यह आपका स्क्रीनशॉट है। हरा भेजें वाला तीर दबाइए।",
+                "ఇది మీ స్క్రీన్‌షాట్. ఆకుపచ్చ పంపు బాణం నొక్కండి.")),
+        )
+        return Flow("share_screenshot", { send }, steps,
+            { sc -> sc.pkg.startsWith("com.whatsapp") && sc.elements.any { Regex("(?i)^(Message|Type a message)$").matches(it.label) } &&
+                sc.elements.none { Regex("(?i)^(Add a caption|Add caption)").containsMatchIn(it.label) } },
+            say("Sent! It's in the chat now.", "भेज दिया! अब चैट में है।", "పంపారు! ఇప్పుడు చాట్‌లో ఉంది."),
+            say("Here's your screenshot in WhatsApp.", "WhatsApp में आपका स्क्रीनशॉट तैयार है।", "WhatsApp లో మీ స్క్రీన్‌షాట్ సిద్ధంగా ఉంది."),
+            llmGoal = g, appPkg = wa)
+    }
+
     /** "take a screenshot and send it to Akash on WhatsApp" → "send this photo to Akash on WhatsApp"; null = nothing after. */
     private fun screenshotThen(g: String): String? {
         if (!Regex("(?i)send|share|whatsapp|भेज|शेयर|పంప|షేర్").containsMatchIn(g)) return null
@@ -1852,8 +1887,13 @@ class Guide(
         lang = Prefs.lang(svc)
         // Asked by voice, Saathi's own mic sheet can still be the active window for a moment: that screen has no
         // boxes, so every "fill this form on my screen" went to the camera. Look at the app underneath, after a beat.
-        if (svc.rootInActiveWindow?.packageName?.toString() == svc.packageName) { scope.launch { delay(700); formHelpNow() }; return }
-        formHelpNow()
+        // A window hidden behind the sheet isn't even listed: wait (up to 2.5 s) until the sheet has gone.
+        scope.launch {
+            var waited = 0
+            while (waited < 2500 && (SaathiService.ownUiOpen || svc.rootInActiveWindow?.packageName?.toString() == svc.packageName)) { delay(150); waited += 150 }
+            if (waited > 0) delay(250)
+            formHelpNow()
+        }
     }
 
     /** The app window under Saathi's own UI (the active one if it isn't ours). */

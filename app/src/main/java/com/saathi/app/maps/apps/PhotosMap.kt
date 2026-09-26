@@ -19,8 +19,9 @@ object PhotosMap {
     const val PKG = "com.google.android.apps.photos"
 
     private val TILE = Sel(label = rx("^(Photo|Image|Portrait photo|Screenshot) (taken )?(on|·|,)|^Photo taken|^Image taken"), clickable = true, pick = Pick.TOP)
-    private val EDIT = lbl("^Edit$", clickable = true)
-    private val SHARE = lbl("^Share$", clickable = true)
+    // Newer Photos (Compose) doesn't mark its bottom bar clickable (field, 03:09): match the label alone.
+    private val EDIT = lbl("^Edit$")
+    private val SHARE = lbl("^Share$")
     private val CROP_TAB = lbl("^Crop$", clickable = true)
     private val ADJUST_TAB = lbl("^(Adjust|Tools)$", clickable = true)
     private val SAVE = listOf(lbl("^Save copy$", clickable = true), lbl("^Save$", clickable = true))
