@@ -44,11 +44,10 @@ object IntentRouter {
     fun isScamCheck(goal: String) = goal.lowercase().has("scam", "fraud", "is this safe", "धोखा", "ठगी", "మోసం")
 
     fun route(ctx: Context, goal: String): Flow? {
-        val g = goal.lowercase()
-        if (g.has("text bigger", "bigger text", "font", "letters bigger", "big letters", "अक्षर बड़े", "बड़ा", "అక్షరాలు పెద్ద")) return CoreFlows.fontSize()
-        if (g.has("wifi", "wi-fi", "वाईफाई", "వైఫై")) return CoreFlows.wifi()
+        val slots = SlotExtractor.from(goal, Prefs.family(ctx))
+        Skills.match(goal)?.let { return it.build(ctx, slots) }
         AppLauncher.findInGoal(ctx, goal)?.let { app ->
-            val onlyOpen = Regex("(?i)^\\s*(open|start|launch|खोलो|తెరువు)\\s+\\S+(\\s+app)?\\s*$").matches(goal)
+            val onlyOpen = Regex("(?i)^\\s*(open|start|launch)\\s+.+$|(खोलो|खोल दो|తెరువు|ఓపెన్ చేయి)\\s*$").containsMatchIn(goal)
             return Flow("app_${app.pkg}", { c -> AppLauncher.launch(c, app.pkg) }, emptyList(),
                 if (onlyOpen) { _ -> true } else null,
                 say("${app.label} is open.", "${app.label} खुल गया।", "${app.label} తెరుచుకుంది."),

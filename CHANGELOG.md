@@ -17,3 +17,7 @@
   ScreenReader · Guide ladder 0–10 (throttle 200 ms, settle 450 ms, instant glow-clear on tap) · compact draggable card
   (top/bottom, remembered) · Siri-style edge aura while thinking · living orb bubble · Speaker · safe Do it · scam guard ·
   Memory · say.sh (`--doit --stop --dump --aura`).
+- 12:58 **P0-3 Skills**: 24 skills in 6 groups (family, watch, everyday, learn, fix, money safety) + "open any app";
+  EN/HI/TE keywords, slots (people/family, times incl. बजे/రాత్రి, places, HI/TE search-phrase cleanup).
+  RoutingTest green (50 phrases EN/HI/TE + slots). Verified on the iQOO: "हनुमान चालीसा लगाओ यूट्यूब पर" (HI) → YouTube
+  opens → glow on the search box → Hindi card.

@@ -25,6 +25,11 @@ object Prefs {
     fun setLang(c: Context, l: Lang) = sp(c).edit().putString("lang", l.name).apply()
     fun name(c: Context): String = sp(c).getString("name", "") ?: ""
     fun setName(c: Context, v: String) = sp(c).edit().putString("name", v).apply()
+    /** Main family contact (name + number), set in caregiver setup; editing it later needs the screen lock. */
+    fun family(c: Context): String = sp(c).getString("family", "") ?: ""
+    fun setFamily(c: Context, v: String) = sp(c).edit().putString("family", v).apply()
+    fun familyPhone(c: Context): String = sp(c).getString("family_phone", "") ?: ""
+    fun setFamilyPhone(c: Context, v: String) = sp(c).edit().putString("family_phone", v).apply()
     fun speechRate(c: Context): Float = sp(c).getFloat("rate", 0.88f)
     fun setSpeechRate(c: Context, v: Float) = sp(c).edit().putFloat("rate", v).apply()
     fun textScale(c: Context): Float = sp(c).getFloat("text_scale", 1f)
