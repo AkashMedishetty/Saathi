@@ -70,3 +70,14 @@ Never `gradlew clean`. **Disk is nearly full**: delete finished worktrees' `app/
 - **Regression 3/5/9/10 pass on the phone.** R8 was fixed after the done-guard (YouTube glows Search as step 1).
 - **Next:** run the full `scripts/e2e/run.sh` on the phone; fix the failures. Merge Kiro's remaining maps
   (Maps/cab, Chrome, Phone, Messages, Instagram, Clock) as they land.
+
+## Sun 27 Sep 02:50 (Claude, after Kiro left)
+Main = adbedbb + Codex e2e merged. Phone has this build. Verified on the phone tonight:
+- Video call → WhatsApp | Phone choice → spoken "WhatsApp" → the top-bar camera glows (no chat-bubble mistake).
+- Telugu WhatsApp message typed, Send glows. JioHotstar: Search tab → type → Latest Episode → login wall card (planner never runs on login/OTP pages).
+- YouTube: starts from home (CLEAR_TASK), search → suggestion/keyboard search key → result (ads skipped) → playing; playlist → Play all.
+- Mid-task doubt answered from the map step's own "why"; "yes" resumes. Planner "A or B?" questions are two buttons; answers reach the planner.
+- Voice while watching: pause / play / next / louder / softer / close this app.
+- Settings: vivo ALWAYS switches Saathi off when Settings opens. Now: quiet launch + instant heal (~50 ms) + auto-resume → guided to the result.
+Tools: scripts/applog.sh (app's own log file), scripts/tapshow.sh, scripts/e2e/run.sh --quick (5/8 pass; the 3 fails are test expectations → Codex).
+Demo prep: uninstall JioHotstar for the install moment (or demo the installed path); put Settings on the home screen.
