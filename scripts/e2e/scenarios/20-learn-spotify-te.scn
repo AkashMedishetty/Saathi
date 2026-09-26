@@ -1,0 +1,6 @@
+name: Learn Spotify entry (TE)
+apps: com.spotify.music
+# Demo pivot. Checks entry to teaching, not completion of all Spotify operations.
+say TE నాకు Spotify వాడటం నేర్పించు
+expect show key=(open_app|find_app) within 15
+expect enabled

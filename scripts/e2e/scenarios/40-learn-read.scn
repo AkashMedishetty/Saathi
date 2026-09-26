@@ -1,0 +1,5 @@
+name: Learn-section reading lesson entry
+# School Week 3 read_this phrase; only reader entry is asserted.
+say EN teach me how to read a letter
+expect focus "ReadActivity" within 15
+expect enabled

@@ -1,0 +1,5 @@
+name: Greeting response (HI)
+# Current greeting branch logs finish; general response branches log respond.
+say HI नमस्ते
+expect log "\[finish\]|\[respond\]" within 15
+expect enabled

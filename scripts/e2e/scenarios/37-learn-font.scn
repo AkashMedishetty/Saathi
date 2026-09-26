@@ -1,0 +1,5 @@
+name: Learn-section bigger letters entry
+# School Week 4 font phrase; does not tap the Settings launcher icon.
+say HI अक्षर बड़े करना सिखाओ
+expect show key=(open_settings|open_app|find_app|display|font) within 15
+expect enabled

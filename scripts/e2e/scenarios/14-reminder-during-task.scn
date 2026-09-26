@@ -1,0 +1,9 @@
+name: Reminder fires during YouTube task
+apps: com.google.android.youtube
+# A20. Task intentionally remains at the first glow while reminder fires.
+say EN remind me in 1 minute to look away from the screen
+expect log "\[reminder\] set" within 8
+say EN search for old telugu songs on youtube
+expect show key=search within 15
+expect log "\[routine\] due .*look away from the screen.*active=true" within 75
+expect enabled

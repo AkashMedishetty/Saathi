@@ -1,0 +1,6 @@
+name: One-minute reminder fires
+# A17. Creates a real one-time reminder; let it fire before reset.
+say EN remind me in 1 minute to stretch gently
+expect log "\[reminder\] set" within 8
+expect log "\[routine\] due .*stretch gently" within 75
+expect enabled

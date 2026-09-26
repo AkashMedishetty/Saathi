@@ -1,0 +1,8 @@
+name: YouTube subscriptions (EN)
+apps: com.google.android.youtube
+# A8/B1. Requires an authenticated YouTube profile.
+say EN open my YouTube subscriptions
+expect show key=(subscriptions|subs) within 15
+tap-glow
+expect log "\[finish\]" within 15
+expect enabled

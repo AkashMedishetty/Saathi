@@ -1,0 +1,6 @@
+name: APK attachment STOP alert
+# Demo pivot: debug APK warning only, never open/install a file.
+cmd scam_apk
+expect log "\[alert\] shield apk STOP" within 8
+expect not log "\[act\].*(key=install|target=.?[Ii]nstall)" for 3
+expect enabled

@@ -1,0 +1,5 @@
+name: Greeting response (TE)
+# Current greeting branch logs finish; general response branches log respond.
+say TE నమస్తే
+expect log "\[finish\]|\[respond\]" within 15
+expect enabled

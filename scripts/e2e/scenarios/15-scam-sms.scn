@@ -1,0 +1,5 @@
+name: SMS KYC threat alert
+# C8: debug broadcast, no real message is sent.
+cmd scam_sms
+expect log "\[alert\] shield kyc CAUTION" within 8
+expect enabled

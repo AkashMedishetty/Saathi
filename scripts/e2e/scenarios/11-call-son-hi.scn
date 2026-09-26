@@ -1,0 +1,6 @@
+name: Call son guidance without placing call (HI)
+# A4. Save a family contact for the terminal Call glow; contact-search guidance also counts.
+say HI बेटे को फ़ोन करो
+expect show key=(call|search|type|pick) within 15
+expect not log "\[act\].*(key=call|target=.?(Call|Dial))" for 3
+expect enabled

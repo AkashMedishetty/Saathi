@@ -1,0 +1,5 @@
+name: Greeting response (EN)
+# Current greeting branch logs finish; general response branches log respond.
+say EN hello
+expect log "\[finish\]|\[respond\]" within 15
+expect enabled

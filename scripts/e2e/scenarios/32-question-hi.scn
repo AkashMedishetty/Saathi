@@ -1,0 +1,6 @@
+name: General question routes to source (HI)
+# B17. Browser connectivity required; checks routing/output event, not factual correctness.
+say HI बादल कैसे बनते हैं
+expect log "\[respond\] general question" within 15
+expect log "\[lookup\] q=.* a=" within 35
+expect enabled

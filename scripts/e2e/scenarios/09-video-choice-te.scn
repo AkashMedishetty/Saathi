@@ -1,0 +1,9 @@
+name: Video choice then phone path (TE)
+# A1/B14. WhatsApp choice must be available; operator supplies current --phone-choice X,Y. Stops before calling.
+say TE కొడుకుకి వీడియో కాల్ చేయి
+expect show key=choose_video within 15
+screenshot video-choice
+tap-choice phone
+expect show key=(video|call|search|type|pick) within 15
+expect not log "\[act\].*(key=(call|video)|target=.?(Call|Video call))" for 3
+expect enabled

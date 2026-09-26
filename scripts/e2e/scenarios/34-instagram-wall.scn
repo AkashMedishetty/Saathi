@@ -1,0 +1,6 @@
+name: Instagram login wall
+apps: com.instagram.android
+# Owner has not logged in: wall is an expected safe outcome.
+say EN show me Instagram reels
+expect show key=(wall_.*|reels) within 20
+expect enabled
