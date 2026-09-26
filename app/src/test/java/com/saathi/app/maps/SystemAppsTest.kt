@@ -82,3 +82,13 @@ class SystemAppsTest {
         assertTrue((AppMaps.next(r, InstagramMap.PKG, cap, 2) as Decision.Glow).risky)
     }
 }
+
+class CameraMapTest {
+    @Test fun selfieSwitchesFirst() {
+        val r = AppMaps.routeById("camera_selfie")!!
+        val back = T.screen(T.btn("Switch to front camera", "1100, 2700 - 1300, 2900"), T.btn("Shutter", "560, 2650 - 880, 2970"))
+        val front = T.screen(T.btn("Switch to rear camera", "1100, 2700 - 1300, 2900"), T.btn("Shutter", "560, 2650 - 880, 2970"))
+        assertEquals("Switch to front camera", (AppMaps.next(r, com.saathi.app.maps.apps.CameraMap.PKG, back, 0) as Decision.Glow).node.label)
+        assertEquals("Shutter", (AppMaps.next(r, com.saathi.app.maps.apps.CameraMap.PKG, front, 0) as Decision.Glow).node.label)
+    }
+}

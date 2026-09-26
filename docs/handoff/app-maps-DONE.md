@@ -1,8 +1,14 @@
 # App maps: DONE (Kiro, branch `kiro/app-maps`)
 
-Package `com.saathi.app.maps` (pure Kotlin, no Android types) + one file per app in `maps/apps/`. Tests in
-`app/src/test/java/com/saathi/app/maps/` read the real dumps in `fixtures/trees/`. Committed app by app; this note
-is updated with each commit.
+Package `com.saathi.app.maps`:
+- pure Kotlin, no Android types;
+- one file per app in `maps/apps/`, and `SystemApps.kt` for Phone, Messages, Clock, Instagram and Camera.
+
+**15 apps, 44 routes.** Tests in `app/src/test/java/com/saathi/app/maps/` (64 tests) read the real dumps in
+`fixtures/trees/` wherever one exists. Committed app by app.
+
+**Final gate:** `./gradlew testDebugUnitTest assembleDebug` passes, with 1072 tests and 0 failures, and the merged
+manifest has no INTERNET permission. No new dependencies, and no files outside `maps/`.
 
 ## Status
 | App | Routes | Verified against real fixtures? |
@@ -21,9 +27,15 @@ is updated with each commit.
 | Messages (Google + vivo) | read latest SMS (first-run "Continue" handled) · block a number | first-run screen: **real dump, verified**. List / thread: unverified |
 | Clock (vivo + Google) | turn off the X o'clock alarm (the switch **inside that alarm's card**) · show how to add an alarm | alarm list: **real dump, verified** (package assumed `com.android.BBKClock`). Edit screen: unverified |
 | Instagram | open profile · reels · post a photo (Share **risky**) | **No dump; UNVERIFIED** (owner logs in) |
+| Camera (vivo + Google) | take a photo · selfie (switch to front first, then the shutter) | **No dump; UNVERIFIED** |
 
-**Checkpoint 1 (engine + YouTube + Settings + Photos): done.** Full suite `testDebugUnitTest assembleDebug` passes
-(1036 tests, 0 failures); merged manifest has no INTERNET.
+**Checkpoint 1** (engine + YouTube + Settings + Photos) was committed at 22:23. The rest followed app by app.
+`RegistryTest` checks the whole registry, so a typo fails a test instead of breaking on stage. It checks that:
+- every step's screen exists;
+- every sentence exists in EN / HI / TE, in Devanagari / Telugu script;
+- every `{slot}` used in speech is declared, and `fill` slots are declared;
+- no step is both risky and a typing step;
+- ids and packages are unique.
 
 ## Overlaps with existing Skills (your call on the order)
 `AppMaps.route()` also matches goals that today go to Skills: brightness, dark mode, Wi-Fi/Bluetooth *settings*,
@@ -37,7 +49,10 @@ storage / search`.
 ### 1. Pick a route before the LLM
 ```kotlin
 val route = AppMaps.route(goal)                       // null → your existing Skills/planner path
-val slots = MapSlots.of(route, goal, Prefs.family(ctx)) // "query" → "hanuman chalisa", "term", "contact", "place", "app"
+val slots = MapSlots.of(route, goal, Prefs.family(ctx))
+// slots: "query" (hanuman chalisa), "term" (ringtone), "contact" (Rahul / the family contact for "my son"),
+//        "text" (what to write), "place" (Charminar), "app" + "developer" (whatsapp / WhatsApp LLC), "time" (8:00)
+// Topic routes carry presets (settings_ringtone → term = "ringtone").
 launch(route.pkg)                                     // open the app (or ask them to, for Settings: trap #45)
 var reached = 0                                       // furthest step index returned so far
 ```
@@ -97,6 +112,46 @@ when (val d = AppMaps.next(route, pkg, nodes, reached, slots)) {
   editor before the edit is done). **`doneNeedsLastStep`**: a page that merely contains the goal's word is not
   "done" until the last step was reached (Settings, Photos edits).
 
+- **Play Store hand-over:** after the `Open` glow, when the foreground package becomes the new app, say
+  `AppMaps.fillIn(route.doneSay, slots)`, offer `route.next`, then start your learn-app guide for that package.
+- **App hops:** some routes deliberately end where the next app begins (YouTube/Photos share → WhatsApp,
+  WhatsApp location → Maps, Maps cab → Uber). `next` returns `Unknown` once you're in the other app. Say `doneSay`,
+  then (optionally) start the next route: `wa_*`, `maps_directions` or `uber_cab` with the same slots.
+- **Order vs Skills:** see "Overlaps" above.
+- **Speech with brackets:** `d.say` is final. When filling `route.doneSay` or `route.next` yourself, use
+  `AppMaps.fillIn(say, slots)`. It fills the `{slots}` and drops `[optional]` parts whose slot is unknown.
+
+## What each app's evidence is
+- **Real phone dumps** (verified):
+  - YouTube: home, search, typed, results with an ad, playlist results, subscriptions, You.
+  - The Chrome notifications prompt.
+  - The vivo dialer.
+  - The Google Messages first-run screen.
+  - The vivo Clock alarm list.
+- **Hand-built trees** in the same format, from each app's known labels and ids (everything else). These prove the
+  engine logic and the route order, **not** that the labels match this phone. First job on the phone: capture one
+  dump per new screen with `scripts/capture-tree.sh` into `fixtures/trees/<app>/`. The tests pick them up, and a
+  wrong label shows as a failing assert, not a wrong glow.
+
+## Field fixes folded in
+- 22:34 (your `Guide.kt` fix ae22412): a Short's Like button on YouTube Home ended `yt_search` at once. The engine
+  now also guards it. `yt_search` is done only after the last step was reached, and not while the tab bar is showing.
+  `yt_watch` requires the tab bar to be gone. A regression test covers both.
+
 ## Not reliable yet
-- YouTube watch page (like / share) and History: no dump yet; selectors are YouTube's English labels.
-- The dumps have no "selected" state, so YouTube's tabs are told apart by their content.
+- **No dump at all:**
+  - YouTube's watch page (like / share) and History.
+  - Settings.
+  - Photos, Play Store, Spotify, Docs, WhatsApp, Maps, Uber, Instagram, Camera.
+  - Phone contact search / detail, the Messages list / thread, the Clock edit screen.
+- **Package names inferred:**
+  - vivo dialer = `com.android.contacts`, vivo Clock = `com.android.BBKClock` (the dumps don't record the package).
+  - `alsoPkgs` covers the Google variants. If `AppMaps.mapFor(pkg)` returns null on the phone, add the real package
+    to that map's `alsoPkgs`.
+- **No "selected" state in the dumps**, so YouTube's tabs are told apart by their content. The Subscriptions tab is
+  recognised by its empty state or by "Manage" / "All subscriptions". A full subscriptions feed isn't dumped yet.
+- **Settings are English-only:** the search term is English ("ringtone"), and so are the result-row labels.
+  Settings in Hindi would need Hindi terms.
+- **The selfie route** relies on the camera's switch button changing its label to "Switch to rear camera".
+- **Split date boxes and pickers**, and Uber's map pin, are not handled.
+- **Everything is guidance.** No route taps a `risky` target, and the Settings routes must stay glow-only (trap #45).
