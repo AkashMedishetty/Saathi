@@ -37,7 +37,7 @@ if want 7; then reset; goal "remember my BP tablet is Telma 40"; sleep 2; goal "
   if adb shell dumpsys window | grep mCurrentFocus | grep -q SosActivity; then PASS=$((PASS+1)); RESULTS+=("✅ R7b SOS screen"); else FAIL=$((FAIL+1)); RESULTS+=("❌ R7b SOS screen"); fi
   adb shell input keyevent KEYCODE_BACK; fi
 if want 8; then reset; adb shell am force-stop com.google.android.youtube; goal "search for old telugu songs on youtube"
-  check "R8 YouTube search → glows search" "\[show\] key=search" 15; fi
+  check "R8 YouTube search → glows search" "\[show\] key=(search|map_yt_search_0)" 15; fi
 if want 9; then reset; goal "watch my serial on hotstar"
   check "R9 Hotstar missing → offers to install" "\[missing\] app=in.startv.hotstar" 15; fi
 if want 10; then reset; B --es cmd scam_apk
