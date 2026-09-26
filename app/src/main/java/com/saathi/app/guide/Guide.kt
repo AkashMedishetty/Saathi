@@ -165,13 +165,14 @@ class Guide(
             com.saathi.app.DebugLog.i("system", "global action $action for \"$goalText\"")
             return
         }
-        if (IntentRouter.isQuestion(svc, goalText)) { answerQuestion(goalText); return }
         if (Coach.wants(goalText, null)) { startCoach(goalText); return }
         if (IntentRouter.isScamCheck(goalText)) { scamCheck(); return }
         if (IntentRouter.isFamilyHelp(goalText)) { askFamily(); return }
         if (IntentRouter.isReadMessages(goalText)) { readMessages(); return }
         if (IntentRouter.isExplain(goalText)) { explain(); return }
         if (IntentRouter.isBriefing(goalText)) { briefing(); return }
+        if (IntentRouter.isObjectHelp(goalText)) { begin(goalText, Skills.byId("learn_app")?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
+        if (IntentRouter.isQuestion(svc, goalText)) { answerQuestion(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
         // Teach-once: "watch me: video call Rahul" … "done teaching".
         Regex("(?i)^\\s*(watch me|learn this|let me show you|i'?ll show you|देखो मैं|मैं दिखाता|నేను చూపిస్తా)\\W*(.*)$").find(goalText)?.let { m ->
@@ -192,12 +193,12 @@ class Guide(
         }
         // Something a family member taught me? That path wins: it's known to work on this very phone.
         Recipes.find(svc, goalText)?.let { r -> begin(goalText, Recipes.toFlow(r), autoMode); return }
-        if (LlmManager.isReady) {
-            // Let the model pick the helper (≈0.5 s); keywords only if it can't.
+        if (LlmManager.isReady || com.saathi.app.llm.ModelLocator.fast(svc) != null) {
+            // Let the model pick the helper (NPU ≈0.25 s); keywords only if it can't.
             overlay.showCard(say("Okay…", "ठीक है…", "సరే…").pick(lang), Overlay.Mode.THINKING)
             scope.launch {
                 // 1) Understand the vague request. 2) Jump there with an intent. 3) Only then guide / answer.
-                val u = Understand.parse(goalText)
+                val u = Understand.parse(goalText, svc)
                 com.saathi.app.DebugLog.i("understand", "\"$goalText\" → $u")
                 if (u != null && handleIntent(goalText, u, autoMode)) return@launch
                 when (val r = IntentRouter.smartRoute(svc, goalText)) {
@@ -214,6 +215,10 @@ class Guide(
     private suspend fun handleIntent(goalText: String, u: Understand.Intent2, autoMode: Boolean): Boolean {
         val q = u.query ?: goalText
         fun skill(id: String, g: String = goalText) = Skills.byId(id)?.build(svc, SlotExtractor.from(g, Prefs.family(svc)))
+        // A precise, reliable skill (torch, font, storage, selfie…) beats the model's broad category.
+        Skills.match(goalText)?.takeIf { it.id in IntentRouter.DIRECT && u.intent !in setOf("weather", "lookup", "question", "watch", "music") }?.let {
+            begin(goalText, it.build(svc, SlotExtractor.from(goalText, Prefs.family(svc))), autoMode); return true
+        }
         if (Coach.wants(goalText, u.intent) || (u.intent == "watch" && u.device == "tv")) { startCoach(goalText); return true }
         when (u.intent) {
             "question" -> { answerQuestion(goalText); return true }
@@ -1205,7 +1210,7 @@ class Guide(
                 val g = c.arg.ifBlank { coachGoal ?: "" }
                 com.saathi.app.DebugLog.i("coach", "handoff to guide: $g")
                 coachGoal = null; coachWaiting = false
-                val u = Understand.parse(g)
+                val u = Understand.parse(g, svc)
                 if (u == null || !handleIntent(g, u, false)) begin(g, IntentRouter.route(svc, g), false)
             }
             "DONE" -> endCoach(c.arg.ifBlank { say("Done!", "हो गया!", "అయింది!").pick(lang) })
@@ -1228,6 +1233,42 @@ class Guide(
         coachGoal = null; coachWaiting = false
         LlmManager.endChat()
         if (text != null) finish(text) else stop()
+    }
+
+    /**
+     * Evaluation: what WOULD Saathi do with this sentence? Mirrors start()'s decision order, acts on nothing.
+     * Label = the path: sos, routine, recall, system, question, coach, family, messages, explain, briefing, teach,
+     * recipe, intent:<intent>, skill:<id>, app:<pkg>, agent.
+     */
+    suspend fun decideOnly(g: String): String {
+        if (IntentRouter.isSos(g)) return "sos"
+        if (Routines.parse(g) != null) return "routine"
+        if (IntentRouter.isRecall(g)) return "recall"
+        if (IntentRouter.systemAction(g) != null) return "system"
+        if (Coach.wants(g, null)) return "coach"
+        if (IntentRouter.isScamCheck(g)) return "scamcheck"
+        if (IntentRouter.isFamilyHelp(g)) return "family"
+        if (IntentRouter.isReadMessages(g)) return "messages"
+        if (IntentRouter.isExplain(g)) return "explain"
+        if (IntentRouter.isBriefing(g)) return "briefing"
+        if (IntentRouter.isObjectHelp(g)) return "skill:learn_app"
+        if (IntentRouter.isQuestion(svc, g)) return "question"
+        if (Regex("(?i)^\\s*(remember|note down|याद रखो|याद रखना|గుర్తుంచుకో)\\b").containsMatchIn(g)) return "note"
+        Recipes.find(svc, g)?.let { return "recipe" }
+        if (LlmManager.isReady || com.saathi.app.llm.FastBrain.isReady || com.saathi.app.llm.ModelLocator.fast(svc) != null) {
+            val u = Understand.parse(g, svc)
+            if (u != null) {
+                if (Coach.wants(g, u.intent) || (u.intent == "watch" && u.device == "tv")) return "coach"
+                Skills.match(g)?.takeIf { it.id in IntentRouter.DIRECT && u.intent !in setOf("weather", "lookup", "question", "watch", "music") }?.let { return "skill:${it.id}" }
+                if (u.intent in setOf("question", "weather", "lookup", "watch", "music", "call", "video_call", "message", "photo", "alarm", "directions", "setting", "tv"))
+                    return "intent:${u.intent}"
+            }
+            return when (val r = IntentRouter.smartRoute(svc, g)) {
+                is IntentRouter.Route.Question -> "question"
+                is IntentRouter.Route.Skill -> r.flow?.let { f -> if (f.id.startsWith("app_")) "app:${f.id.removePrefix("app_")}" else "skill:${f.id}" } ?: "agent"
+            }
+        }
+        return IntentRouter.route(svc, g)?.let { "skill:${it.id}" } ?: "agent"
     }
 
     // ───────────────────────── watchdog ─────────────────────────

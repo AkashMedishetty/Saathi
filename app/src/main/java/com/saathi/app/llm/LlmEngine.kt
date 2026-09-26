@@ -168,8 +168,13 @@ object ModelLocator {
         File(ctx.filesDir, "models"),
     )
 
-    /** Text brains, best first. Vision models are excluded. */
-    fun text(ctx: Context): List<File> = all(ctx).filterNot(::isVision).sortedByDescending(::score)
+    /** Text brains for the GPU (thinking), best first. Vision and the small NPU fast brain are excluded. */
+    fun text(ctx: Context): List<File> = all(ctx).filterNot { isVision(it) || isFast(it) }.sortedByDescending(::score)
+
+    /** The small text model compiled for this chip's NPU (Gemma 3 1B sm8850): the fast brain. */
+    fun fast(ctx: Context): File? = all(ctx).firstOrNull(::isFast)
+
+    private fun isFast(f: File) = f.name.lowercase().let { "sm8850" in it && !isVision(f) }
 
     /** The vision model (FastVLM compiled for this chip's NPU). */
     fun vision(ctx: Context): File? = all(ctx).filter(::isVision).maxByOrNull { if ("sm8850" in it.name.lowercase()) 1 else 0 }

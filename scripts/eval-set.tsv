@@ -1,0 +1,100 @@
+# utterance	lang	acceptable labels (| separated)
+will it rain today	EN	intent:weather|intent:lookup
+is it going to be hot tomorrow	EN	intent:weather|intent:lookup
+aaj baarish hogi kya	HI	intent:weather|intent:lookup
+आज मौसम कैसा है	HI	intent:weather|intent:lookup
+ఈరోజు వర్షం పడుతుందా	TE	intent:weather|intent:lookup
+india match score	EN	intent:lookup
+gold rate today	EN	intent:lookup
+what's the news today	EN	intent:lookup
+guntur karam movie	EN	intent:watch
+guntur karam movie on tv	EN	coach
+play pushpa on netflix	EN	intent:watch|skill:ott
+मुझे कोई फिल्म देखनी है	HI	intent:watch|skill:ott
+hanuman chalisa sunao	HI	intent:music|skill:youtube|intent:watch
+play old kishore kumar songs	EN	intent:music|skill:youtube|intent:watch
+భక్తి పాటలు పెట్టు	TE	intent:music|skill:youtube|intent:watch
+call my son	EN	intent:call|skill:call
+beta ko phone lagao	HI	intent:call|skill:call
+బాబుకి ఫోన్ చేయి	TE	intent:call|skill:call
+I want to talk to my daughter on video	EN	intent:video_call|skill:wa_video
+बेटे से वीडियो पर बात करनी है	HI	intent:video_call|skill:wa_video
+send a message to rahul that I reached	EN	intent:message|skill:wa_message
+send the photo to my son	EN	intent:photo|skill:wa_photo
+wake me up at 6	EN	intent:alarm|skill:alarm
+remind me to take BP tablet at 8 am	EN	skill:medicine|intent:alarm|routine
+every morning at 7 play bhajan	EN	routine
+how do I go to the nearest hospital	EN	intent:directions|skill:maps
+take me to charminar	EN	intent:directions|skill:maps
+I can't read, letters are too small	EN	skill:font|intent:setting
+अक्षर बड़े करो	HI	skill:font|intent:setting
+my phone is not ringing	EN	skill:volume|intent:setting
+I can't hear anything	EN	skill:volume|intent:setting
+turn on wifi	EN	skill:wifi|intent:setting
+turn off bluetooth	EN	skill:bluetooth|intent:setting
+screen is too dark	EN	skill:brightness|intent:setting
+change my ringtone	EN	intent:setting|skill:settings_search
+change wallpaper	EN	intent:setting|skill:settings_search
+battery drains fast	EN	skill:battery|intent:setting
+phone storage is full	EN	skill:storage
+how much storage is left	EN	skill:storage_view|intent:setting
+turn on the torch	EN	skill:torch
+टॉर्च जलाओ	HI	skill:torch
+take a selfie	EN	skill:camera
+read this letter for me	EN	skill:read_this
+what does this paper say	EN	skill:read_this|explain
+scan my medicine strip	EN	skill:scan_medicine
+how do I use this washing machine	EN	skill:learn_app
+book a train ticket to delhi	EN	coach
+tatkal ticket book karna hai	HI	coach
+help!	EN	sos
+बचाओ	HI	sos
+ask my son for help	EN	family
+read my messages	EN	messages
+what is on this screen	EN	explain
+where am I	EN	explain
+what's my BP tablet	EN	recall
+good morning	EN	briefing|question
+hello	EN	question
+how to make upma	EN	question
+what is diabetes	EN	question
+who is the prime minister of india	EN	question|intent:lookup
+tell me a story	EN	question
+open whatsapp	EN	app:com.whatsapp|intent:open_app|skill:wa_message
+open youtube	EN	app:com.google.android.youtube|skill:youtube
+open notification bar	EN	system
+take a screenshot	EN	system
+is this a scam	EN	scamcheck
+remember my locker number is in the blue diary	EN	note
+open my youtube subscriptions	EN	recipe
+# ── held-out (added after the first fixes) ──
+should I take an umbrella	EN	intent:weather|intent:lookup
+kal garmi hogi kya	HI	intent:weather|intent:lookup
+what's the temperature in hyderabad	EN	intent:weather|intent:lookup
+petrol price today	EN	intent:lookup
+cricket score batao	HI	intent:lookup
+put on some bhakti songs	EN	intent:music|skill:youtube|intent:watch
+I want to watch baahubali	EN	intent:watch|skill:ott
+show me a cooking video	EN	intent:watch|intent:music|skill:youtube
+चलो कोई गाना चलाओ	HI	intent:music|skill:youtube|intent:watch
+call rahul	EN	intent:call|skill:call
+dial my daughter	EN	intent:call|skill:call
+video call amma	EN	intent:video_call|skill:wa_video
+tell my son I will be late	EN	intent:message|skill:wa_message|family
+share this picture with my wife	EN	intent:photo|skill:wa_photo
+alarm for 5 30 in the morning	EN	intent:alarm|skill:alarm
+remind me to call the doctor at 4 pm	EN	skill:medicine|intent:alarm|skill:alarm|routine
+directions to the railway station	EN	intent:directions|skill:maps
+the phone is too quiet	EN	skill:volume|intent:setting
+make the screen brighter	EN	skill:brightness|intent:setting
+switch off wifi	EN	skill:wifi|intent:setting
+turn the torch off	EN	skill:torch
+मेरा फ़ोन धीमा चल रहा है	HI	skill:storage|intent:setting|agent
+click a photo	EN	skill:camera|intent:photo
+what's written here	EN	skill:read_this|explain
+what is this button for	EN	explain|question
+i am lost	EN	explain
+book a bus ticket to vijayawada	EN	coach
+watch cricket on tv	EN	coach
+thank you	EN	question
+what should I eat for diabetes	EN	question

@@ -63,7 +63,7 @@ object Skills {
             s3("Send a WhatsApp message to my son", "बेटे को मैसेज भेजो", "కొడుకుకి మెసేజ్ పంపు")) { ctx, s -> whatsapp(ctx, s, video = false) },
 
         Skill("wa_photo", Cat.CHAT, R.drawable.ic_add_photo_alternate, s3("Send a photo on WhatsApp", "WhatsApp पर फोटो भेजें", "WhatsApp లో ఫోటో పంపండి"),
-            listOf("send photo", "send a photo", "send picture", "share photo", "send the photo", "फोटो भेज", "फ़ोटो भेज", "ఫోటో పంపు"),
+            listOf("send photo", "send a photo", "send picture", "share photo", "send the photo", "share this picture", "share the picture", "share a picture", "send this picture", "फोटो भेज", "फ़ोटो भेज", "ఫోటో పంపు"),
             s3("Send a photo to my son on WhatsApp", "बेटे को फोटो भेजो", "కొడుకుకి ఫోటో పంపు")) { ctx, s ->
             val base = whatsapp(ctx, s, video = false)
             Flow("wa_photo", base.launch,
@@ -213,7 +213,7 @@ object Skills {
         },
 
         Skill("read_this", Cat.DAILY, R.drawable.ic_document_scanner, s3("Read this for me", "मेरे लिए पढ़ो", "నా కోసం చదువు"),
-            listOf("read this", "read it", "read the", "what does this say", "what is written", "magnifier", "zoom in", "can't see", "बड़ा करके दिखाओ",
+            listOf("read this", "read it", "read the", "what does this say", "what is written", "what's written", "written here", "this paper", "this letter", "paper say", "magnifier", "zoom in", "can't see", "बड़ा करके दिखाओ",
                 "पढ़ो", "पढ़कर सुनाओ", "क्या लिखा है", "చదువు", "చదివి వినిపించు", "ఏం రాసి ఉంది"),
             s3("Read this letter for me", "यह काग़ज़ पढ़कर सुनाओ", "ఈ కాగితం చదివి వినిపించు")) { _, _ ->
             Flow("read_this", null, emptyList(), null, NONE, NONE, action = { ctx ->

@@ -143,10 +143,17 @@ object IntentRouter {
     private val QUESTION = Regex("(?i)^\\W*(how|what|why|who|when|where|which|can you|could you|tell me|explain|is it|should i|do you|are you|what's|whats)\\b|\\?\\s*$|" +
         "^(क्या|कैसे|क्यों|कौन|कब|कहाँ|मुझे बताओ)|(क्या है|कैसे बनाते|कैसे करते)|^(ఏమిటి|ఎలా|ఎందుకు|ఎవరు|ఎప్పుడు|ఎక్కడ)|(ఎలా చేయాలి|ఏమిటి)")
 
+    /** Live facts, places, reading, objects: phrased as questions, but they need the phone/camera/web, not a chat answer. */
+    private val NOT_CHAT = Regex("(?i)weather|rain|umbrella|hot|cold|temperature|forecast|score|price|rate|news|today|tomorrow|match|" +
+        "go to|reach|way to|route|near(est|by)?|hospital|station|address|" +
+        "paper|letter|written|read|say\\b|this (machine|thing|remote|device|washing|microwave|tv|fan|geyser)|use this|work(s)? this|where am i|" +
+        "बारिश|मौसम|गर्मी|रास्ता|पढ़|यह कैसे|వర్షం|వాతావరణం|దారి|చదువ|ఇది ఎలా")
+
     /** A question or chit-chat to answer out loud, not a phone task to navigate. */
     fun isQuestion(ctx: Context?, goal: String): Boolean {
         if (isGreeting(goal)) return true
         if (!QUESTION.containsMatchIn(goal.trim())) return false
+        if (NOT_CHAT.containsMatchIn(goal)) return false
         if (PHONE_WORDS.containsMatchIn(goal)) return false
         if (Skills.match(goal) != null) return false
         return ctx == null || AppLauncher.findInGoal(ctx, goal) == null
@@ -165,6 +172,14 @@ object IntentRouter {
             else -> null
         }
     }
+
+    /** "How do I use this washing machine?" → the camera helps with the object in front of them. */
+    fun isObjectHelp(goal: String) = Regex("(?i)how (do i|to|does) (use|work|operate|start) (this|the)\\b|how does this (work|thing)|use this (machine|thing|remote|device)|" +
+        "यह कैसे चल|इसे कैसे चला|ఇది ఎలా వాడ|దీన్ని ఎలా").containsMatchIn(goal)
+
+    /** Skills that do or open exactly the right thing (instant or one screen): they beat the generic "setting" route. */
+    val DIRECT = setOf("torch", "volume", "font", "wifi", "bluetooth", "brightness", "battery", "storage", "storage_view", "camera",
+        "dark_mode", "read_this", "scan_medicine", "home", "tv", "internet", "backup", "phone_school", "wa_photo")
 
     fun isScamCheck(goal: String) = goal.lowercase().has("scam", "fraud", "is this safe", "धोखा", "ठगी", "మోసం")
 

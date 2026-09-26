@@ -12,6 +12,7 @@ object NpuProbe {
     fun run(ctx: Context, backend: String = "NPU", which: String = "vision", visionBackend: Boolean = true): String {
         val f: File = when (which) {
             "vision" -> ModelLocator.vision(ctx)
+            "fast" -> ModelLocator.fast(ctx)
             else -> ModelLocator.text(ctx).firstOrNull()
         } ?: return "✗ no model found in ${ModelLocator.dirs(ctx).joinToString()}".also { Log.w(TAG, it) }
         Log.i(TAG, "probe: ${f.name} on $backend (visionBackend=$visionBackend)")

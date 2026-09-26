@@ -36,9 +36,37 @@ object Understand {
         "hanuman chalisa sunao -> INTENT=music | QUERY=Hanuman Chalisa | APP=none | DEVICE=phone | PERSON=none\n" +
         "how to make upma -> INTENT=question | QUERY=how to make upma | APP=none | DEVICE=phone | PERSON=none"
 
-    suspend fun parse(goal: String): Intent2? {
-        if (!LlmManager.isReady) return null
-        val out = LlmManager.generate(SYSTEM, "$goal ->") ?: return null
+    /** Which brain understood the last request ("NPU" = Gemma 3 1B on the Hexagon NPU, "GPU" = Gemma 4). */
+    @Volatile var lastBrain = ""
+
+    /** Which intents a keyword-matched skill is compatible with (used to trust the fast NPU answer). */
+    private val COMPATIBLE = mapOf(
+        "font" to "setting", "volume" to "setting", "wifi" to "setting", "bluetooth" to "setting", "brightness" to "setting",
+        "battery" to "setting", "storage" to "setting", "storage_view" to "setting", "dark_mode" to "setting", "internet" to "setting",
+        "torch" to "setting|other", "camera" to "photo|other", "call" to "call", "wa_video" to "video_call", "wa_message" to "message",
+        "wa_photo" to "photo|message", "youtube" to "music|watch", "ott" to "watch", "maps" to "directions", "alarm" to "alarm|reminder",
+        "medicine" to "alarm|reminder", "irctc_tatkal" to "book", "tv" to "tv|watch")
+
+    /**
+     * Hybrid brain. The NPU (Gemma 3 1B, ≈0.25–0.6 s) answers first; its answer is used when it agrees with the keyword
+     * skill or is a clear lookup/watch/music/directions intent. Otherwise (disagreement, or "question", which the 1B
+     * model over-uses) Gemma 4 on the GPU double-checks. Measured: NPU alone 83%, GPU alone 94%.
+     */
+    suspend fun parse(goal: String, ctx: Context? = null): Intent2? {
+        val npu = parseLine(ctx?.let { com.saathi.app.llm.FastBrain.generate(it, SYSTEM, "$goal ->") })
+        if (npu != null) {
+            val kw = Skills.match(goal)?.id
+            val agrees = kw != null && COMPATIBLE[kw]?.split('|')?.contains(npu.intent) == true
+            val clear = kw == null && npu.intent in setOf("weather", "lookup", "watch", "music", "directions", "book") && npu.query != null
+            if (agrees || clear) { lastBrain = "NPU"; return npu }
+        }
+        if (!LlmManager.isReady) { lastBrain = if (npu != null) "NPU" else ""; return npu }
+        lastBrain = "NPU→GPU"
+        return parseLine(LlmManager.generate(SYSTEM, "$goal ->")) ?: npu
+    }
+
+    private fun parseLine(out: String?): Intent2? {
+        out ?: return null
         val kv = out.lines().firstOrNull { it.contains("INTENT", true) }?.split("|")?.mapNotNull {
             val p = it.split("=", limit = 2); if (p.size == 2) p[0].trim().uppercase() to p[1].trim() else null
         }?.toMap() ?: return null

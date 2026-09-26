@@ -15,6 +15,7 @@ import android.os.Vibrator
 import android.provider.Settings
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import kotlinx.coroutines.launch
 import androidx.core.content.ContextCompat
 import com.saathi.app.guide.Guide
 import com.saathi.app.guide.Lang
@@ -209,6 +210,13 @@ class SaathiService : AccessibilityService() {
                     "stop" -> guide.stop()
                     "aura" -> overlay?.setAura(i.getBooleanExtra("on", true))
                     "dump" -> dumpTree()
+                    "eval" -> i.getStringExtra("goal")?.let { g ->
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                            val t0 = System.currentTimeMillis()
+                            val d = runCatching { guide.decideOnly(g) }.getOrElse { "error:${it.javaClass.simpleName}" }
+                            Log.i("SaathiEval", "$g\t$d\t${System.currentTimeMillis() - t0}\t${com.saathi.app.guide.Understand.lastBrain}")
+                        }
+                    }
                     "log_from" -> com.saathi.app.DebugLog.setFrom(this@SaathiService, i.getLongExtra("ms", 0L))
                     "ask" -> openAsk(i.getBooleanExtra("listen", false))
                     "routine" -> com.saathi.app.guide.Routines.all(this@SaathiService).firstOrNull()?.let { guide.routineDue(it) }

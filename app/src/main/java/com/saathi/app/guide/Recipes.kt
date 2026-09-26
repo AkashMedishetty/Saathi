@@ -72,9 +72,12 @@ object Recipes {
 
     /** The recipe whose name best matches what they asked (word overlap). */
     fun find(c: Context, goal: String): Recipe? {
-        val w = goal.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.length >= 3 }.toSet()
-        return all(c).map { r -> r to r.name.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).count { it in w } }
-            .filter { it.second >= 2 || (it.second >= 1 && it.first.name.split(' ').size <= 2) }.maxByOrNull { it.second }?.first
+        val stop = setOf("the", "my", "a", "an", "to", "on", "in", "me", "please", "for")
+        fun words(t: String) = t.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.length >= 2 && it !in stop }.toSet()
+        val w = words(goal)
+        // Most of the recipe's own words must be in the request ("open youtube" ≠ "open my youtube subscriptions").
+        return all(c).map { r -> val rw = words(r.name); r to (if (rw.isEmpty()) 0.0 else rw.count { it in w }.toDouble() / rw.size) }
+            .filter { it.second >= 0.75 }.maxByOrNull { it.second }?.first
     }
 
     /** A recording as a guided flow: each tap becomes a step, matched by its label. */
