@@ -74,7 +74,7 @@ object YouTubeMap {
                     "(play|put on|watch) (a |some |the )?.+ (video|song|bhajan|songs|videos)",
                     ".+ (गाना|गाने|भजन|वीडियो) (लगाओ|चलाओ|बजाओ|सुनाओ|दिखाओ)", ".+ (పాట|పాటలు|వీడియో) (పెట్టు|వినిపించు|చూపించు)",
                 ),
-                avoid = listOf(rx("video ?call|वीडियो कॉल|వీడియో కాల్|subscription|सब्सक्रिप्शन|సబ్.?స్క్రిప్షన్|history|हिस्ट्री|హిస్టరీ")),
+                avoid = listOf(rx("video ?call|वीडियो कॉल|వీడియో కాల్|subscription|सब्सक्रिप्शन|సబ్.?స్క్రిప్షన్|history|हिस्ट्री|హిస్టరీ|spotify|स्पॉटिफाई|స్పాటిఫై")),
                 slots = listOf("query"),
                 steps = listOf(
                     MapStep("yt_home", SEARCH_ICON,
