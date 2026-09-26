@@ -143,6 +143,9 @@ class Guide(
     private data class Settle(val routeId: String, var kind: String, val label: String, var say: String,
         var start: String, var last: String, var changedAt: Long = 0L, var asked: Boolean = false)
     private var settle: Settle? = null
+    /** Unscripted (planner) path: how close each planned screen was to the goal (goal words on it), and search-first. */
+    private val planScores = mutableListOf<Int>()
+    private var searchTried = false
     /** What they answered to Saathi's questions in this task ("play the playlist"): the planner sees it every time. */
     private val answers = mutableListOf<String>()
     /** The current map step's checked explanation ("The magnifying glass means search."): the grounded answer to a doubt. */
@@ -563,7 +566,7 @@ class Guide(
         flow = f
         history.clear(); current = null; lastSpokenKey = null; lastSig = 0; warnedSig = 0; lastStepIdx = -1; scrolls = 0
         taskPkgs.clear(); paused = false; pendingLearn = null; adoptPkg = true
-        auto = autoMode; autoSteps = 0; autoLastKey = null; autoSameKey = 0; setAside = false; answers.clear()
+        auto = autoMode; autoSteps = 0; autoLastKey = null; autoSameKey = 0; setAside = false; answers.clear(); planScores.clear(); searchTried = false
         planCache.clear(); unsureCount.clear(); plansThisTask = 0; wallFp = 0; lastActKey = null; sameActCount = 0
         LlmManager.endChat(); taskKey = "task_${SystemClock.uptimeMillis()}"; lastActionNote = null
         lastProgress = SystemClock.uptimeMillis(); stuckOffered = false
@@ -917,6 +920,8 @@ class Guide(
             if (fp != wallFp) { wallFp = fp; showWall(ScreenKinds.Wall(null, true), screen) }
             return
         }
+        // 9d. Unscripted path, validated (field: vague tasks drifted: the model tapped "something" on any screen).
+        driftCheck(screen, f, g)?.let { return }
         // 10. Anything else: the planner (on-device LLM, loaded on first need; keywords while it warms up).
         if (!LlmManager.isReady) LlmManager.loadAsync(svc)
         delay(50)
@@ -974,8 +979,16 @@ class Guide(
                 planCache[fp] = Plan(el.label, el.role, text, d.noAct)
                 // A search box: "Do it" types the key words of their request (e.g. "ringtone").
                 val fill = if (el.role == "input" && !el.password) (d.text ?: searchTerm(f?.llmGoal ?: g)) else null
-                show(Target(el, if (fill != null) say("Tap the search box and type “$fill”.", "खोज में “$fill” लिखिए।", "వెతుకులో “$fill” టైప్ చేయండి.").pick(lang) else text,
-                    "plan_${el.label}", fill = fill, noAct = d.noAct))
+                // Not a guess dressed as certainty: a target unrelated to the goal and not a normal way to move around
+                // is offered as "I'm not sure" with no "Do it".
+                val words = goalWords(f?.llmGoal ?: g)
+                val related = words.any { el.label.contains(it, true) } || NAV_WORDS.containsMatchIn(el.title) || fill != null
+                val unsureText = say("I'm not sure, but try “${el.title.take(30)}”. If it's wrong, say “I'm lost”.",
+                    "पक्का नहीं पता, पर “${el.title.take(30)}” आज़माइए। ग़लत हो तो कहिए “मैं खो गया”।",
+                    "ఖచ్చితంగా తెలియదు, కానీ “${el.title.take(30)}” ప్రయత్నించండి. తప్పైతే “తప్పిపోయాను” అనండి.").pick(lang)
+                if (!related) com.saathi.app.DebugLog.i("drift", "unrelated target \"${el.title}\" for $words: offered as unsure")
+                show(Target(el, if (fill != null) say("Tap the search box and type “$fill”.", "खोज में “$fill” लिखिए।", "వెతుకులో “$fill” టైప్ చేయండి.").pick(lang)
+                    else if (!related) unsureText else text, "plan_${el.label}", fill = fill, noAct = d.noAct || !related))
             } else {
                 unsureCount[fp] = (unsureCount[fp] ?: 0) + 1
                 if (screen.scrollable() != null && (unsureCount[fp] ?: 0) == 1) show(Target(null, d.say, "plan_scroll_$fp", scroll = true))
@@ -2256,6 +2269,62 @@ class Guide(
     }
 
     /** "change my ringtone" → "ringtone": the words worth typing into a search box. */
+    private val NAV_WORDS = Regex("(?i)^(search|search .*|menu|more|more options|next|continue|ok|done|allow|open|home|back|navigate up|settings|library|you|profile|account|tabs?)$|search")
+
+    /** The goal's own words ("ringtone", "liked", "akash"): what a screen closer to the goal would show. */
+    private fun goalWords(goal: String): List<String> {
+        val stop = setOf("change", "the", "how", "want", "please", "show", "open", "find", "make", "with", "from", "that", "this",
+            "some", "have", "what", "where", "phone", "mobile", "there", "help", "need", "like", "about", "your", "into", "want")
+        return SlotExtractor.searchPhrase(goal).lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+"))
+            .filter { it.length >= 4 && it !in stop }.distinct()
+    }
+
+    /**
+     * The unscripted path's checks, before the model plans a step. Returns Unit when it handled the screen.
+     * - Stay in the task's app: a planner step that ended up in another app → "where am I" (not more guesses there).
+     * - Search first: a vague goal in an app with a search box/icon → "let's search for …" (what a careful person does).
+     * - Progress: three planned screens in a row with none of the goal's words → "I may have taken a wrong turn".
+     */
+    private fun driftCheck(screen: Screen, f: Flow?, g: String): Unit? {
+        if (f != null && f.steps.isNotEmpty()) return null   // scripted flows check their own screens
+        val home = f?.appPkg
+        if (home != null && screen.pkg != home && plansThisTask > 0 && !helperApp(screen.pkg) && screen.pkg != launcherPkg()) {
+            com.saathi.app.DebugLog.i("drift", "left ${home} for ${screen.pkg}")
+            whereAmI(lead = say("This isn't the app we were in. ", "यह वह ऐप नहीं है जिसमें हम थे। ", "ఇది మనం ఉన్న యాప్ కాదు. ").pick(lang))
+            return Unit
+        }
+        val words = goalWords(f?.llmGoal ?: g)
+        // Search is for FINDING something (a song, a chat, a setting), never for making one (field: "add my doctor
+        // appointment" was sent to Calendar's search).
+        val finding = Regex("(?i)\\b(find|show|see|look|watch|play|listen|where|search|read|check|open)\\b|दिखा|ढूंढ|ढूँढ|चलाओ|చూపించు|వెతుకు").containsMatchIn(g) &&
+            !Regex("(?i)\\b(add|create|new|make|set|send|call|write|book|delete|remove|schedule|save)\\b|जोड़|बनाओ|भेजो|జోడించు|పంపు").containsMatchIn(g)
+        if (!searchTried && finding && words.isNotEmpty()) {
+            searchTried = true
+            val s = screen.elements.firstOrNull { e -> (e.role == "input" && Regex("(?i)search").containsMatchIn(e.label)) } ?:
+                screen.elements.firstOrNull { e -> e.role == "button" && Regex("(?i)^search\\b|^search$|magnif").containsMatchIn(e.title) }
+            if (s != null) {
+                val appName = AppLauncher.labelOf(svc, screen.pkg).lowercase()
+                val term = (searchTerm(f?.llmGoal ?: g) ?: words.take(2).joinToString(" ")).split(" ")
+                    .filter { !appName.contains(it.lowercase()) && it.lowercase() != "app" }.joinToString(" ").ifBlank { words.first() }
+                com.saathi.app.DebugLog.i("drift", "search first: \"$term\" via \"${s.title}\"")
+                show(Target(s, if (s.role == "input") say("Let's search. Tap the search box and type “$term”.", "खोजते हैं। खोज में “$term” लिखिए।",
+                    "వెతుకుదాం. వెతుకులో “$term” టైప్ చేయండి.").pick(lang)
+                    else say("Let's search for “$term”. Tap the magnifying glass.", "“$term” खोजते हैं। आवर्धक काँच दबाइए।",
+                        "“$term” వెతుకుదాం. భూతద్దం నొక్కండి.").pick(lang), "plan_search", fill = if (s.role == "input") term else null))
+                return Unit
+            }
+        }
+        val score = words.count { screen.allText.contains(it, true) }
+        planScores += score
+        if (planScores.size >= 3 && planScores.takeLast(3).all { it == 0 }) {
+            com.saathi.app.DebugLog.i("drift", "3 screens with none of $words: stop and show where we are")
+            planScores.clear()
+            whereAmI(lead = say("I may have taken a wrong turn. ", "शायद हम ग़लत रास्ते पर हैं। ", "మనం తప్పు దారిలో వెళ్ళామేమో. ").pick(lang))
+            return Unit
+        }
+        return null
+    }
+
     private fun searchTerm(goal: String): String? {
         val stop = setOf("change", "my", "the", "a", "an", "how", "to", "do", "i", "set", "open", "turn", "on", "off", "make", "please", "want", "can", "you", "find", "show", "me", "is", "in")
         val w = SlotExtractor.searchPhrase(goal).split(Regex("\\s+")).filter { it.length > 2 && it.lowercase() !in stop }
