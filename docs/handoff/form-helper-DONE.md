@@ -1,6 +1,6 @@
 # Form helper: DONE (Kiro, branch `kiro/form-helper`)
 
-Package `com.saathi.app.forms` (8 files) with tests in `app/src/test/java/com/saathi/app/forms/` (49 tests, 5 classes).
+Package `com.saathi.app.forms` (10 files) with tests in `app/src/test/java/com/saathi/app/forms/` (49 tests, 5 classes).
 The whole suite passes on the branch: `./gradlew testDebugUnitTest assembleDebug` runs 64 tests with 0 failures, and the
 merged manifest has no INTERNET permission.
 No new dependencies. No files outside `forms/` were touched.
