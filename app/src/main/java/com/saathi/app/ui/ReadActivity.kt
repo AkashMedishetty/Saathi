@@ -290,6 +290,7 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
                 if (tooDark(bmp)) {
                     // A black or blank frame (lens covered, dark room): say so instead of "describing" nothing.
                     aura.setAura(false); busy = false
+                    com.saathi.app.DebugLog.i("read", "too dark")
                     val t = s("It's too dark to read. Hold it in the light, a little further away, and try again.",
                         "बहुत अँधेरा है। रोशनी में, थोड़ा दूर रखकर फिर कोशिश कीजिए।", "చాలా చీకటిగా ఉంది. వెలుతురులో, కొంచెం దూరంగా పెట్టి మళ్ళీ ప్రయత్నించండి.")
                     showSheet(t, "", listOf(again(), close())); speaker?.say(t, lang); return
