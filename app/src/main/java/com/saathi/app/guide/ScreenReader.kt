@@ -29,7 +29,7 @@ data class Screen(val pkg: String, val elements: List<UiElement>, val allText: S
                 if (!e.enabled) append(" (disabled)")
                 if (e.role == "switch") append(if (e.checked) " (on)" else " (off)")
             }
-            "[${e.id}] ${e.role} \"${e.label.take(40)}\"$state"
+            "[${e.id}] ${e.role} \"${redact(e.label).take(40)}\"$state"
         }
 
     /**
@@ -41,6 +41,11 @@ data class Screen(val pkg: String, val elements: List<UiElement>, val allText: S
         return cands.firstOrNull { e -> targets.any { it.containsMatchIn(e.title) } }
             ?: if (role != null) cands.firstOrNull { e -> targets.any { it.containsMatchIn(e.label) } } else null
     }
+
+    /** What the model may see: no balances, OTPs or phone numbers (4+ digits → ####), no emails. */
+    private fun redact(t: String) = t
+        .replace(Regex("\\d[\\d ,.-]{2,}\\d"), "####")
+        .replace(Regex("[\\w.+-]+@[\\w-]+\\.[\\w.]+"), "(email)")
 
     fun byId(id: Int) = elements.firstOrNull { it.id == id }
     fun scrollable() = elements.firstOrNull { it.scrollable }

@@ -61,10 +61,14 @@ object Planner {
     }
 
     suspend fun decide(goal: String, screen: Screen, history: List<String>, lang: Lang, learned: List<String> = emptyList()): Decision {
-        val raw = if (LlmManager.isReady) LlmManager.generate(SYSTEM, buildUser(goal, screen, history, learned)) else null
+        // Banking / UPI screens never go to the model at all: keywords and scripts only.
+        val raw = if (LlmManager.isReady && !isMoneyApp(screen.pkg)) LlmManager.generate(SYSTEM, buildUser(goal, screen, history, learned)) else null
         val d = raw?.let { parse(it, screen, lang) } ?: heuristic(goal, screen, lang)
         return guard(d, screen, lang)
     }
+
+    private val MONEY_PKGS = Regex("paisa|phonepe|paytm|npci|sbi|icici|hdfc|axis|kotak|bank|upi|wallet|pay", RegexOption.IGNORE_CASE)
+    fun isMoneyApp(pkg: String) = MONEY_PKGS.containsMatchIn(pkg)
 
     /** Pure: model text → decision, or null if it isn't usable. */
     fun parse(raw: String, screen: Screen, lang: Lang = Lang.EN): Decision? {
