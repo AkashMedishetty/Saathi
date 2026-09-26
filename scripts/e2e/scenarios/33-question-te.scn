@@ -1,0 +1,6 @@
+name: General question routes to source (TE)
+# B17. Browser connectivity required; checks routing/output event, not factual correctness.
+say TE మేఘాలు ఎలా ఏర్పడతాయి
+expect log "\[respond\] general question" within 15
+expect log "\[lookup\] q=.* a=" within 35
+expect enabled

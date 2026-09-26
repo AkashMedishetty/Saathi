@@ -1,0 +1,6 @@
+0.000 I E2E: enabled=1
+0.100 I SaathiLog: [goal] "hello"
+0.300 I SaathiLog: [finish] "Namaste"
+0.500 I SaathiLog: [service] destroyed
+1.000 I E2E: enabled=0
+1.001 I E2E: end

@@ -1,0 +1,6 @@
+name: Learn Google Docs entry
+apps: com.google.android.apps.docs.editors.docs
+# Demo pivot. No document or account is modified.
+say EN teach me how to use Google Docs
+expect show key=(open_app|find_app) within 15
+expect enabled

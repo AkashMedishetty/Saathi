@@ -1,0 +1,12 @@
+name: Synthetic parser replay, not device evidence
+apps: com.google.android.youtube # only resettable apps are allowed
+say EN search for old telugu songs on youtube
+expect show key=search within 1
+tap-glow
+expect show key=type within 1
+doit
+expect show key=(go|pick) within 1
+expect focus "com.google.android.youtube" within 1
+expect not log "\[act\].*target=\"Send\"" for 1
+expect enabled
+screenshot replay

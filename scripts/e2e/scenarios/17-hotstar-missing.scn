@@ -1,0 +1,7 @@
+name: Missing Hotstar points to Install
+# B4. Precondition: Hotstar is absent. No installation is performed.
+say EN watch my serial on hotstar
+expect log "\[missing\] app=in.startv.hotstar" within 15
+expect show key=install within 15
+expect not log "\[act\].*(key=install|target=.?[Ii]nstall)" for 3
+expect enabled

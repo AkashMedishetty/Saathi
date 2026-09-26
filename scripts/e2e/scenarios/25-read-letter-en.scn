@@ -1,0 +1,6 @@
+name: Reader opens (EN)
+# C1 entry only. Camera capture/OCR quality requires a real paper and manual visual review.
+say EN read this letter
+expect focus "com.saathi.app.*ReadActivity" within 12
+screenshot reader
+expect enabled

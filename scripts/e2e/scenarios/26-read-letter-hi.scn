@@ -1,0 +1,6 @@
+name: Reader opens (HI)
+# C1 entry only. Camera capture/OCR quality requires a real paper and manual visual review.
+say HI यह पत्र पढ़ो
+expect focus "com.saathi.app.*ReadActivity" within 12
+screenshot reader
+expect enabled

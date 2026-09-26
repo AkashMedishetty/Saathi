@@ -1,0 +1,6 @@
+name: Call son guidance without placing call (EN)
+# A4. Save a family contact for the terminal Call glow; contact-search guidance also counts.
+say EN call my son
+expect show key=(call|search|type|pick) within 15
+expect not log "\[act\].*(key=call|target=.?(Call|Dial))" for 3
+expect enabled

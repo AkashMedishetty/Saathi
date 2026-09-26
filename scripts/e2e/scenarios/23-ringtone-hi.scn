@@ -1,0 +1,11 @@
+name: Settings ringtone search (HI)
+# A16/Settings trap. Opens Settings via person-style intent; stops before choosing a ringtone.
+start-activity android.settings.SETTINGS
+expect focus "com.android.settings" within 8
+say HI मेरी रिंगटोन बदलो
+expect show key=open_search within 15
+tap-glow
+expect show key=type within 10
+doit
+expect show key=result within 12
+expect enabled

@@ -1,0 +1,8 @@
+0.000 I E2E: enabled=1
+0.100 101 101 I SaathiLog: [goal] "search for old telugu songs on youtube"
+0.200 101 101 I SaathiLog: [show] key=search el="Search" role=button bounds=[100,200][300,400] noAct=false
+0.600 101 101 I SaathiLog: [show] key=type el="Search YouTube" role=input bounds=[10,20][90,60] noAct=false
+0.900 101 101 I SaathiLog: [show] key=go el="Search" role=button bounds=[30,40][90,100] noAct=false
+1.200 I E2E: focus=mCurrentFocus com.google.android.youtube/MainActivity
+3.000 I E2E: enabled=1
+3.001 I E2E: end

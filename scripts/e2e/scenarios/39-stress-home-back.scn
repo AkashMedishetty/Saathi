@@ -1,0 +1,16 @@
+name: HOME and BACK during guidance
+apps: com.google.android.youtube
+# D2. Pause log required on HOME; BACK asserts health only, overlay placement needs visual review.
+say EN search for old telugu songs on youtube
+expect show key=search within 15
+home
+expect log "\[pause\]" within 10
+say EN search for old telugu songs on youtube
+expect show key=search within 15
+tap-glow
+expect show key=type within 10
+back
+expect not log "\[service\] destroyed" for 3
+home
+expect focus "launcher|Launcher" within 8
+expect enabled

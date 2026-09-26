@@ -1,0 +1,23 @@
+name: Ten requests without resetting apps
+# D1. Exactly ten requests; no internal reset/force-stop. No terminal communication tap.
+say EN hello
+expect log "\[finish\]|\[respond\]" within 15
+say HI नमस्ते
+expect log "\[finish\]|\[respond\]" within 15
+say TE నమస్తే
+expect log "\[finish\]|\[respond\]" within 15
+say EN search for old telugu songs on youtube
+expect show key=search within 15
+say EN open my YouTube subscriptions
+expect show key=(subscriptions|subs) within 15
+say EN teach me how to use Spotify
+expect show key=(open_app|find_app) within 15
+say EN read this letter
+expect focus "ReadActivity" within 12
+say EN open WhatsApp
+expect log "\[finish\]|\[show\] key=wall_" within 15
+say EN call my son
+expect show key=(call|search|type|pick) within 15
+say EN hello
+expect log "\[finish\]|\[respond\]|\[answer\]" within 20
+expect enabled

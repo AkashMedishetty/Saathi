@@ -1,0 +1,5 @@
+name: Learn-section photo lesson entry
+# School Week 2 camera phrase; does not take a photo.
+say EN teach me how to take a photo
+expect show key=(open_app|find_app|switch|shutter) within 15
+expect enabled
