@@ -224,7 +224,8 @@ internal class Tree(val nodes: List<Node>) {
         val n = nodes[i]
         if (n.clickable || n.editable) return i
         var p = parent[i]; var k = 0
-        while (p >= 0 && k < 4) { if (nodes[p].clickable) return p; p = parent[p]; k++ }
+        // Up to 6 levels: YouTube's library cards put the title 5 levels under the tappable card (field, 03:20).
+        while (p >= 0 && k < 6) { if (nodes[p].clickable) return p; p = parent[p]; k++ }
         return if (s.clickable == true) null else i
     }
 

@@ -182,4 +182,12 @@ class YouTubeMapTest {
         // An old playlist page before anything was searched: not ours to play.
         assertTrue(AppMaps.next(search, pkg, page, 0, q) !is Decision.Glow)
     }
+
+    /** Field (03:20): "my liked videos" → You tab → the Liked videos card (its title sits 5 levels under the card). */
+    @Test fun likedVideosCardOnYouTab() {
+        val liked = AppMaps.routeById("yt_liked")!!
+        assertEquals("yt_liked", AppMaps.route("show my liked videos on youtube")?.id)
+        val d = AppMaps.next(liked, pkg, yt("you_tab"), 1)
+        assertTrue("$d", d is Decision.Glow && d.step == 1 && d.box.t in 1800..1950)
+    }
 }

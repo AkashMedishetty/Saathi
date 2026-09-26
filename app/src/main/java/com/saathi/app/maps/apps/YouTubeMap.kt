@@ -45,6 +45,22 @@ object YouTubeMap {
      */
     private val SUBS_CUE = lbl("^(New videos right to you|Manage|All subscriptions|Subscribe to get the latest videos.*)$|^Subscribe to .+\\.$")
 
+    /** One of their own lists on the You tab ("Liked videos"): You → the card → its page. */
+    private fun youThing(id: String, label: String, what: com.saathi.app.guide.Say, vararg g: String) = Route(
+        id = id, pkg = PKG, goals = goals(*g), slots = emptyList(),
+        steps = listOf(
+            MapStep("yt_home", listOf(TAB_YOU), say("Tap You at the bottom right.", "नीचे दाईं ओर 'You' दबाइए।", "కింద కుడివైపు 'You' నొక్కండి."),
+                why = say("Everything that's yours on YouTube is under You.", "YouTube पर आपका सब कुछ 'You' में है।", "YouTube లో మీదంతా 'You' లో ఉంటుంది."),
+                alsoOn = listOf("yt_subs", "yt_results", "yt_results_for", "yt_history")),
+            MapStep("yt_you", listOf(lbl("^" + Regex.escape(label) + "$")), say("Tap “$label”.", "“$label” दबाइए।", "“$label” నొక్కండి."),
+                scrollHint = say("Slowly scroll down to “$label”.", "धीरे से नीचे “$label” तक स्क्रॉल कीजिए।", "నెమ్మదిగా “$label” వరకు కిందకు స్క్రోల్ చేయండి.")),
+        ),
+        // Its page has the name as the title at the top (on the You tab the card sits low).
+        done = listOf(Sel(label = rx("^" + Regex.escape(label) + "$"), above = 0.3f)), doneNeedsLastStep = true,
+        doneSay = com.saathi.app.guide.say("Here are ${what[com.saathi.app.guide.Lang.EN]}.", "ये रहे ${what[com.saathi.app.guide.Lang.HI]}।",
+            "ఇవిగో ${what[com.saathi.app.guide.Lang.TE]}."),
+    )
+
     val map = AppMap(
         pkg = PKG, name = "YouTube",
         screens = listOf(
@@ -78,7 +94,9 @@ object YouTubeMap {
                     "(play|put on|watch) (a |some |the )?.+ (video|song|bhajan|songs|videos)",
                     ".+ (गाना|गाने|भजन|वीडियो) (लगाओ|चलाओ|बजाओ|सुनाओ|दिखाओ)", ".+ (పాట|పాటలు|వీడియో) (పెట్టు|వినిపించు|చూపించు)",
                 ),
-                avoid = listOf(rx("video ?call|वीडियो कॉल|వీడియో కాల్|subscription|सब्सक्रिप्शन|సబ్.?స్క్రిప్షన్|history|हिस्ट्री|హిస్టరీ|spotify|स्पॉटिफाई|స్పాటిఫై")),
+                avoid = listOf(rx("video ?call|वीडियो कॉल|వీడియో కాల్|subscription|सब्सक्रिप्शन|సబ్.?స్క్రిప్షన్|history|हिस्ट्री|హిస్టరీ|spotify|स्पॉटिफाई|స్పాటిఫై|" +
+                    // Their own things live on the You tab, never a search for those words.
+                    "liked|watch later|downloaded|my downloads|your videos|my videos|लाइक|बाद में देख|डाउनलोड किए|मेरे वीडियो|లైక్|తర్వాత చూడ|నా వీడియోలు")),
                 slots = listOf("query"),
                 steps = listOf(
                     MapStep("yt_home", SEARCH_ICON,
@@ -116,6 +134,14 @@ object YouTubeMap {
                 next = listOf(say("Want me to show you how to like it or share it with family?",
                     "क्या इसे लाइक करना या परिवार को भेजना सिखाऊँ?", "దీన్ని లైక్ చేయడం లేదా కుటుంబానికి పంపడం చూపించనా?")),
             ),
+            youThing("yt_liked", "Liked videos", say("your liked videos", "आपके लाइक किए वीडियो", "మీరు లైక్ చేసిన వీడియోలు"),
+                "liked videos?", "videos? i liked", "लाइक (किए|वाले) वीडियो", "లైక్ చేసిన వీడియో"),
+            youThing("yt_watch_later", "Watch later", say("the videos you saved to watch later", "बाद में देखने के लिए रखे वीडियो", "తర్వాత చూడటానికి దాచిన వీడియోలు"),
+                "watch later", "saved (videos|for later)", "बाद में देख", "తర్వాత చూడ"),
+            youThing("yt_downloads", "Downloads", say("the videos you downloaded", "आपके डाउनलोड किए वीडियो", "మీరు డౌన్‌లోడ్ చేసిన వీడియోలు"),
+                "my downloads", "downloaded videos?", "videos? i downloaded", "डाउनलोड किए", "డౌన్‌?లోడ్ చేసిన"),
+            youThing("yt_your_videos", "Your videos", say("the videos you made", "आपके अपने वीडियो", "మీ సొంత వీడియోలు"),
+                "my (own |uploaded )?videos", "your videos", "videos i (made|uploaded|posted)", "मेरे (अपने )?वीडियो", "నా వీడియోలు"),
             Route(
                 id = "yt_subscriptions", pkg = PKG,
                 goals = goals("subscription", "channels i (follow|subscribed)", "my channels", "सब्सक्रिप्शन", "सब्सक्राइब किए",
