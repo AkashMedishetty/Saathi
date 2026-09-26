@@ -79,7 +79,18 @@ Rules:
 - **Chrome** `com.android.chrome`: search; open a new tab; clear the cookies banner (tap "Accept" / "Reject",
   whichever exists: prefer reject non-essential).
 - **Google Maps** `com.google.android.apps.maps`: directions to X (search → X → Directions → Start).
-- **Play Store** `com.android.vending`: find app X → Install (risky: glow only).
+- **Play Store** `com.android.vending`: the full "get a new app and learn it" journey:
+  1. search box → type the app name → open the **right** listing. Check the developer name/badge and prefer the
+     result whose title matches best. Warn if the top result is an ad ("Sponsored") or a look-alike (a different
+     developer, few downloads).
+  2. **Install** (risky: glow only; the person taps).
+  3. Wait while "Installing…/Pending" shows (Decision = Wait, see below).
+  4. **Open**.
+  5. Hand over to learning: the route's `next` says "Want me to show you how to use <app>?". Claude then starts the
+     learn-app guide for the new package.
+
+  Also: "update my apps" (Profile → Manage apps → Update all) and "uninstall X" (risky).
+  Add `data class Wait(val say: Say) : Decision` for progress screens (installing, loading, "Please wait").
 - **Camera** (vivo `com.android.camera`), **Clock** (`com.android.deskclock` / vivo), **Instagram**
   `com.instagram.android` (open profile; view reels; post a photo: stops at Share, risky).
 
