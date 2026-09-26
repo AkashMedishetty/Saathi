@@ -44,15 +44,23 @@ object Skills {
     private val SEARCH_BOX = rx("Search", "Find")
     private val SAVE = rx("^Save( copy)?$", "^Done$", "^OK$", "^Apply$", "^Set$")
 
-    private fun searchSteps(query: String, pick: Say) = listOf(
+    private fun searchSteps(query: String, pick: Say, youtube: Boolean = false) = listOf(
         Step("search", SEARCH_BTN, s3("Tap the magnifying glass to search.", "खोजने के लिए आवर्धक काँच (खोज) दबाइए।", "వెతకడానికి భూతద్దం నొక్కండి.")),
         Step("type", SEARCH_BOX, s3("Type \"$query\". Or tap Do it and I'll type it.", "\"$query\" लिखिए। या 'आप कर दो' दबाइए, मैं लिख दूँगा।", "\"$query\" టైప్ చేయండి. లేదా 'మీరే చేయండి' నొక్కండి, నేను టైప్ చేస్తాను."),
             role = "input", fill = query),
-        // A real result: never a search suggestion or an ad, and only once the search box isn't empty (field test:
-        // "Tap the video you like" pointed at a history suggestion).
-        Step("pick", listOf(Regex("^(?!.*(Edit suggestion|Sponsored|Search for|Search YouTube)).*" +
-            Regex.escape(query.split(" ").maxByOrNull { it.length } ?: query), RegexOption.IGNORE_CASE)), pick,
-            unlessVisible = listOf(Regex("^Search YouTube$", RegexOption.IGNORE_CASE))),
+        // Typed: the matching suggestion row runs the search (as does the keyboard's search key).
+        Step("go", listOf(Regex("^" + Regex.escape(query) + "$", RegexOption.IGNORE_CASE)),
+            s3("Now tap “$query” in the list, or the search key on the keyboard.", "अब सूची में “$query” दबाइए, या कीबोर्ड पर खोज वाला बटन।",
+                "ఇప్పుడు జాబితాలో “$query” నొక్కండి, లేదా కీబోర్డ్‌లో వెతుకు బటన్."), role = "button",
+            screenHas = Regex("Edit suggestion|Search for", RegexOption.IGNORE_CASE)), // only while suggestions show
+        // A real result: never the search box, a suggestion or an ad (field test: "Tap the video you like" pointed at a
+        // history suggestion, then at the search box itself).
+        // A real video row: YouTube describes each one as "<title> - <length> - … - <views> - play video" (titles may be in
+        // Hindi for an English search, so we don't match the query words). Never an ad, a channel card or a suggestion.
+        Step("pick", listOf(if (youtube) Regex("(?i)^(?!.*\\bSponsored\\b)(.*\\bplay (video|short)\\s*$|(Playlist|Mix) - .*)")
+            else Regex("^(?=.{${query.length + 12},})(?!.*(Edit suggestion|Sponsored|Search for)).*" +
+                Regex.escape(query.split(" ").maxByOrNull { it.length } ?: query), RegexOption.IGNORE_CASE)), pick,
+            role = "button", unlessVisible = listOf(Regex("^Search YouTube$", RegexOption.IGNORE_CASE), Regex("Edit suggestion", RegexOption.IGNORE_CASE))),
     )
 
     val all: List<Skill> = listOf(
@@ -112,7 +120,7 @@ object Skills {
             s3("Play Hanuman Chalisa on YouTube", "हनुमान चालीसा लगाओ", "హనుమాన్ చాలీసా పెట్టు")) { _, s ->
             val q = SlotExtractor.searchPhrase(s.query?.takeIf { it.length > 1 } ?: s.raw).ifBlank { "bhajan" }
             Flow("youtube", { AppLauncher.launch(it, "com.google.android.youtube") },
-                searchSteps(q, s3("Tap the video you like. The picture shows what it is.", "जो वीडियो पसंद हो उसे दबाइए। तस्वीर से पता चलता है।", "నచ్చిన వీడియోను నొక్కండి. బొమ్మ చూస్తే తెలుస్తుంది.")),
+                searchSteps(q, youtube = true, pick = s3("Tap the video you like. The picture shows what it is.", "जो वीडियो पसंद हो उसे दबाइए। तस्वीर से पता चलता है।", "నచ్చిన వీడియోను నొక్కండి. బొమ్మ చూస్తే తెలుస్తుంది.")),
                 { sc -> sc.elements.any { Regex("^(Pause|Play) video|^Minimi[sz]e|Enter fullscreen|^Full screen", RegexOption.IGNORE_CASE).containsMatchIn(it.label) } },
                 s3("Enjoy! Tap the video once to see the pause and full-screen buttons.", "आनंद लीजिए! रोकने के लिए वीडियो को एक बार छुइए।", "ఆనందించండి! ఆపడానికి వీడియోను ఒకసారి తాకండి."),
                 s3("Let's find \"$q\" on YouTube.", "YouTube पर \"$q\" ढूँढते हैं।", "YouTube లో \"$q\" వెతుకుదాం."), teach = true, llmGoal = "play $q on YouTube",

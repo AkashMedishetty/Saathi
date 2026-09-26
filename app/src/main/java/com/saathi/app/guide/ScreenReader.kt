@@ -13,6 +13,8 @@ data class UiElement(
     val checked: Boolean,
     val scrollable: Boolean,
     val node: AccessibilityNodeInfo?,
+    /** The label was stitched from its children ("Settings · Search settings"), not the element's own words. */
+    val merged: Boolean = false,
 ) {
     /** A row's title: "Display & touch · Dark theme, font size" → "Display & touch". */
     val title get() = label.substringBefore(" · ").trim()
@@ -81,10 +83,10 @@ object ScreenReader {
             return parts.joinToString(" · ").take(80)
         }
 
-        fun add(n: AccessibilityNodeInfo, label: String, role: String) {
+        fun add(n: AccessibilityNodeInfo, label: String, role: String, merged: Boolean = false) {
             val r = Rect().also { n.getBoundsInScreen(it) }
             if (r.width() <= 4 || r.height() <= 4) return
-            out += UiElement(out.size + 1, label, role, r, n.isEnabled, n.isPassword, n.isChecked, n.isScrollable, n)
+            out += UiElement(out.size + 1, label, role, r, n.isEnabled, n.isPassword, n.isChecked, n.isScrollable, n, merged)
         }
 
         fun visit(n: AccessibilityNodeInfo?, depth: Int, insideInteractive: Boolean, parentLabel: String = "") {
@@ -113,7 +115,7 @@ object ScreenReader {
                 if (label.isEmpty()) label = n.viewIdResourceName?.substringAfter('/')?.replace('_', ' ') ?: ""
                 if (label.isEmpty() && role == "slider") label = "slider"
                 // Nested clickables with the same label (button > layout > text) are one thing to a person.
-                if (label.isNotEmpty() && label != parentLabel) add(n, label, role)
+                if (label.isNotEmpty() && label != parentLabel) add(n, label, role, merged = text.isEmpty())
                 inside = true
                 for (i in 0 until n.childCount) visit(n.getChild(i), depth + 1, true, label)
                 return
@@ -136,7 +138,9 @@ object ScreenReader {
         // Containers aren't targets: a clickable area wrapping 2+ other tappable things (a toolbar, a card, a whole
         // header) has a merged label like "Settings · Search settings" that lured the planner (field test).
         val interactive = out.filter { it.role != "text" }
-        val containers = interactive.filter { c ->
+        // (A row that describes itself, like YouTube's "<title> - … - play video", is a real target even though it
+        // holds "Go to channel" / "Action menu" buttons: field test, every YouTube result was being dropped.)
+        val containers = interactive.filter { c -> c.merged &&
             interactive.count { o -> o !== c && c.bounds.contains(o.bounds) && o.bounds != c.bounds } >= 2
         }.toSet()
         val kept = out.filter { it !in containers }.mapIndexed { i, e -> e.copy(id = i + 1) }

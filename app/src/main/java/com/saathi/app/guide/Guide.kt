@@ -182,7 +182,7 @@ class Guide(
         IntentRouter.cameraRead(goalText)?.let { id -> begin(goalText, Skills.byId(id)?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
         IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         IntentRouter.phoneHowTo(svc, goalText)?.let { begin(goalText, it, autoMode); return }
-        if (IntentRouter.isQuestion(svc, goalText)) { answerQuestion(goalText); return }
+        if (IntentRouter.isQuestion(svc, goalText)) { respond(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
         // Teach-once: "watch me: video call Rahul" … "done teaching".
         Regex("(?i)^\\s*(watch me|learn this|let me show you|i'?ll show you|देखो मैं|मैं दिखाता|నేను చూపిస్తా)\\W*(.*)$").find(goalText)?.let { m ->
@@ -213,7 +213,7 @@ class Guide(
                 com.saathi.app.DebugLog.i("understand", "\"$goalText\" → $u")
                 if (u != null && handleIntent(goalText, u, autoMode)) return@launch
                 when (val r = IntentRouter.smartRoute(svc, goalText)) {
-                    is IntentRouter.Route.Question -> answerQuestion(goalText)
+                    is IntentRouter.Route.Question -> respond(goalText)
                     is IntentRouter.Route.Skill -> begin(goalText, r.flow, autoMode)
                 }
             }
@@ -238,7 +238,7 @@ class Guide(
             begin(goalText, Skills.byId("learn_app")?.build(svc, SlotExtractor.from("how do I use ${app.label}")), autoMode); return true
         }
         when (u.intent) {
-            "question" -> { answerQuestion(goalText); return true }
+            "question" -> { respond(goalText); return true }
             "weather", "lookup" -> { lookUp(goalText, if (u.intent == "weather" && !q.contains("weather", true)) "$q weather" else q); return true }
             "watch", "music" -> {
                 if (u.device == "tv") { watchOnTv("$q on tv ${u.app ?: ""}"); return true }
@@ -288,6 +288,7 @@ class Guide(
                 "Question: $goalText\nSearch results:\n${text.take(3000)}")?.takeIf { it.isNotBlank() && it.length < 400 && !com.saathi.app.llm.Templates.garbled(it) }
             else null
             overlay.setAura(false)
+            if (text.isBlank()) { answerQuestion(goalText); return@launch } // no results (offline): a careful short answer
             val t = a ?: say("Here are the results. I've opened them for you.", "नतीजे खोल दिए हैं।", "ఫలితాలు తెరిచాను.").pick(lang)
             com.saathi.app.DebugLog.i("lookup", "q=\"$q\" a=\"${t.take(200)}\"")
             Conversation.remember(goalText, t)
@@ -311,10 +312,10 @@ class Guide(
             return
         }
 
-        // No app and no skill, asked from the home screen: there's nothing to guide on. Answer instead of wandering.
+        // No app and no skill, asked from the home screen: nothing to guide on. Don't wander: ask/look it up (respond).
         if (f == null) {
             val here = svc.rootInActiveWindow?.packageName?.toString()
-            if (here == null || here == launcherPkg() || here == svc.packageName) { answerQuestion(goalText); return }
+            if (here == null || here == launcherPkg() || here == svc.packageName) { respond(goalText); return }
         }
 
         goal = goalText
@@ -561,7 +562,11 @@ class Guide(
                 val next = f.steps.getOrNull(lastStepIdx + 1) ?: f.steps.first()
                 val name = next.targets.first().pattern.replace("\\Q", "").replace("\\E", "").replace(Regex("\\{\\d+,?\\d*\\}"), "")
                     .replace(Regex("[\\^$\\\\()?*+.\\[\\]]"), "").substringBefore('|').trim()
-                val text = if (name.length >= 3) say("Slowly scroll down. Look for \"$name\".", "धीरे से नीचे स्क्रॉल कीजिए। \"$name\" ढूँढिए।", "నెమ్మదిగా కిందకు స్క్రోల్ చేయండి. \"$name\" వెతకండి.").pick(lang)
+                // Only quote a plain word/phrase; a pattern with lookaheads or alternatives means "use the step's words".
+                val plain = name.length in 3..40 && Regex("^[\\p{L}\\p{M}\\p{N} '&,-]+$").matches(name) &&
+                    !Regex("[?!]").containsMatchIn(next.targets.first().pattern.take(4))
+                val text = if (plain) say("Slowly scroll down. Look for \"$name\".", "धीरे से नीचे स्क्रॉल कीजिए। \"$name\" ढूँढिए।", "నెమ్మదిగా కిందకు స్క్రోల్ చేయండి. \"$name\" వెతకండి.").pick(lang)
+                else if (next.say.isNotEmpty()) (say("Slowly scroll down.", "धीरे से नीचे स्क्रॉल कीजिए।", "నెమ్మదిగా కిందకు స్క్రోల్ చేయండి.").pick(lang) + " " + next.say.pick(lang))
                 else say("Slowly scroll down to see more.", "धीरे से नीचे स्क्रॉल कीजिए।", "నెమ్మదిగా కిందకు స్క్రోల్ చేయండి.").pick(lang)
                 scrolls++
                 show(Target(null, text, "scroll_${next.key}", scroll = true))
@@ -673,12 +678,22 @@ class Guide(
     }
 
     /** Latest step whose target is visible, including labels this phone taught us. */
-    private fun matchStep(f: Flow, screen: Screen): Pair<Int, UiElement>? {
+    /** Ads are never a step's target, in any app. */
+    private val NOT_A_TARGET = Regex("(?i)\\bSponsored\\b|^Ad\\s*[·•]|· Ad\\b")
+
+    private fun matchStep(f: Flow, rawScreen: Screen): Pair<Int, UiElement>? {
+        // Only things a finger can actually hit: ≥60 px visible above the navigation bar (field test: a 30 px sliver of
+        // a YouTube row at the screen edge was glowed; tapping it hit the nav bar and went Home).
+        val h = android.content.res.Resources.getSystem().displayMetrics.heightPixels
+        val usable = (h * 0.955f).toInt()
+        val screen = rawScreen.copy(elements = rawScreen.elements.filter { e ->
+            !NOT_A_TARGET.containsMatchIn(e.label) && minOf(e.bounds.bottom, usable) - maxOf(e.bounds.top, 0) >= 60 && e.bounds.width() >= 40
+        })
         for (i in f.steps.indices.reversed()) {
             val st = f.steps[i]
             val learned = Memory.learnedLabel(screen.pkg, st.key)?.let { listOf(Regex("^" + Regex.escape(it) + "$")) }.orEmpty()
             if (st.screenHas != null && !st.screenHas.containsMatchIn(screen.allText)) continue
-            if (st.unlessVisible.isNotEmpty() && screen.find(st.unlessVisible) != null) continue
+            if (st.unlessVisible.isNotEmpty() && screen.elements.any { e -> st.unlessVisible.any { it.containsMatchIn(e.label) } }) continue
             val el = screen.find(st.targets + learned, st.role) ?: continue
             return i to el
         }
@@ -1127,6 +1142,33 @@ class Guide(
         "com.google.android.apps.photos" to "Google Photos", "com.google.android.apps.nbu.paisa.user" to "Google Pay", "com.phonepe.app" to "PhonePe")
 
     /** A question or chit-chat: answer out loud (the Clicky lesson), no screen navigation. */
+    /**
+     * Saathi acts and guides; it isn't a chatbot (Google already answers questions). So a "question":
+     *  - mid-task → a short answer, then back to the task (answerQuestion);
+     *  - a greeting → one line and "what shall we do?";
+     *  - mentions an app → "Do you want to use <app>? I'll show you." (misheard speech lands here, e.g. "Instagram …");
+     *  - anything else → the real Google results on screen, with the answer read from them (lookUp), and a
+     *    model-only answer only when there are no results (offline).
+     */
+    fun respond(q: String) {
+        lang = Prefs.lang(svc)
+        if (goal != null) { answerQuestion(q); return }
+        if (IntentRouter.isGreeting(q)) {
+            finish(say("Namaste! I'm here. What shall we do on your phone?", "नमस्ते! मैं यहीं हूँ। फ़ोन पर क्या करें?", "నమస్కారం! నేను ఇక్కడే ఉన్నాను. ఫోన్‌లో ఏం చేద్దాం?").pick(lang))
+            return
+        }
+        AppLauncher.findInGoal(svc, q)?.let { app ->
+            val t = say("Do you want to use ${app.label}? I'll show you.", "क्या आप ${app.label} चलाना चाहते हैं? मैं दिखाता हूँ।", "${app.label} వాడాలనుకుంటున్నారా? నేను చూపిస్తాను.").pick(lang)
+            com.saathi.app.DebugLog.i("respond", "app mentioned → ask: ${app.label}")
+            current = Target(null, t, "ask_app"); lastSpokenKey = current?.key
+            overlay.showCard(t, Overlay.Mode.ASK, onContinue = { overlay.hideCard(); start("how do I use ${app.label}") })
+            speaker.say(t, lang)
+            return
+        }
+        com.saathi.app.DebugLog.i("respond", "general question → look it up")
+        lookUp(q, q)
+    }
+
     fun answerQuestion(q: String) {
         // A question in the middle of a task sets the task aside (not lost): answer, then offer to continue it.
         val interrupted = goal
@@ -1142,7 +1184,9 @@ class Guide(
             overlay.setAura(false)
             Conversation.remember(q, a)
             com.saathi.app.DebugLog.i("answer", "q=\"$q\" a=\"${a.take(200)}\"")
-            val howTo = Regex("(?i)^how (to|do|can)|recipe|कैसे|ఎలా").containsMatchIn(q) && !IntentRouter.isGreeting(q)
+            // "Shall I find a video?" only for real-world how-tos (cooking, crafts), never phone tasks or mid-task.
+            val howTo = Regex("(?i)^how (to|do|can)|recipe|कैसे|ఎలా").containsMatchIn(q) && !IntentRouter.isGreeting(q) &&
+                interrupted == null && !IntentRouter.aboutPhone(svc, q)
             current = Target(null, a, "answer")
             if (howTo) overlay.showCard(a + "\n\n" + say("Shall I find a video?", "वीडियो ढूँढूँ?", "వీడియో వెతకనా?").pick(lang), Overlay.Mode.ASK, onContinue = {
                 overlay.hideCard(); start("play ${SlotExtractor.searchPhrase(q)} on YouTube")
