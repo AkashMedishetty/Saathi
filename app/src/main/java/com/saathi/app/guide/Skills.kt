@@ -371,7 +371,7 @@ object Skills {
         },
 
         Skill("storage", Cat.FIX, R.drawable.ic_cleaning_services, s3("Free up space (storage full)", "जगह ख़ाली करें (स्टोरेज भरा)", "స్థలం ఖాళీ చేయండి (స్టోరేజ్ నిండింది)"),
-            listOf("storage full", "space full", "memory full", "phone full", "phone is slow", "clean", "free up", "जगह भर", "स्टोरेज भर", "मेमोरी भर", "స్టోరేజ్ నిండ", "స్థలం లేదు"),
+            listOf("storage full", "storage is full", "is full", "no space", "space full", "memory full", "phone full", "phone is slow", "clean", "free up", "जगह भर", "स्टोरेज भर", "मेमोरी भर", "స్టోరేజ్ నిండ", "స్థలం లేదు"),
             s3("My phone storage is full", "फ़ोन की जगह भर गई", "స్టోరేజ్ నిండిపోయింది")) { ctx, _ ->
             // vivo/iQOO phones: i Manager does the cleaning; others: Files by Google, else Settings › Storage.
             // NOT vivo i Manager: opening it kills accessibility services (field test: Saathi was destroyed on launch).
