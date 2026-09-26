@@ -46,6 +46,8 @@ class SaathiService : AccessibilityService() {
     private var debugReceiver: BroadcastReceiver? = null
     private var wasLocked = false
 
+    @Volatile private var debugHidden = false
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         Memory.init(this)
@@ -101,7 +103,7 @@ class SaathiService : AccessibilityService() {
                 if (sensitive && overlay?.steppedBack == false) {
                     overlay?.stepBack(true)
                     com.saathi.app.DebugLog.i("stepback", "on in $pkg")
-                } else if (!sensitive && overlay?.steppedBack == true) {
+                } else if (!sensitive && overlay?.steppedBack == true && !debugHidden) {
                     overlay?.stepBack(false)
                     com.saathi.app.DebugLog.i("stepback", "off ($pkg)")
                 }
@@ -231,6 +233,11 @@ class SaathiService : AccessibilityService() {
                     "doit" -> guide.doItForMe()
                     "stop" -> guide.stop()
                     "aura" -> overlay?.setAura(i.getBooleanExtra("on", true))
+                    // Experiments (debug builds): what makes the phone switch Saathi off around Settings?
+                    "brain_unload" -> { com.saathi.app.llm.LlmManager.unload(); com.saathi.app.llm.VisionBrain.unload() }
+                    "brain_load" -> com.saathi.app.llm.LlmManager.loadAsync(this@SaathiService)
+                    "overlay_off" -> { debugHidden = true; overlay?.stepBack(true) }
+                    "overlay_on" -> { debugHidden = false; overlay?.stepBack(false) }
                     "dump" -> dumpTree()
                     "eval" -> i.getStringExtra("goal")?.let { g ->
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
