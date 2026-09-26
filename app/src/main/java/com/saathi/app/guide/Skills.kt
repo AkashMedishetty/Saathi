@@ -370,11 +370,12 @@ object Skills {
                 s3("Let's fix the screen light.", "स्क्रीन की रोशनी ठीक करते हैं।", "స్క్రీన్ వెలుతురు సరిచేద్దాం."), llmGoal = "change screen brightness")
         },
 
-        Skill("storage", Cat.FIX, R.drawable.ic_cleaning_services, s3("Phone storage full", "फ़ोन की जगह भर गई", "ఫోన్ స్టోరేజ్ నిండింది"),
-            listOf("storage", "space", "memory full", "phone full", "phone is slow", "clean", "जगह", "स्टोरेज", "मेमोरी", "స్టోరేజ్", "స్థలం"),
+        Skill("storage", Cat.FIX, R.drawable.ic_cleaning_services, s3("Free up space (storage full)", "जगह ख़ाली करें (स्टोरेज भरा)", "స్థలం ఖాళీ చేయండి (స్టోరేజ్ నిండింది)"),
+            listOf("storage full", "space full", "memory full", "phone full", "phone is slow", "clean", "free up", "जगह भर", "स्टोरेज भर", "मेमोरी भर", "స్టోరేజ్ నిండ", "స్థలం లేదు"),
             s3("My phone storage is full", "फ़ोन की जगह भर गई", "స్టోరేజ్ నిండిపోయింది")) { ctx, _ ->
             // vivo/iQOO phones: i Manager does the cleaning; others: Files by Google, else Settings › Storage.
-            val cleaner = AppLauncher.first(ctx, "com.vivo.imanager", "com.iqoo.secure", "com.google.android.apps.nbu.files")
+            // NOT vivo i Manager: opening it kills accessibility services (field test: Saathi was destroyed on launch).
+            val cleaner = AppLauncher.first(ctx, "com.google.android.apps.nbu.files")
             Flow("storage",
                 { c -> AppLauncher.launch(c, cleaner) ?: Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS) },
                 listOf(
@@ -385,6 +386,14 @@ object Skills {
                 ),
                 null, s3("Space freed up!", "जगह ख़ाली हो गई!", "స్థలం ఖాళీ అయింది!"),
                 s3("Let's free up some space.", "चलिए थोड़ी जगह ख़ाली करते हैं।", "కొంత స్థలం ఖాళీ చేద్దాం."), teach = true, llmGoal = "free up storage space by cleaning junk files")
+        },
+
+        Skill("storage_view", Cat.FIX, R.drawable.ic_cloud_upload, s3("See how much space is used", "कितनी जगह भरी है देखें", "ఎంత స్థలం వాడారో చూడండి"),
+            listOf("how much storage", "storage used", "see storage", "check storage", "show storage", "how much space", "कितनी जगह", "స్టోరేజ్ ఎంత"),
+            s3("Show me how much storage is used", "कितनी जगह भरी है दिखाओ", "ఎంత స్టోరేజ్ వాడారో చూపించు")) { _, _ ->
+            Flow("storage_view", { Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS) }, emptyList(), { _ -> true },
+                s3("This shows how much space is used and what's using it.", "यहाँ दिखता है कितनी जगह भरी है और किससे।", "ఎంత స్థలం వాడారో, దేనితో వాడారో ఇక్కడ కనిపిస్తుంది."),
+                s3("Opening storage.", "स्टोरेज खोल रहा हूँ।", "స్టోరేజ్ తెరుస్తున్నాను."))
         },
 
         Skill("backup", Cat.FIX, R.drawable.ic_cloud_upload, s3("Back up my phone", "फ़ोन का बैकअप लें", "ఫోన్ బ్యాకప్ తీసుకోండి"),

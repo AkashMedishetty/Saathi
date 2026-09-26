@@ -50,6 +50,7 @@ class RoutingTest {
         "connect my earphones" to "bluetooth",
         "battery finishes quickly" to "battery",
         "my phone storage is full" to "storage",
+        "show me how much storage is used" to "storage_view",
         "back up my phone" to "backup",
         "backup whatsapp chats" to "backup",
         "open google pay" to "real_upi",

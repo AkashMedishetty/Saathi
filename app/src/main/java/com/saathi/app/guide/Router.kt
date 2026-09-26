@@ -80,6 +80,43 @@ object IntentRouter {
             llmGoal = goal)
     }
 
+    sealed interface Route {
+        data class Skill(val flow: Flow?) : Route
+        data object Question : Route
+    }
+
+    /**
+     * Model-first routing (field test: "show me how much storage is used" hit the cleanup skill on a keyword).
+     * Gemma picks the helper from the list; keywords are only the fallback while it loads.
+     */
+    suspend fun smartRoute(ctx: Context, goal: String): Route {
+        val kw = route(ctx, goal)
+        if (!com.saathi.app.llm.LlmManager.isReady) return Route.Skill(kw)
+        val list = Skills.all.joinToString("\n") { "${it.id}: ${it.title.pick(Lang.EN)} (e.g. \"${it.example.pick(Lang.EN)}\")" }
+        val out = com.saathi.app.llm.LlmManager.generate(
+            "You route an elderly person's request to the right helper on their Android phone. Reply with ONE word: a helper id from the list, " +
+                "or SETTINGS (a phone setting to find or change), or APP (open or use a specific app not in the list), or QUESTION (they want an answer, not a phone action), or OTHER.",
+            "Helpers:\n$list\n\nRequest: \"$goal\"\nAnswer:")?.trim()?.split(Regex("[^A-Za-z_]+"))?.firstOrNull { it.isNotBlank() } ?: return Route.Skill(kw)
+        com.saathi.app.DebugLog.i("route", "\"$goal\" → model=$out keyword=${kw?.id}")
+        return when {
+            out.equals("QUESTION", true) -> Route.Question
+            out.equals("SETTINGS", true) -> Route.Skill(settingsSearch(goal) ?: kw ?: settingsFlow(goal))
+            Skills.byId(out) != null -> Route.Skill(Skills.byId(out)!!.build(ctx, SlotExtractor.from(goal, Prefs.family(ctx))))
+            else -> Route.Skill(kw)
+        }
+    }
+
+    /** Any phone-setting goal: open Settings search with the goal's key words. */
+    private fun settingsFlow(goal: String): Flow {
+        val term = SlotExtractor.searchPhrase(goal).split(Regex("\\s+")).filter { it.length > 2 && it.lowercase() !in setOf("change", "my", "the", "show", "how", "much", "turn", "set", "make") }
+            .takeLast(2).joinToString(" ").ifBlank { goal }
+        return Flow("settings_search", { Intent("android.settings.APP_SEARCH_SETTINGS") },
+            listOf(Step("open_search", rx("^Search settings", "^Search$", "^Search "), say("Tap the search bar at the top.", "ऊपर खोज पट्टी दबाइए।", "పైన వెతుకు పట్టీ నొక్కండి.")),
+                Step("type", rx("Search"), say("Type “$term”.", "“$term” लिखिए।", "“$term” టైప్ చేయండి."), role = "input", fill = term)),
+            null, say("Done!", "हो गया!", "అయింది!"), say("Let's find “$term” in Settings.", "Settings में “$term” ढूँढते हैं।", "Settings లో “$term” వెతుకుదాం."),
+            llmGoal = goal)
+    }
+
     fun isGreeting(goal: String) = Regex("(?i)^\\W*(hi|hello|hey|hlo|namaste|namaskar|namaskaram|good (morning|afternoon|evening|night)|thank you|thanks|how are you|" +
         "नमस्ते|नमस्कार|हैलो|धन्यवाद|शुक्रिया|आप कैसे हैं|హలో|హాయ్|నమస్కారం|ధన్యవాదాలు|బాగున్నారా)\\W*(saathi|साथी|సాథీ)?\\W*$").matches(goal.trim())
 

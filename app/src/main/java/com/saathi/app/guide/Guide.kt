@@ -168,7 +168,21 @@ class Guide(
         if (IntentRouter.isExplain(goalText)) { explain(); return }
         if (IntentRouter.isBriefing(goalText)) { briefing(); return }
         rememberRequest(goalText)?.let { finish(it); return }
-        val f = IntentRouter.route(svc, goalText)
+        if (LlmManager.isReady) {
+            // Let the model pick the helper (≈0.5 s); keywords only if it can't.
+            overlay.showCard(say("Okay…", "ठीक है…", "సరే…").pick(lang), Overlay.Mode.THINKING)
+            scope.launch {
+                when (val r = IntentRouter.smartRoute(svc, goalText)) {
+                    is IntentRouter.Route.Question -> answerQuestion(goalText)
+                    is IntentRouter.Route.Skill -> begin(goalText, r.flow, autoMode)
+                }
+            }
+            return
+        }
+        begin(goalText, IntentRouter.route(svc, goalText), autoMode)
+    }
+
+    private fun begin(goalText: String, f: Flow?, autoMode: Boolean) {
 
         // Instant skills (torch, volume): just do it and say so.
         f?.action?.let { act ->
