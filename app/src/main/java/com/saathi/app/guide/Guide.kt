@@ -76,6 +76,8 @@ class Guide(
     private val taskPkgs = mutableSetOf<String>()
     private var adoptPkg = false
     private var lastFrontPkg: String? = null
+    /** Practice run ("Let me try"): Saathi names the step but waits; the glow comes only if they're stuck. */
+    private var practice = false
     private var prevExternalPkg: String? = null
     /** Settings task: the person opens Settings themselves (trap #45: vivo switches Saathi off if Saathi opens it). */
     private var needSettings = false
@@ -349,7 +351,9 @@ class Guide(
                 hello = say("First, open Settings: tap the Settings icon, the grey gear.", "पहले Settings खोलिए: Settings का आइकन, ग्रे गियर, दबाइए।",
                     "ముందు Settings తెరవండి: Settings ఐకాన్, బూడిద రంగు గేర్, నొక్కండి.").pick(lang)
             }
-            val ok = intent != null && (inSettingsAlready || askToOpen || runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess)
+            val ok = intent != null && (inSettingsAlready || askToOpen || runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                // Practice starts from the app's first screen, not wherever it was left.
+                (if (practice) Intent.FLAG_ACTIVITY_CLEAR_TASK else 0))) }.isSuccess)
             if (inSettingsAlready) com.saathi.app.DebugLog.i("begin", "already in Settings: guiding from this screen")
             if (askToOpen) com.saathi.app.DebugLog.i("begin", "asking them to open Settings (Saathi never opens it)")
             if (ok) resolvePkg(intent!!)?.let { taskPkgs += it; adoptPkg = false }
@@ -666,11 +670,13 @@ class Guide(
         val st = f.steps[i]
         val teach = f.teach || Prefs.teach(svc)
         // Phones name things differently: if the real label isn't in our sentence, quote it (trap #14).
-        val text = quoteRealLabel(st.say.pick(lang), el)
+        val text = quoteRealLabel(st.say.pick(lang), el).let { t ->
+            if (practice) say("Your turn. ", "अब आपकी बारी। ", "ఇప్పుడు మీ వంతు. ").pick(lang) + t + say(" I'll show you if you need.", " ज़रूरत हो तो मैं दिखाऊँगा।", " అవసరమైతే చూపిస్తాను.").pick(lang) else t
+        }
         show(Target(el, text, st.key, st.fill,
             final = f.isDone == null && i == f.steps.lastIndex,
             tip = if (teach) st.tip?.pick(lang) else null,
-            progress = (i + 1) to f.steps.size), practiced = Memory.timesDone(f.id) >= 3)
+            progress = (i + 1) to f.steps.size), practiced = practice || Memory.timesDone(f.id) >= 3)
     }
 
     /**
@@ -723,7 +729,7 @@ class Guide(
         if (practiced && newKey && !t.warn) {
             // Fading help: they've done this before, so give them a moment to find it themselves.
             overlay.highlight(null, false)
-            delayedGlow = scope.launch { delay(3500); if (current?.key == t.key) overlay.highlight(t.el?.bounds, false) }
+            delayedGlow = scope.launch { delay(if (practice) 8000 else 3500); if (current?.key == t.key) overlay.highlight(t.el?.bounds, false) }
         } else overlay.highlight(t.el?.bounds, t.warn)
         if (newKey) lastProgress = SystemClock.uptimeMillis()
         if (newKey) com.saathi.app.DebugLog.i("show", "key=${t.key} el=\"${t.el?.label?.take(60)}\" role=${t.el?.role} bounds=${t.el?.bounds?.toShortString()} warn=${t.warn} final=${t.final} noAct=${t.noAct} auto=$auto text=\"${t.text.take(120)}\" pkg=${taskPkgs.firstOrNull()}")
@@ -938,10 +944,25 @@ class Guide(
         goal?.let { Memory.journal("Did: $it") }
         f.memo?.let { Memory.addReminder(it) }
         runCatching { f.onDone?.invoke(svc) }
-        finish(f.doneSay.pick(lang))
+        val g = goal
+        val wasPractice = practice
+        practice = false
+        // A task that teaches something can be practised: same task again, the person leads.
+        val canPractise = g != null && f.steps.size >= 2 && f.launch != null && f.id !in setOf("phone_video", "wa_video", "call")
+        val tryIt = if (canPractise) Triple(say("Let me try", "मैं ख़ुद करूँ", "నేనే చేస్తాను").pick(lang), com.saathi.app.R.drawable.ic_touch_app,
+            { practise(g!!, f) }) else null
+        val praise = if (wasPractice) say("You did it yourself! ", "आपने ख़ुद कर लिया! ", "మీరే చేశారు! ").pick(lang) else ""
+        finish(praise + f.doneSay.pick(lang), tryIt)
     }
 
-    private fun finish(text: String) {
+    /** "Let me try": the same task from the app's start screen; Saathi prompts, the glow waits (see show()). */
+    private fun practise(g: String, f: Flow) {
+        practice = true
+        com.saathi.app.DebugLog.i("practice", "start ${f.id}")
+        begin(g, f, autoMode = false)
+    }
+
+    private fun finish(text: String, first: Triple<String, Int, () -> Unit>? = null) {
         LlmManager.endChat()
         goal?.let { Conversation.remember(it, text) }
         com.saathi.app.DebugLog.i("finish", "\"${text.take(120)}\" goal=\"$goal\"")
@@ -950,11 +971,13 @@ class Guide(
         delayedGlow?.cancel()
         Memory.clearTask()
         overlay.highlight(null, false)
-        overlay.showCard(text, Overlay.Mode.DONE)
+        // Never a dead end: what next? (Practise it, or something else by voice.)
+        val more = Triple(say("Something else", "कुछ और", "ఇంకేదైనా").pick(lang), com.saathi.app.R.drawable.ic_mic, { svc.openAsk(listen = true) })
+        if (first != null) overlay.showChoice(text, first, more) else overlay.showChoice(text, more, null)
         speaker.say(text, lang)
         svc.buzz()
         hideJob?.cancel()
-        hideJob = scope.launch { delay(6000); if (goal == null) overlay.hideCard() }
+        hideJob = scope.launch { delay(20_000); if (goal == null) overlay.hideCard() }
     }
 
     fun stop() {
@@ -963,7 +986,7 @@ class Guide(
         goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
-        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false
+        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false
         delayedGlow?.cancel()
         Memory.clearTask()
         clearVisuals()

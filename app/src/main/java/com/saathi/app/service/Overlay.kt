@@ -86,7 +86,7 @@ class Overlay(
     private var choiceB: Triple<String, Int, () -> Unit>? = null
 
     /** Two clear options, both one tap, plus "Not now". */
-    fun showChoice(text: String, a: Triple<String, Int, () -> Unit>, b: Triple<String, Int, () -> Unit>) {
+    fun showChoice(text: String, a: Triple<String, Int, () -> Unit>, b: Triple<String, Int, () -> Unit>?) {
         choiceA = a; choiceB = b
         showCard(text, Mode.CHOICE)
     }
