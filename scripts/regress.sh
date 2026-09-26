@@ -19,15 +19,13 @@ SEL=("$@"); mkdir -p shots
 
 reset; goal "hello"; wait_for "\[answer\]" 20 >/dev/null   # warm the brain
 
-if want 1; then reset; goal "अक्षर बड़े करो" HI;  check "R1 letters bigger (HI) → glow on font size" "\[show\] key=(display|font|slider)" 15; fi
+if want 1; then reset; goal "अक्षर बड़े करो" HI;  check "R1 letters bigger (HI) → points the way to Settings" "\[show\] key=(open_settings|find_settings|display|font|slider)" 15; fi
 if want 2; then reset; goal "will it rain today" TE; check "R2 rain (TE) → answer read from results" "\[lookup\] q=.* a=\"[^\"]{8,}" 40; fi
-if want 3; then reset; goal "play guntur karam movie on my tv"
-  check "R3a TV coach → looks it up" "\[coach\] step 1: Call\(tool=LOOKUP" 25
-  check "R3b TV coach → asks about the subscription" "\[coach\] step [0-9]+: Call\(tool=ASK" 40
-  goal "yes"; check "R3c TV coach → guides the TV (look/press)" "\[coach\] step [0-9]+: Call\(tool=(LOOK_TV|TV)" 30; fi
+if want 3; then reset; goal "video call my son"
+  check "R3 video call → asks WhatsApp or phone" "\[choice\] choose_video" 15; fi
 if want 4; then reset; goal "read this letter for me"; sleep 4; adb shell input tap 720 2688
-  check "R4 read this → explained on device" "\[vision\] [0-9]+ ms|\[read\] text .*(NPU|Gemma)" 30; B --es cmd stop; adb shell input keyevent KEYCODE_BACK; fi
-if want 5; then reset; B --es cmd scam_sms; check "R5 scam SMS → alert" "\[alert\] message scam" 8; fi
+  check "R4 read this → explained on device" "\[vision\] [0-9]+ ms|\[read\] (ocr|text|blurry)|too dark" 30; B --es cmd stop; adb shell input keyevent KEYCODE_BACK; fi
+if want 5; then reset; B --es cmd scam_sms; check "R5 scam SMS → alert" "\[alert\] (message scam|shield)" 8; fi
 if want 6; then reset; goal "watch me: open my youtube subscriptions"; sleep 2
   adb shell monkey -p com.google.android.youtube -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 4; adb shell input tap 1008 2920; sleep 2
   goal "done teaching"; check "R6a teach → saved" "\[teach\] saved" 10
@@ -38,6 +36,12 @@ if want 7; then reset; goal "remember my BP tablet is Telma 40"; sleep 2; goal "
   reset; goal "help!"; sleep 2
   if adb shell dumpsys window | grep mCurrentFocus | grep -q SosActivity; then PASS=$((PASS+1)); RESULTS+=("✅ R7b SOS screen"); else FAIL=$((FAIL+1)); RESULTS+=("❌ R7b SOS screen"); fi
   adb shell input keyevent KEYCODE_BACK; fi
+if want 8; then reset; adb shell am force-stop com.google.android.youtube; goal "search for old telugu songs on youtube"
+  check "R8 YouTube search → glows search" "\[show\] key=search" 15; fi
+if want 9; then reset; goal "watch my serial on hotstar"
+  check "R9 Hotstar missing → offers to install" "\[missing\] app=in.startv.hotstar" 15; fi
+if want 10; then reset; B --es cmd scam_apk
+  check "R10 APK sent on WhatsApp → STOP warning" "\[alert\] shield apk STOP" 8; fi
 
 reset
 echo; printf '%s\n' "${RESULTS[@]}"

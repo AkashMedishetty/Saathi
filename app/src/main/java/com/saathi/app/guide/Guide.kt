@@ -1416,6 +1416,7 @@ class Guide(
                 if (goal != null) stop() // (no stop() otherwise: its card fade-out would remove this card)
                 hideJob?.cancel()
                 current = Target(null, q, "choose_video"); lastSpokenKey = current?.key
+                com.saathi.app.DebugLog.i("choice", "choose_video: WhatsApp | Phone")
                 overlay.showChoice(q, Triple("WhatsApp", com.saathi.app.R.drawable.ic_chat, wa),
                     Triple(say("Phone call", "फ़ोन कॉल", "ఫోన్ కాల్").pick(lang), com.saathi.app.R.drawable.ic_call, phone))
                 speaker.say(q, lang)
