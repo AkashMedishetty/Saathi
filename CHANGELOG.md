@@ -26,3 +26,9 @@
   never PIN fields, risky taps glow-only, HI/TE speech from templates). Verified: "turn on dark mode" (no script) →
   Gemma picks "Display, brightness & eye protection" then "Dark mode". Explain/"where am I". Siri-style aura rebuilt as a
   blurred edge mask + rotating sweep (smooth); card placement hysteresis (no top/bottom jumping).
+- 13:08 **P0-5 Voice + Home + Settings**: Ask sheet (edge aura, voice-reactive orb, live words, EN/हिं/తె chips, typing,
+  vertical suggestions); speech fallback chain on-device → default offline (en-IN, en-US) → default (the iQOO had no
+  en-IN offline pack: error 12). Home: serif greeting, living orb, helper status, Today (task/reminders/people/learned),
+  24 skills as big rows by group, privacy footer. Settings: name, language, family contact behind the screen lock,
+  speech rate, text size, dim/scam/teach toggles, Test brain + Test NPU, memory + Forget everything.
+  Bubble hides on the lock screen. Offline speech packs: download from Settings (user's call).

@@ -9,4 +9,14 @@
         <item name="colorSecondary">@color/marigold</item>
         <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
     </style>
+    <style name="Theme.Saathi.Sheet" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="colorPrimary">@color/pine</item>
+        <item name="colorSecondary">@color/marigold</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
 </resources>

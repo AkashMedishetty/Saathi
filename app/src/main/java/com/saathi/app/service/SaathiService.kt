@@ -20,7 +20,6 @@ import com.saathi.app.guide.Guide
 import com.saathi.app.guide.Lang
 import com.saathi.app.guide.Memory
 import com.saathi.app.guide.Prefs
-import com.saathi.app.ui.MainActivity
 
 class SaathiService : AccessibilityService() {
 
@@ -44,6 +43,7 @@ class SaathiService : AccessibilityService() {
     private lateinit var speaker: Speaker
     lateinit var guide: Guide; private set
     private var debugReceiver: BroadcastReceiver? = null
+    private var wasLocked = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -80,6 +80,10 @@ class SaathiService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || instance !== this) return
         if (event.packageName == packageName) return // our own windows (trap #9)
+        // Never float over the lock screen.
+        val locked = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
+        if (locked != wasLocked) { wasLocked = locked; overlay?.setBubbleVisible(!locked && !ownUiOpen) }
+        if (locked) return
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> guide.onUserMotion()
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> guide.onWindowChanged()
@@ -100,10 +104,12 @@ class SaathiService : AccessibilityService() {
         super.onDestroy()
     }
 
-    /** The Ask sheet arrives in P0-5; until then the bubble opens Home. */
-    fun openAsk(@Suppress("UNUSED_PARAMETER") listen: Boolean) {
+    /** The listening sheet: an Activity, so the mic is reliably allowed (trap #26). */
+    fun openAsk(listen: Boolean) {
         runCatching {
-            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            startActivity(Intent(this, com.saathi.app.ui.AskActivity::class.java)
+                .putExtra(com.saathi.app.ui.AskActivity.EXTRA_LISTEN, listen)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
         }
     }
 
@@ -148,6 +154,7 @@ class SaathiService : AccessibilityService() {
                     "stop" -> guide.stop()
                     "aura" -> overlay?.setAura(i.getBooleanExtra("on", true))
                     "dump" -> dumpTree()
+                    "ask" -> openAsk(i.getBooleanExtra("listen", false))
                     null -> i.getStringExtra("goal")?.let { guide.handleUtterance(it) }
                     else -> Log.w(TAG, "unknown cmd $cmd")
                 }

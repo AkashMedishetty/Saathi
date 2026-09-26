@@ -44,6 +44,19 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.AskActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="com.saathi.ask"
+            android:theme="@style/Theme.Saathi.Sheet"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:exported="false" />
+
         <service
             android:name=".service.SaathiService"
             android:exported="false"

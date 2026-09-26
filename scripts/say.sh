@@ -8,6 +8,7 @@ case "$1" in
   --doit) adb "${A[@]}" --es cmd doit >/dev/null ;;
   --stop) adb "${A[@]}" --es cmd stop >/dev/null ;;
   --dump) adb logcat -c; adb "${A[@]}" --es cmd dump >/dev/null; sleep 1; adb logcat -d -s SaathiDump:I | sed "s/^.*SaathiDump: //"; exit ;;
+  --ask) adb "${A[@]}" --es cmd ask --ez listen "$([ "$2" = listen ] && echo true || echo false)" >/dev/null ;;
   --aura) adb "${A[@]}" --es cmd aura --ez on "$([ "$2" = off ] && echo false || echo true)" >/dev/null ;;
   *)
     # adb shell re-splits the string: quote it for the device shell.
