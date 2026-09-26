@@ -23,7 +23,8 @@ object Coach {
         "GUIDE <what to do on the phone, e.g. 'book a sleeper ticket from Hyderabad to Delhi on 28 Sep on IRCTC'>  (on-screen step-by-step help takes over)\n" +
         "SAY <one short sentence to tell them>\n" +
         "DONE <one short closing sentence>\n" +
-        "For the TV: first LOOK_TV to see where things are, then one button at a time, checking the result each time. " +
+        "For a movie or show on the TV: first LOOKUP where it is streaming, then ASK if they have that app, and only then LOOK_TV and " +
+        "guide one button at a time, checking the result each time. For other TV help: LOOK_TV first. " +
         "Rules: one small step per reply. Never ask for or type passwords, OTP, PIN or card numbers; they do payments themselves. " +
         "Short, warm, simple words. Don't repeat a step that already worked."
 
@@ -55,6 +56,17 @@ object Coach {
         val arg = line.substringAfter(tool, "").removePrefix(":").trim().trim('"', '<', '>')
         return Call(tool, arg)
     }
+
+    private val TV = Regex("(?i)\\btv\\b|टीवी|టీవీ")
+    private val WATCH = Regex("(?i)\\b(play|watch|put|see|movie|film|serial|show|episode)\\b|देख|लगाओ|चलाओ|फ़िल्म|फिल्म|చూడ|పెట్టు|సినిమా")
+
+    /** "play Guntur Kaaram on my TV", "guntur karam movie on tv". */
+    fun isWatchOnTv(goal: String) = TV.containsMatchIn(goal) && WATCH.containsMatchIn(goal)
+
+    /** The title with the filler words removed ("play guntur karam movie on my tv" → "guntur karam movie"). */
+    fun title(goal: String): String =
+        goal.replace(Regex("(?i)\\b(please|can you|could you|i want to|let's|play|watch|put|see|show me|on|in|my|the|a|tv|for me|now)\\b|टीवी|టీవీ|पर|में|లో"), " ")
+            .replace(Regex("\\s+"), " ").trim().ifEmpty { goal }
 
     /** Coach-worthy goals: the TV, bookings, anything that needs checking and choices. */
     fun wants(goal: String, intent: String?): Boolean =

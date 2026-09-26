@@ -172,6 +172,7 @@ class Guide(
         if (IntentRouter.isExplain(goalText)) { explain(); return }
         if (IntentRouter.isBriefing(goalText)) { briefing(); return }
         if (IntentRouter.isObjectHelp(goalText)) { begin(goalText, Skills.byId("learn_app")?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
+        IntentRouter.cameraRead(goalText)?.let { id -> begin(goalText, Skills.byId(id)?.build(svc, SlotExtractor.from(goalText)), autoMode); return }
         if (IntentRouter.isQuestion(svc, goalText)) { answerQuestion(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
         // Teach-once: "watch me: video call Rahul" … "done teaching".
@@ -282,6 +283,9 @@ class Guide(
     }
 
     private fun begin(goalText: String, f: Flow?, autoMode: Boolean) {
+        // Another app is about to be in front: keep Saathi light so the OS doesn't clean it up. The NPU brain stays;
+        // the GPU brain reloads on demand if a later step needs the planner.
+        if (f?.launch != null && coachGoal == null) LlmManager.unload()
 
         // Instant skills (torch, volume): just do it and say so.
         f?.action?.let { act ->
@@ -1137,7 +1141,9 @@ class Guide(
             LlmManager.lastChatKey = coachKey
             val raw = LlmManager.chat(coachKey, Coach.SYSTEM, msg)
             overlay.setAura(false)
-            val call = raw?.let { Coach.parse(it) }
+            var call = raw?.let { Coach.parse(it) }
+            // Watching something on the TV: check where it streams before touching the TV (ground truth, not assumption).
+            if (coachSteps == 1 && call?.tool != "LOOKUP" && Coach.isWatchOnTv(g)) call = Coach.Call("LOOKUP", "where to watch ${Coach.title(g)} online India")
             com.saathi.app.DebugLog.i("coach", "step $coachSteps: ${call ?: raw?.take(120)}")
             if (coachGoal != g) return@launch
             if (call == null) { endCoach(say("I'm not sure how to go on. Tell me again in other words?", "आगे कैसे करें, पक्का नहीं। दूसरे शब्दों में फिर बताइए?", "ఎలా కొనసాగించాలో తెలియట్లేదు. వేరే మాటల్లో చెప్పండి?").pick(lang)); return@launch }
@@ -1252,6 +1258,7 @@ class Guide(
         if (IntentRouter.isExplain(g)) return "explain"
         if (IntentRouter.isBriefing(g)) return "briefing"
         if (IntentRouter.isObjectHelp(g)) return "skill:learn_app"
+        IntentRouter.cameraRead(g)?.let { return "skill:$it" }
         if (IntentRouter.isQuestion(svc, g)) return "question"
         if (Regex("(?i)^\\s*(remember|note down|याद रखो|याद रखना|గుర్తుంచుకో)\\b").containsMatchIn(g)) return "note"
         Recipes.find(svc, g)?.let { return "recipe" }

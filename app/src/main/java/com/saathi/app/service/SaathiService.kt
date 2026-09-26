@@ -74,6 +74,7 @@ class SaathiService : AccessibilityService() {
         o.setBubbleVisible(!ownUiOpen)
 
         registerDebugTrigger()
+        goForeground()
         guide.offerResume()
         Log.i(TAG, "service connected")
     }
@@ -122,12 +123,32 @@ class SaathiService : AccessibilityService() {
 
     override fun onInterrupt() {}
 
+    /**
+     * A foreground service with a quiet notification: the Android-approved way to stay alive on OEM skins that
+     * clean up heavy background apps (vivo killed the service when another app opened; field test).
+     */
+    private fun goForeground() {
+        runCatching {
+            val nm = getSystemService(android.app.NotificationManager::class.java)
+            nm.createNotificationChannel(android.app.NotificationChannel("saathi", "Saathi", android.app.NotificationManager.IMPORTANCE_MIN).apply { setShowBadge(false) })
+            val open = android.app.PendingIntent.getActivity(this, 1, Intent(this, com.saathi.app.ui.MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
+            val n = android.app.Notification.Builder(this, "saathi")
+                .setSmallIcon(com.saathi.app.R.drawable.ic_launcher_fg)
+                .setContentTitle("Saathi is ready to help")
+                .setContentText("Works on this phone, no internet needed.")
+                .setContentIntent(open).setOngoing(true).build()
+            if (android.os.Build.VERSION.SDK_INT >= 34) startForeground(7, n, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            else startForeground(7, n)
+        }.onFailure { Log.w(TAG, "foreground failed", it); com.saathi.app.DebugLog.w("service", "foreground failed", it) }
+    }
+
     fun isLocked() = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
 
     /** Android is short on memory: give the models back first (they reload on demand). */
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= TRIM_MEMORY_RUNNING_LOW) {
+        // Only real memory pressure. (Level 20 = "UI hidden" fires every time another app comes to the front: not a reason.)
+        if (level == TRIM_MEMORY_RUNNING_LOW || level == TRIM_MEMORY_RUNNING_CRITICAL || level >= TRIM_MEMORY_COMPLETE) {
             Log.i(TAG, "trim memory $level → unloading models")
             com.saathi.app.DebugLog.i("memory", "trim $level → models unloaded")
             com.saathi.app.llm.LlmManager.unload()

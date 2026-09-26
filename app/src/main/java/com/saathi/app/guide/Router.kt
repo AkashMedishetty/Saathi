@@ -177,6 +177,19 @@ object IntentRouter {
     fun isObjectHelp(goal: String) = Regex("(?i)how (do i|to|does) (use|work|operate|start) (this|the)\\b|how does this (work|thing)|use this (machine|thing|remote|device)|" +
         "यह कैसे चल|इसे कैसे चला|ఇది ఎలా వాడ|దీన్ని ఎలా").containsMatchIn(goal)
 
+    /**
+     * "Read this letter", "what's written here", "what does this paper say", "scan my medicine strip": the thing is in
+     * their hand, so the camera reader is the answer, whatever the model thinks (the 1B model calls these "question").
+     */
+    fun cameraRead(goal: String): String? {
+        val g = goal.lowercase()
+        if (Regex("medicine strip|tablet strip|scan (my |the )?medicine|दवा का पत्ता|दवा स्कैन|మందుల స్ట్రిప్|మందు స్కాన్").containsMatchIn(g)) return "scan_medicine"
+        return "read_this".takeIf {
+            Regex("\\bread (this|it|the (letter|paper|bill|label|note|form|board|sign)s?)\\b|what (does|is) (this|it) (say|written)|what'?s written|written (here|on (this|it))|" +
+                "(this|the) (letter|paper|bill|label|prescription) (say|mean)|पढ़कर सुनाओ|क्या लिखा है|ये पढ़ो|यह पढ़ो|चिट्ठी पढ़ो|చదివి వినిపించు|ఏం రాసి ఉంది|ఇది చదువు").containsMatchIn(g)
+        }
+    }
+
     /** Skills that do or open exactly the right thing (instant or one screen): they beat the generic "setting" route. */
     val DIRECT = setOf("torch", "volume", "font", "wifi", "bluetooth", "brightness", "battery", "storage", "storage_view", "camera",
         "dark_mode", "read_this", "scan_medicine", "home", "tv", "internet", "backup", "phone_school", "wa_photo")

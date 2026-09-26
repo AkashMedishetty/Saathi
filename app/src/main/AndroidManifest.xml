@@ -12,6 +12,9 @@
     <uses-permission android:name="android.permission.TRANSMIT_IR" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.consumerir" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -85,6 +88,7 @@
 
         <service
             android:name=".service.SaathiService"
+            android:foregroundServiceType="specialUse"
             android:exported="false"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
@@ -94,6 +98,9 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/saathi_accessibility" />
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Accessibility companion that guides elderly users through their phone; must stay alive while other apps are open." />
         </service>
         <service
             android:name=".service.MessageListener"
