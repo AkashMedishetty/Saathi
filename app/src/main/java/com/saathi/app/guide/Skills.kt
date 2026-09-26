@@ -166,7 +166,11 @@ object Skills {
                     ?: "com.google.android.youtube"
             }
             val q = s.query?.replace(Regex("(?i)\\b(a|the|my)?\\s*(movie|film|serial|series|show)\\b"), "")?.trim()?.takeIf { it.length > 1 }
-            val steps = if (q != null) searchSteps(q, s3("Tap the one you want to watch.", "जो देखना है उसे दबाइए।", "చూడాలనుకున్నది నొక్కండి.")) else emptyList()
+            // No title ("watch my serial"): point at Search and ask for the name, never "scroll and look for Play".
+            val steps = if (q != null && !Regex("(?i)^(my|watch|serial|series|show|movie|film|something|\\s)+$").matches(q))
+                searchSteps(q, s3("Tap the one you want to watch.", "जो देखना है उसे दबाइए।", "చూడాలనుకున్నది నొక్కండి."))
+            else listOf(Step("search", rx("^Search$", "^Find$", "^Search .*"), s3("Tap Search, then type the name of your serial or film.",
+                "'Search' दबाइए, फिर अपने सीरियल या फ़िल्म का नाम लिखिए।", "'Search' నొక్కి, మీ సీరియల్ లేదా సినిమా పేరు టైప్ చేయండి.")))
             Flow("ott", { AppLauncher.launch(it, pkg) },
                 steps + Step("play", rx("^Play", "^Resume", "^Watch", "^Continue watching"), s3("Tap Play.", "'Play' दबाइए।", "'Play' నొక్కండి.")),
                 { sc -> Regex("^Pause|Skip intro|Audio & Subtitles|Episodes", RegexOption.IGNORE_CASE).let { r -> sc.elements.any { r.containsMatchIn(it.label) } } },

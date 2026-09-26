@@ -211,6 +211,16 @@ class Overlay(
         bubbleOrb.mood = if (on) OrbView.Mood.ACTIVE else OrbView.Mood.IDLE
     }
 
+    /** A card is up: it has its own mic and close, so the floating button steps aside (field: it sat on input boxes
+     *  and on the card's close button). It comes back with the card gone, if they want it. */
+    private fun bubbleForCard(cardOn: Boolean) {
+        val show = !cardOn && bubbleWanted
+        bubble.animate().cancel()
+        if (show) bubble.visibility = View.VISIBLE
+        bubble.animate().alpha(if (show) 1f else 0f).setDuration(160)
+            .withEndAction { if (!show) bubble.visibility = View.GONE }.start()
+    }
+
     fun setBubbleVisible(v: Boolean) {
         bubbleWanted = v
         bubble.animate().cancel()
@@ -400,14 +410,18 @@ class Overlay(
             if (tgt != null) { add(tgt.bottom + ctx.dp(14)); add(tgt.top - ctx.dp(14) - ch) }
             focusBox?.let { add(it.bottom + ctx.dp(14)) }
         }
+        // Nothing fits cleanly: never over the keyboard (field: a tall login card sat on JioHotstar's keypad); overlap
+        // the target / input box as little as possible instead.
         val y = candidates.firstOrNull { clear(it) }
-            ?: candidates.minByOrNull { c -> avoid.sumOf { a -> maxOf(0, minOf(a.bottom, c + ch) - maxOf(a.top, c)) } } ?: topMin
+            ?: candidates.map { it.coerceIn(topMin, maxOf(topMin, bottomMax - ch)) }
+                .minByOrNull { c -> avoid.sumOf { a -> maxOf(0, minOf(a.bottom, c + ch) - maxOf(a.top, c)) } } ?: topMin
         val wantTop = y + ch / 2 < screenH / 2
         val p = lp(WLP.MATCH_PARENT, WLP.WRAP_CONTENT, true).apply { gravity = Gravity.TOP; this.y = y.coerceAtLeast(topMin) }
         val changed = y != cardY
         if (animateIn) {
             if (!add(cardWrap, p)) return
             cardShown = true
+            bubbleForCard(true)
             card.translationY = ctx.dpf(if (wantTop) -40 else 40); card.alpha = 0f
             card.scaleX = 0.96f; card.scaleY = 0.96f
             card.animate().translationY(0f).alpha(1f).scaleX(1f).scaleY(1f).setInterpolator(EASE).setDuration(400).start()
@@ -426,12 +440,14 @@ class Overlay(
     private fun hideCardNow() {
         if (!cardShown) return
         cardShown = false
+        bubbleForCard(false)
         runCatching { wm.removeView(cardWrap) }
     }
 
     fun hideCard() {
         if (!cardShown) return
         cardShown = false
+        bubbleForCard(false)
         card.animate().alpha(0f).translationY(ctx.dpf(if (cardAtTop) -36 else 36)).setInterpolator(EASE).setDuration(240)
             .withEndAction { if (!cardShown) runCatching { wm.removeView(cardWrap) } }.start()
     }

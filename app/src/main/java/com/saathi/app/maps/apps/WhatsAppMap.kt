@@ -32,8 +32,9 @@ object WhatsAppMap {
     private val CHAT_TITLE = listOf(id("conversation_contact_name"), id("conversation_contact"))
     private val ENTRY = listOf(id("entry"), lbl("^(Message|Type a message)$"))
     private val SEND = listOf(id("send"), lbl("^Send$", clickable = true))
-    private val VIDEO = lbl("^Video call$", clickable = true)
-    private val VOICE = lbl("^(Voice call|Call)$", clickable = true)
+    // Top bar only: a "Video call · No answer" bubble in the chat is also labelled "Video call" (field, 01:55).
+    private val VIDEO = lbl("^Video call$", clickable = true).copy(above = 0.15f)
+    private val VOICE = lbl("^(Voice call|Call)$", clickable = true).copy(above = 0.15f)
     private val TABS = lbl("^(Chats|Updates|Communities|Calls)$", clickable = true)
 
     private val FIND_CONTACT = listOf(
@@ -53,6 +54,9 @@ object WhatsAppMap {
             ScreenDef("wa_home", listOf(TABS, SEARCH.last().copy(clickable = null)), mustNot = listOf(ENTRY.first())),
             ScreenDef("wa_search", listOf(Sel(editable = true, above = 0.2f)), mustNot = listOf(ENTRY.first())),
             ScreenDef("wa_chat", listOf(CHAT_TITLE.first(), ENTRY.first())),
+            // Their chat (WhatsApp reopens on the LAST chat, often someone else's): the in-chat steps live only here, so
+            // another person's chat is a wrong screen → "tap the back arrow" (field: it glowed a call in the wrong chat).
+            ScreenDef("wa_chat_them", listOf(CHAT_TITLE.first(), ENTRY.first(), CHAT_TITLE.first().copy(slot = "contact"))),
             ScreenDef("wa_chat_label", listOf(lbl("^(Message|Type a message)$"), lbl("^(Attach|Camera|Emoji|Voice message|Video call)$", clickable = true))),
             ScreenDef("wa_call_confirm", listOf(lbl("^(Start (video|voice) call\\?|Video call .*\\?|Voice call .*\\?|Call .*\\?)$"), lbl("^(Call|Start)$", clickable = true))),
             ScreenDef("wa_attach", listOf(lbl("^(Gallery|Document|Camera|Location|Contact|Audio|Poll)$", clickable = true), lbl("^(Gallery|Document)$"))),
@@ -70,7 +74,7 @@ object WhatsAppMap {
                 id = "wa_video_call", pkg = PKG,
                 goals = goals("video ?call( to)? .+", ".+ (ko|को) (video|वीडियो) (call|कॉल)", "वीडियो कॉल", "వీడియో కాల్", "(see|talk to) .+ on (video|whatsapp)"),
                 slots = listOf("contact"),
-                steps = inChat(MapStep("wa_chat", listOf(VIDEO), say("Tap the camera icon at the top to video call {contact}.",
+                steps = inChat(MapStep("wa_chat_them", listOf(VIDEO), say("Tap the camera icon at the top to video call {contact}.",
                     "{contact} को वीडियो कॉल के लिए ऊपर कैमरे वाला निशान दबाइए।", "{contact} కి వీడియో కాల్ చేయడానికి పైన కెమెరా గుర్తు నొక్కండి."),
                     risky = true, alsoOn = listOf("wa_chat_label")),
                     MapStep("wa_call_confirm", listOf(lbl("^(Call|Start)$", clickable = true)), say("Tap Call.", "'Call' दबाइए।", "'Call' నొక్కండి."), risky = true)),
@@ -83,7 +87,7 @@ object WhatsAppMap {
                 goals = goals("whatsapp call", "call .+ on whatsapp", "(voice|audio) call", "व्हाट्सएप (पर )?कॉल", "వాట్సాప్ కాల్"),
                 avoid = listOf(rx("video|वीडियो|వీడియో")),
                 slots = listOf("contact"),
-                steps = inChat(MapStep("wa_chat", listOf(VOICE), say("Tap the phone icon at the top to call {contact}.", "{contact} को कॉल के लिए ऊपर फ़ोन वाला निशान दबाइए।",
+                steps = inChat(MapStep("wa_chat_them", listOf(VOICE), say("Tap the phone icon at the top to call {contact}.", "{contact} को कॉल के लिए ऊपर फ़ोन वाला निशान दबाइए।",
                     "{contact} కి కాల్ చేయడానికి పైన ఫోన్ గుర్తు నొక్కండి."), risky = true, alsoOn = listOf("wa_chat_label")),
                     MapStep("wa_call_confirm", listOf(lbl("^(Call|Start)$", clickable = true)), say("Tap Call.", "'Call' दबाइए।", "'Call' నొక్కండి."), risky = true)),
                 done = listOf(lbl("^(End call|Ringing|Calling).*")),
@@ -95,10 +99,10 @@ object WhatsAppMap {
                 avoid = listOf(rx("photo|picture|फोटो|ఫోటో|location|लोकेशन|లొకేషన్|\\bsms\\b|size|bigger|smaller|font|अक्षर|అక్షర")),
                 slots = listOf("contact", "text"),
                 steps = inChat(
-                    MapStep("wa_chat", ENTRY, say("Tap the box at the bottom and type your message.[ I can type: “{text}”.]",
+                    MapStep("wa_chat_them", ENTRY, say("Tap the box at the bottom and type your message.[ I can type: “{text}”.]",
                         "नीचे बॉक्स दबाकर संदेश लिखिए।[ मैं लिख सकता हूँ: “{text}”।]", "కింద బాక్స్ నొక్కి సందేశం టైప్ చేయండి.[ నేను టైప్ చేయగలను: “{text}”.]"),
                         fill = "text", alsoOn = listOf("wa_chat_label")),
-                    MapStep("wa_chat", SEND, say("Read it once. Then tap the green send arrow.", "एक बार पढ़ लीजिए। फिर हरा भेजें वाला तीर दबाइए।",
+                    MapStep("wa_chat_them", SEND, say("Read it once. Then tap the green send arrow.", "एक बार पढ़ लीजिए। फिर हरा भेजें वाला तीर दबाइए।",
                         "ఒకసారి చదవండి. తర్వాత ఆకుపచ్చ పంపు బాణం నొక్కండి."), risky = true, alsoOn = listOf("wa_chat_label"), needsReached = 3),
                 ),
                 done = emptyList(),
@@ -109,7 +113,7 @@ object WhatsAppMap {
                 goals = goals("send (a |the |my )?(photo|picture|pic) (to|on) .+", "(photo|picture) .*whatsapp", "(फोटो|फ़ोटो) .*(भेजो|व्हाट्सएप)", "ఫోటో .*(పంపు|వాట్సాప్)"),
                 slots = listOf("contact"),
                 steps = inChat(
-                    MapStep("wa_chat", listOf(id("input_attach_button"), lbl("^Attach$", clickable = true)),
+                    MapStep("wa_chat_them", listOf(id("input_attach_button"), lbl("^Attach$", clickable = true)),
                         say("Tap the paper clip to attach.", "जोड़ने के लिए पेपर-क्लिप दबाइए।", "జత చేయడానికి పేపర్ క్లిప్ నొక్కండి."), alsoOn = listOf("wa_chat_label")),
                     MapStep("wa_attach", listOf(lbl("^Gallery$", clickable = true)), say("Tap Gallery.", "'Gallery' दबाइए।", "'Gallery' నొక్కండి.")),
                     MapStep("wa_gallery", listOf(Sel(label = rx("^(Photo|Image),? "), clickable = true, pick = Pick.TOP)),
@@ -143,7 +147,7 @@ object WhatsAppMap {
                 goals = goals("(location|address|pin) .+ (sent|shared)", "(open|go to|directions to) the location", "location (in|on) whatsapp",
                     "(भेजी|भेजा) (हुई|हुआ)? ?(लोकेशन|जगह)", "लोकेशन खोलो", "(పంపిన )?లొకేషన్ (తెరువు|చూపించు)"),
                 slots = listOf("contact"),
-                steps = inChat(MapStep("wa_chat", listOf(Sel(label = rx("location|maps\\.google|goo\\.gl/maps|maps\\.app\\.goo\\.gl"), clickable = true, pick = Pick.TOP,
+                steps = inChat(MapStep("wa_chat_them", listOf(Sel(label = rx("location|maps\\.google|goo\\.gl/maps|maps\\.app\\.goo\\.gl"), clickable = true, pick = Pick.TOP,
                     not = rx("^(Location|Attach)$"))),
                     say("Tap the map in the chat. It opens in Google Maps.", "चैट में नक्शा दबाइए। यह Google Maps में खुलेगा।",
                         "చాట్‌లో మ్యాప్ నొక్కండి. ఇది Google Maps లో తెరుచుకుంటుంది."),

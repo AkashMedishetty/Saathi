@@ -46,7 +46,7 @@ object MapSlots {
 
     /** Words that are about the app, not what to search for. "songs" / "गाने" / "పాటలు" stay: they help the search. */
     private val ROUTE_WORDS = rx("(^|\\s)(on|in|at|the|a|an|search|find|open|app|youtube|spotify|" +
-        "play store|playstore|google play|please|for|me|and|then|some|to|listen|hear|" +
+        "play store|playstore|google play|please|for|me|and|then|some|to|listen|hear|my|watch|serial|jio ?hotstar|hotstar|netflix|" +
         "सुनाओ|सुनना|चलाओ|लगाओ|बजाओ|खोजो|ढूंढो|ढूँढो|पर|पे|में|को|" +
         "పెట్టు|వినిపించు|వెతుకు|లో)(?=\\s|$)")
 

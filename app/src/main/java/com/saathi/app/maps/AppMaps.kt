@@ -7,6 +7,7 @@ import com.saathi.app.maps.apps.CameraMap
 import com.saathi.app.maps.apps.ChromeMap
 import com.saathi.app.maps.apps.ClockMap
 import com.saathi.app.maps.apps.DocsMap
+import com.saathi.app.maps.apps.HotstarMap
 import com.saathi.app.maps.apps.InstagramMap
 import com.saathi.app.maps.apps.MessagesMap
 import com.saathi.app.maps.apps.PhoneMap
@@ -28,7 +29,7 @@ import com.saathi.app.maps.apps.YouTubeMap
  */
 object AppMaps {
     /** All maps, in priority order for goal matching ties. */
-    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map, PhotosMap.map, PlayStoreMap.map, SpotifyMap.map, DocsMap.map, WhatsAppMap.map, MapsMap.map, UberMap.map, ChromeMap.map, PhoneMap.map, MessagesMap.map, ClockMap.map, InstagramMap.map, CameraMap.map) }
+    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map, PhotosMap.map, PlayStoreMap.map, SpotifyMap.map, DocsMap.map, WhatsAppMap.map, MapsMap.map, UberMap.map, ChromeMap.map, PhoneMap.map, MessagesMap.map, ClockMap.map, InstagramMap.map, CameraMap.map, HotstarMap.map) }
 
     private val byPkg by lazy { all.flatMap { m -> (listOf(m.pkg) + m.alsoPkgs).map { it to m } }.toMap() }
 

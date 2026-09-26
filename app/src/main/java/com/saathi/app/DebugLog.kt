@@ -18,13 +18,17 @@ object DebugLog {
     private val io = Executors.newSingleThreadExecutor()
     private var dir: File? = null
     @Volatile private var fromMs = Long.MAX_VALUE
+    private var debuggable = false
     private val ts = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
     private val day = SimpleDateFormat("yyyyMMdd", Locale.US)
 
     fun init(ctx: Context) {
         if (dir != null) return
         dir = File(ctx.applicationContext.filesDir, "logs").apply { mkdirs() }
-        fromMs = ctx.getSharedPreferences("saathi", Context.MODE_PRIVATE).getLong("log_from", Long.MAX_VALUE)
+        // Privacy: test builds only (a release build never writes a log), and nothing older than 2 days is kept.
+        debuggable = (ctx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        fromMs = if (debuggable) ctx.getSharedPreferences("saathi", Context.MODE_PRIVATE).getLong("log_from", Long.MAX_VALUE) else Long.MAX_VALUE
+        io.execute { runCatching { dir?.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 2 * 86_400_000L }?.forEach { it.delete() } } }
         // Crashes are the most important thing to capture.
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
@@ -34,6 +38,7 @@ object DebugLog {
     }
 
     fun setFrom(ctx: Context, ms: Long) {
+        if (!debuggable) return
         fromMs = ms
         ctx.getSharedPreferences("saathi", Context.MODE_PRIVATE).edit().putLong("log_from", ms).apply()
         i("log", "logging from ${Date(ms)}")

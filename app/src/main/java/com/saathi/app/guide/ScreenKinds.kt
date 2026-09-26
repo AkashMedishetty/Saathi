@@ -22,11 +22,20 @@ object ScreenKinds {
     fun wall(s: Screen): Wall? {
         if (!WALL.containsMatchIn(s.allText)) return null
         val hasPassword = s.elements.any { it.password }
-        val setup = Regex("(?i)welcome to|agree and continue|enter (your )?(phone|mobile) number|verify your").containsMatchIn(s.allText)
+        val setup = Regex("(?i)welcome to|agree and continue|enter (your )?(phone|mobile) number|verify your").containsMatchIn(s.allText) || secretEntry(s)
         val btn = s.find(WALL_BUTTON)
         if (btn == null && !hasPassword && !setup) return null
         return Wall(btn, setup)
     }
+
+    /**
+     * A box for a phone number, OTP, password or PIN is on screen (field: JioHotstar's "Log in to watch" page — once
+     * the keyboard hid its Log in button, it stopped counting as a wall and the planner asked for their number).
+     * Only the person types these; Saathi never plans or types here.
+     */
+    fun secretEntry(s: Screen): Boolean = s.elements.any { it.password } ||
+        (s.elements.any { it.role == "input" } && Regex("(?i)mobile number|phone number|\\botp\\b|one.time (password|code)|verification code|enter (the )?code|\\bpin\\b|password|cvv|card number|upi pin")
+            .containsMatchIn(s.allText))
 
     // ── Ads and interrupting popups ──
     private val AD_TEXT = Regex("(?i)\\b(sponsored|advertisement|\\bad\\b ?[·•:]|ad \\d+ of \\d+|skip ad|install now|rate us|enjoying .* \\?)")
@@ -34,6 +43,12 @@ object ScreenKinds {
 
     /** An ad or a nag popup with a way out: point at the way out. */
     fun ad(s: Screen): UiElement? = if (AD_TEXT.containsMatchIn(s.allText)) s.find(AD_CLOSE) else null
+
+    /** Buttons that only ever decline a nag ("Allow notifications?", "Rate us", "Try Premium"): always safe to point at. */
+    private val NAG_DECLINE = rx("^Maybe later$", "^Not now$", "^No,? thanks$", "^Later$", "^Skip for now$", "^Remind me later$", "^Dismiss$", "^Don.t allow$")
+
+    /** A nag popup covering the page (field: JioHotstar's "Allow Notifications / Maybe Later" sheet hid the Search tab). */
+    fun nag(s: Screen): UiElement? = s.find(NAG_DECLINE)
 
     // ── Places a guide should not take people unless they asked for them ──
     private val AVOID = Regex("(?i)^(help|help cent(er|re)|need help\\??|about|about (us|this app)|privacy|privacy policy|terms|terms of (service|use)|" +

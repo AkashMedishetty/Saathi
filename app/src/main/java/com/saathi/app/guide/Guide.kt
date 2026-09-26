@@ -53,7 +53,8 @@ class Guide(
         val OWN_THINGS = Regex("(?i)\\b(my|mine)\\s+(own\\s+)?(liked|saved|downloaded|downloads|playlists?|library|history|watch later|uploads?|videos|account|profile|orders?|bookings?|trips?|rides?)\\b|" +
             "\\bi (liked|saved|watched|downloaded|ordered|booked)\\b|(मेरे|मेरी|मेरा)\\s+(लाइक|सेव|डाउनलोड|प्लेलिस्ट|वीडियो|ऑर्डर)|నా\\s+(లైక్|సేవ్|డౌన్‌?లోడ్|ప్లేలిస్ట్|వీడియో|ఆర్డర్)")
         /** "book a cab to THIS location", "send THIS photo": about what is on the screen right now. */
-        val DEICTIC = Regex("(?i)\\b(this|these|here)\\b|यह|ये|इस|इसे|ఈ |ఇది|ఇక్కడ|దీన్ని")
+        // Whole words only: Devanagari/Telugu have no \b in Java regex, so "ये" matched inside "खोजिये", "इस" inside "इस्तेमाल".
+        val DEICTIC = Regex("(?i)\\b(this|these|here)\\b|(?<![\\p{L}\\p{M}])(यह|ये|इस|इसे|इसको|यहाँ|ఈ|ఇది|ఇక్కడ|దీన్ని)(?![\\p{L}\\p{M}])")
         const val TAG = "Saathi"
         const val THROTTLE_MS = 200L
         const val SETTLE_MS = 450L
@@ -242,15 +243,20 @@ class Guide(
         // General first, not app by app: a request about what's on the screen ("book a cab to THIS location" in a
         // WhatsApp chat) or about the person's own things in an app ("my liked videos") is planned from the live
         // screen by the model, starting where they are. A scripted route would launch its app and lose "this".
+        // Something a family member taught me? That path wins, even over the app maps: it's known to work on this very
+        // phone (field: a taught "open my youtube subscriptions" was replaced by the map route).
+        Recipes.find(svc, goalText)?.let { r -> begin(goalText, Recipes.toFlow(r), autoMode); return }
         hereTask(goalText)?.let { begin(goalText, it, autoMode); return }
         ownThingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
-        mapRouteFor(goalText)?.let { r -> beginMap(goalText, r, autoMode); return }
+        mapRouteFor(goalText)?.let { r ->
+            // "Video call my son": their choice first (WhatsApp or the phone's own), unless they said WhatsApp.
+            if (r.id == "wa_video_call" && !Regex("(?i)whats ?app|व्हाट्स|వాట్స").containsMatchIn(goalText)) { videoCall(goalText, null, autoMode); return }
+            beginMap(goalText, r, autoMode); return
+        }
         IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         IntentRouter.phoneHowTo(svc, goalText)?.let { begin(goalText, it, autoMode); return }
         if (IntentRouter.isQuestion(svc, goalText)) { respond(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
-        // Something a family member taught me? That path wins: it's known to work on this very phone.
-        Recipes.find(svc, goalText)?.let { r -> begin(goalText, Recipes.toFlow(r), autoMode); return }
         IntentRouter.openOnly(svc, goalText)?.let { begin(goalText, it, autoMode); return }
         if (LlmManager.isReady || com.saathi.app.llm.ModelLocator.fast(svc) != null) {
             // Let the model pick the helper (NPU ≈0.25 s); keywords only if it can't.
@@ -615,6 +621,10 @@ class Guide(
             }
         }
         val f = flow
+        // WhatsApp is working now (its chat list or a chat is showing): forget an old "not set up" (field: it was never
+        // cleared after registering, so "video call my son" skipped the WhatsApp | Phone choice).
+        if (screen.pkg.startsWith("com.whatsapp") && Prefs.waNotSetUp(svc) &&
+            screen.elements.any { Regex("^(Chats|Calls|Message|Type a message)$").matches(it.label) }) Prefs.setWaNotSetUp(svc, false)
         // 4b. App-map route: known screens → the exact next step (Kiro's maps). Unknown screens fall through.
         mapRoute?.let { r -> if (mapTick(r, screen)) return }
         // 5. Keyboard, notification shade, permission dialog: just wait.
@@ -684,7 +694,7 @@ class Guide(
 
         // 6b. Ads / popups: point at the way out. Sign-in / setup walls: explain once, then wait for them.
         if (stepHere == null) {
-            ScreenKinds.ad(screen)?.let { close ->
+            (ScreenKinds.ad(screen) ?: ScreenKinds.nag(screen))?.let { close ->
                 show(Target(close, say("An ad or popup is in the way. Tap “${close.title}” to close it.", "विज्ञापन बीच में है। बंद करने के लिए “${close.title}” दबाइए।",
                     "ప్రకటన అడ్డం వచ్చింది. మూసేయడానికి “${close.title}” నొక్కండి.").pick(lang), "ad_${close.title}"))
                 return
@@ -733,6 +743,11 @@ class Guide(
         }
         if (unsureCount[fp] ?: 0 >= 2 || plansThisTask >= 8) { unsure(fp); return }
 
+        // 9b. Login / OTP / password page: the person's own step. Never plan (or type) here; explain once and wait.
+        if (ScreenKinds.secretEntry(screen)) {
+            if (fp != wallFp) { wallFp = fp; showWall(ScreenKinds.Wall(null, true), screen) }
+            return
+        }
         // 10. Anything else: the planner (on-device LLM, loaded on first need; keywords while it warms up).
         if (!LlmManager.isReady) LlmManager.loadAsync(svc)
         delay(50)
@@ -1341,9 +1356,9 @@ class Guide(
     private fun showWall(w: ScreenKinds.Wall, screen: Screen) {
         stopAuto()
         val app = AppLauncher.labelOf(svc, screen.pkg)
-        val t = if (w.setup) say("$app isn't set up on this phone yet. It needs your phone number and a code by SMS — best done together with family. I'll wait.",
-                "$app अभी इस फ़ोन पर चालू नहीं है। इसके लिए आपका नंबर और SMS कोड चाहिए — परिवार के साथ कीजिए। मैं इंतज़ार करूँगा।",
-                "$app ఇంకా ఈ ఫోన్‌లో సెట్ కాలేదు. దీనికి మీ నంబర్, SMS కోడ్ కావాలి — కుటుంబంతో కలిసి చేయండి. నేను వేచి ఉంటాను.").pick(lang)
+        val t = if (w.setup) say("$app is asking you to log in with your phone number and a code sent by SMS. Only you, or family, should type these. I'll wait here.",
+                "$app आपका फ़ोन नंबर और SMS पर आया कोड माँग रहा है। इन्हें सिर्फ़ आप या परिवार वाले लिखें। मैं यहीं इंतज़ार करूँगा।",
+                "$app మీ ఫోన్ నంబర్, SMS లో వచ్చే కోడ్ అడుగుతోంది. వీటిని మీరు లేదా కుటుంబం మాత్రమే టైప్ చేయాలి. నేను ఇక్కడే వేచి ఉంటాను.").pick(lang)
             else say("$app needs you to sign in first. Only you should type your password. Tap “${w.button?.title ?: "Sign in"}”.",
                 "$app में पहले साइन इन करना होगा। पासवर्ड सिर्फ़ आप लिखिए। “${w.button?.title ?: "Sign in"}” दबाइए।",
                 "$app లో ముందు సైన్ ఇన్ చేయాలి. పాస్‌వర్డ్ మీరే టైప్ చేయండి. “${w.button?.title ?: "Sign in"}” నొక్కండి.").pick(lang)
@@ -1500,6 +1515,12 @@ class Guide(
         // home screen made the search route "done" before a single step).
         val rr = if (r.doneNeedsLastStep) r else r.copy(doneNeedsLastStep = true)
         val d = runCatching { com.saathi.app.maps.AppMaps.next(rr, screen.pkg, live.nodes, maxOf(mapStep, 0), mapSlots) }.getOrNull() ?: return false
+        // The next target is hidden and a nag popup is on top: point at its "Maybe later" first, in any app.
+        if (d !is com.saathi.app.maps.Decision.Glow && d !is com.saathi.app.maps.Decision.Done) ScreenKinds.nag(screen)?.let { later ->
+            show(Target(later, say("A popup is in the way. Tap “${later.title}” to close it.", "एक पॉपअप बीच में है। बंद करने के लिए “${later.title}” दबाइए।",
+                "ఒక పాపప్ అడ్డం వచ్చింది. మూసేయడానికి “${later.title}” నొక్కండి.").pick(lang), "nag_${later.title}"))
+            return true
+        }
         when (d) {
             is com.saathi.app.maps.Decision.Glow -> {
                 if (d.step > mapStep) mapStep = d.step
@@ -1608,7 +1629,11 @@ class Guide(
     fun videoCall(goalText: String, person: String?, autoMode: Boolean = false) {
         lang = Prefs.lang(svc)
         val g = if (person != null && !goalText.contains(person, true)) "video call $person" else goalText
-        val wa = { begin(goalText, Skills.byId("wa_video")?.build(svc, SlotExtractor.from(g, Prefs.family(svc))), autoMode) }
+        val wa = {
+            // The WhatsApp map (known screens, the real top-bar button); the old skill only if the map isn't there.
+            val r = com.saathi.app.maps.AppMaps.routeById("wa_video_call")?.takeIf { AppLauncher.isInstalled(svc, it.pkg) }
+            if (r != null) beginMap(g, r, autoMode) else begin(goalText, Skills.byId("wa_video")?.build(svc, SlotExtractor.from(g, Prefs.family(svc))), autoMode)
+        }
         val phone = { phoneVideoCall(g, autoMode) }
         val saidWa = Regex("(?i)whats ?app|व्हाट्स|వాట్స").containsMatchIn(goalText)
         val waOk = AppLauncher.first(svc, "com.whatsapp", "com.whatsapp.w4b") != null && !Prefs.waNotSetUp(svc)
