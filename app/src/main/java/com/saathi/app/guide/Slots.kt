@@ -19,7 +19,8 @@ object SlotExtractor {
     )
     /** Relations resolve to the registered family contact when there is one. */
     val FAMILY = setOf("son", "daughter", "beta", "beti", "wife", "husband", "grandson", "granddaughter", "family",
-        "बेटा", "बेटे", "बेटी", "पोता", "पोती", "కొడుకు", "కూతురు", "మనవడు", "మనవరాలు")
+        "बेटा", "बेटे", "बेटी", "बिटिया", "पोता", "पोती", "కొడుకు", "కొడుక్", "కూతురు", "కూతురి", "అబ్బాయి", "అమ్మాయి",
+        "మనవడు", "మనవరాలు")
     private val IC = RegexOption.IGNORE_CASE
 
     /** Words that aren't part of what to search for: app names, verbs and HI/TE particles. */

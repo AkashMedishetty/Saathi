@@ -62,7 +62,6 @@ class Halo(private val ctx: Context, private val wm: WindowManager) {
 
     /** Point at [target] (screen coordinates), or clear with null. */
     fun show(target: Rect?, warn: Boolean) {
-        com.saathi.app.DebugLog.i("halo", "show $target suspended=$suspended")
         if (target == null || target.isEmpty) { clear(); return }
         val next = RectF(target).apply { inset(-gap, -gap) }
         val same = ring == next && this.warn == warn

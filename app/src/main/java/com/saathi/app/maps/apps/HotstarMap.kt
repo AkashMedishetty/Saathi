@@ -62,7 +62,8 @@ object HotstarMap {
                 // Saathi's sign-in wall card explains it (their number, their OTP; Saathi never types them).
                 done = listOf(lbl("^(Pause|Skip intro|Audio & Subtitles|Episodes)$")),
                 doneNot = listOf(SEARCH_BAR, TAB_HOME), doneNeedsLastStep = true,
-                doneSay = say("It's starting. Enjoy!", "शुरू हो रहा है। आनंद लीजिए!", "మొదలవుతోంది. ఆనందించండి!"),
+                doneSay = say("It's starting. Enjoy! Say “pause”, “louder” or “close” any time.", "शुरू हो रहा है। आनंद लीजिए! कभी भी “रोको”, “आवाज़ बढ़ाओ” या “बंद करो” बोलिए।",
+                    "మొదలవుతోంది. ఆనందించండి! ఎప్పుడైనా “ఆపు”, “సౌండ్ పెంచు” లేదా “మూసేయి” అనండి."),
             ),
         ),
     )

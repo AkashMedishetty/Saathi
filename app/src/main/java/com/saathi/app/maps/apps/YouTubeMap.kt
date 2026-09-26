@@ -37,6 +37,8 @@ object YouTubeMap {
         clickable = true, pick = Pick.TOP)
     private val LIKE = lbl("^like this video|^Like$|^I like this", clickable = true)
     private val SHARE = lbl("^Share$", clickable = true)
+    /** A playlist's own page (opened from the results): "Play all" starts it (field: the route lost track here). */
+    private val PLAY_ALL = lbl("^Play all$", clickable = true)
     /**
      * Only on the Subscriptions tab: the empty state ("New videos right to you" + "Subscribe to X." suggestions) or
      * the channel bar's "Manage" / "All subscriptions". Home's chips ("All", "Music") are deliberately not used.
@@ -59,6 +61,7 @@ object YouTubeMap {
             ScreenDef("yt_results", listOf(QUERY_BAR, Sel(resId = "results"))),
             // The watch page hides the bottom tab bar; a Like button next to the tab bar is a Short on Home.
             ScreenDef("yt_watch", listOf(LIKE), mustNot = listOf(SEARCH_BOX, TAB_HOME)),
+            ScreenDef("yt_playlist", listOf(PLAY_ALL), mustNot = listOf(SEARCH_BOX)),
             ScreenDef("yt_share", listOf(lbl("^(Share|Share to|Send to)$"), lbl("^(WhatsApp|Copy link)$", clickable = true)),
                 mustNot = listOf(SEARCH_BOX)),
         ),
@@ -92,6 +95,11 @@ object YouTubeMap {
                     MapStep("yt_search", listOf(SUGGESTION),
                         say("Tap “{query}” in the list.", "सूची में “{query}” दबाइए।", "జాబితాలో “{query}” నొక్కండి."),
                         why = say("Or press the search key on the keyboard.", "या कीबोर्ड पर खोज वाला बटन दबाइए।", "లేదా కీబోర్డ్‌లో సెర్చ్ బటన్ నొక్కండి.")),
+                    // Before the result step on purpose: after a playlist result is tapped, the furthest step reached is
+                    // the result, so "Play all" is found as a step on this screen and "done" still needs the result step.
+                    MapStep("yt_playlist", listOf(PLAY_ALL),
+                        say("This is a playlist. Tap Play all to play the songs one after another.", "यह प्लेलिस्ट है। सारे गाने एक के बाद एक चलाने के लिए 'Play all' दबाइए।",
+                            "ఇది ప్లేలిస్ట్. పాటలన్నీ ఒకదాని తర్వాత ఒకటి ప్లే చేయడానికి 'Play all' నొక్కండి.")),
                     MapStep("yt_results_for", listOf(RESULT),
                         say("Tap the first video to play it.", "चलाने के लिए पहला वीडियो दबाइए।", "ప్లే చేయడానికి మొదటి వీడియో నొక్కండి."),
                         why = say("I skipped the advertisement at the top.", "ऊपर वाला विज्ञापन मैंने छोड़ दिया।", "పైన ఉన్న ప్రకటనను వదిలేశాను."),
@@ -101,7 +109,8 @@ object YouTubeMap {
                 // Done = on a watch page after the result was tapped. Shorts on the Home tab also have a Like button
                 // (found on the phone), so the Like button alone is not enough: the last step must be reached too.
                 done = listOf(LIKE), doneNot = listOf(TAB_HOME, SEARCH_BOX), doneNeedsLastStep = true,
-                doneSay = say("It's playing. Enjoy!", "चल रहा है। आनंद लीजिए!", "ప్లే అవుతోంది. ఆనందించండి!"),
+                doneSay = say("It's playing. Enjoy! Say “pause”, “louder” or “close” any time.", "चल रहा है। आनंद लीजिए! कभी भी “रोको”, “आवाज़ बढ़ाओ” या “बंद करो” बोलिए।",
+                    "ప్లే అవుతోంది. ఆనందించండి! ఎప్పుడైనా “ఆపు”, “సౌండ్ పెంచు” లేదా “మూసేయి” అనండి."),
                 next = listOf(say("Want me to show you how to like it or share it with family?",
                     "क्या इसे लाइक करना या परिवार को भेजना सिखाऊँ?", "దీన్ని లైక్ చేయడం లేదా కుటుంబానికి పంపడం చూపించనా?")),
             ),

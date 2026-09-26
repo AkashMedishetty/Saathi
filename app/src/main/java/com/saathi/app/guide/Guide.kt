@@ -137,6 +137,10 @@ class Guide(
     private var lastActionNote: String? = null
     /** The task is set aside while Saathi answers something else; the loop waits until they continue. */
     private var setAside = false
+    /** What they answered to Saathi's questions in this task ("play the playlist"): the planner sees it every time. */
+    private val answers = mutableListOf<String>()
+    /** The current map step's checked explanation ("The magnifying glass means search."): the grounded answer to a doubt. */
+    private var stepWhy: String? = null
 
     // ── Watchdog: no progress for 2 minutes → offer help (once per task). ──
     private var lastProgress = 0L
@@ -160,6 +164,8 @@ class Guide(
             if (rest.length > 3) { start(rest, autoMode = true); return }
             if (active) { enableAuto(); return }
         }
+        // While watching / listening: "pause", "next", "louder", "close this app" work any time, mid-task or not.
+        if (mediaCommand(text)) return
         // A card is waiting for an answer ("Shall I open the Play Store?", "WhatsApp or Phone?"): a spoken reply answers
         // it (field: "yes" became a brand-new goal called "yes", so the question dead-ended).
         if (overlay.pickChoice(t)) return
@@ -172,6 +178,9 @@ class Guide(
         }
         // Saathi asked them something ("Which contact?"): their reply refines the same task, it isn't a new one.
         if (active && current?.key?.startsWith("ask_") == true) {
+            // The planner reads the flow's goal, not `goal`: keep the answer where it looks (field: "play playlist"
+            // was dropped and the model started over with "Tap Search").
+            answers += text.trim()
             goal = "$goal (${text.trim()})"
             com.saathi.app.DebugLog.i("ask", "answered: $text → goal=$goal")
             planCache.clear(); lastSig = 0; replan = true
@@ -189,10 +198,74 @@ class Guide(
         // the task in mind, and the task waits; it is not a new goal (field: every mid-task question wiped the task).
         if (active && isAsideQuestion(text)) {
             com.saathi.app.DebugLog.i("aside", "mid-task question: \"$text\" (task: \"$goal\")")
+            // About this step ("what does the magnifying glass mean?", "why this?"): the map's own checked
+            // explanation, not the model (field: the small model explained real magnifying glasses).
+            val why = stepWhy; val cur = current
+            if (why != null && cur != null && aboutStep(text, cur)) {
+                com.saathi.app.DebugLog.i("answer", "q=\"$text\" a=\"$why\" (step's own explanation)")
+                setAside = true; autoJob?.cancel()
+                overlay.showCard(why + "\n\n" + cur.text, Overlay.Mode.PAUSED, onContinue = { resumeTask() })
+                speaker.say(why + " " + cur.text, lang)
+                return
+            }
             answerQuestion(text, aside = "I am in the middle of: \"$goal\". Saathi's current instruction: \"${current?.text ?: "none yet"}\".")
             return
         }
         start(text)
+    }
+
+    /**
+     * The everyday controls while a video or song plays, in the person's words: pause / play / next / louder / softer /
+     * close this app / go home. Media keys and the music volume need no permission and never open Settings.
+     */
+    private fun mediaCommand(text: String): Boolean {
+        val g = text.lowercase().trim()
+        val am = svc.getSystemService(android.media.AudioManager::class.java) ?: return false
+        fun key(k: Int) = runCatching {
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, k))
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, k))
+        }
+        fun vol(dir: Int) = runCatching { am.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, dir, android.media.AudioManager.FLAG_SHOW_UI) }
+        val (said, act) = when {
+            Regex("^(pause|pause (it|this|the (video|song|music))|stop the (video|song|music)|रोको|रोक दो|वीडियो रोको|गाना रोको|ఆపు|ఆపండి|పాజ్)\\W*$").matches(g) ->
+                say("Paused. Say “play” to continue.", "रोक दिया। चलाने के लिए “play” बोलिए।", "ఆపాను. మళ్ళీ ప్లే చేయాలంటే “play” అనండి.") to { key(android.view.KeyEvent.KEYCODE_MEDIA_PAUSE) }
+            Regex("^(play|resume|continue (the )?(video|song|music)|play (it )?again|चलाओ|फिर से चलाओ|ప్లే చేయి|మళ్ళీ ప్లే)\\W*$").matches(g) && goal == null ->
+                say("Playing.", "चल रहा है।", "ప్లే అవుతోంది.") to { key(android.view.KeyEvent.KEYCODE_MEDIA_PLAY) }
+            Regex("^(next|next (song|video|one)|skip( this)?|अगला|अगला गाना|తర్వాతిది|తర్వాతి పాట)\\W*$").matches(g) ->
+                say("Next one.", "अगला।", "తర్వాతిది.") to { key(android.view.KeyEvent.KEYCODE_MEDIA_NEXT) }
+            Regex("^(louder|volume up|increase (the )?volume|turn it up|आवाज़ बढ़ाओ|आवाज बढ़ाओ|సౌండ్ పెంచు|శబ్దం పెంచు)\\W*$").matches(g) ->
+                say("A little louder.", "आवाज़ थोड़ी बढ़ा दी।", "కొంచెం సౌండ్ పెంచాను.") to { vol(android.media.AudioManager.ADJUST_RAISE); vol(android.media.AudioManager.ADJUST_RAISE) }
+            Regex("^(softer|quieter|volume down|decrease (the )?volume|turn it down|आवाज़ कम करो|आवाज कम करो|సౌండ్ తగ్గించు|శబ్దం తగ్గించు)\\W*$").matches(g) ->
+                say("A little softer.", "आवाज़ थोड़ी कम कर दी।", "కొంచెం సౌండ్ తగ్గించాను.") to { vol(android.media.AudioManager.ADJUST_LOWER); vol(android.media.AudioManager.ADJUST_LOWER) }
+            Regex("^(close (this|the|it)( app)?|close (youtube|the video|the song)|exit( this)?( app)?|i'?m done|go (to )?home|home screen|बंद करो|ऐप बंद करो|होम पर जाओ|మూసేయి|యాప్ మూసేయి|హోమ్‌?కి వెళ్ళు)\\W*$").matches(g) ->
+                say("Done. You're on the home screen.", "हो गया। आप होम स्क्रीन पर हैं।", "అయింది. మీరు హోమ్ స్క్రీన్‌లో ఉన్నారు.") to {
+                    stop(); svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME) }
+            else -> return false
+        }
+        lang = Prefs.lang(svc)
+        com.saathi.app.DebugLog.i("media", "\"$text\"")
+        act()
+        speaker.say(said.pick(lang), lang)
+        return true
+    }
+
+    /** "…, Play the playlist, or search for something else?" → ("Play the playlist", "Search for something else"). */
+    private fun choicesIn(q: String): Pair<String, String>? {
+        val last = q.trim().split(Regex("(?<=[.!?।])\\s+")).lastOrNull { it.endsWith("?") } ?: return null
+        val m = Regex("(?i)^(?:.*?(?::|—|-)\\s*)?(.+?),?\\s+(?:or|या|లేదా)\\s+(.+?)\\?$").find(last) ?: return null
+        fun tidy(x: String) = x.trim().removePrefix("do you want to ").removePrefix("would you like to ").replaceFirstChar { it.uppercase() }
+        if (m.groupValues[1].count { it == ',' } >= 2) return null   // "Home, Shorts, Create, or You?": a list, not a choice
+        var a = tidy(m.groupValues[1]); val b = tidy(m.groupValues[2])
+        // "What would you like to do now, play the playlist" → keep what comes after the last comma.
+        if (a.contains(",")) a = tidy(a.substringAfterLast(","))
+        return if (a.length in 2..40 && b.length in 2..40) a to b else null
+    }
+
+    /** Is the doubt about the step on screen? "this / why / what does it mean", or it names a word of the instruction. */
+    private fun aboutStep(q: String, t: Target): Boolean {
+        if (Regex("(?i)\\b(this|that|it|why|mean|means)\\b|यह|ये|क्यों|मतलब|ఇది|ఎందుకు|అర్థం").containsMatchIn(q)) return true
+        val words = { x: String -> x.lowercase().split(Regex("[^\\p{L}\\p{M}]+")).filter { it.length >= 4 }.toSet() }
+        return (words(q) intersect (words(t.text) + words(t.el?.label ?: ""))).isNotEmpty()
     }
 
     /** A question, not a new task: phrased as one, and it names no other app, skill or route. */
@@ -403,7 +476,7 @@ class Guide(
         flow = f
         history.clear(); current = null; lastSpokenKey = null; lastSig = 0; warnedSig = 0; lastStepIdx = -1; scrolls = 0
         taskPkgs.clear(); paused = false; pendingLearn = null; adoptPkg = true
-        auto = autoMode; autoSteps = 0; autoLastKey = null; autoSameKey = 0; setAside = false
+        auto = autoMode; autoSteps = 0; autoLastKey = null; autoSameKey = 0; setAside = false; answers.clear()
         planCache.clear(); unsureCount.clear(); plansThisTask = 0; wallFp = 0; lastActKey = null; sameActCount = 0
         LlmManager.endChat(); taskKey = "task_${SystemClock.uptimeMillis()}"; lastActionNote = null
         lastProgress = SystemClock.uptimeMillis(); stuckOffered = false
@@ -766,10 +839,12 @@ class Guide(
         replan = false
         plansThisTask++
         var d = try {
-            Planner.decideInTask(taskKey, f?.llmGoal ?: g, screen, lastActionNote, lang, AppLauncher.labelOf(svc, screen.pkg), allowLlm = !lowPower,
+            Planner.decideInTask(taskKey, (f?.llmGoal ?: g) + answers.joinToString("") { " (they chose: $it)" }, screen, lastActionNote, lang, AppLauncher.labelOf(svc, screen.pkg), allowLlm = !lowPower,
                 progress = history.toList())
         } finally { thinking = false; overlay.setAura(false) }
         lastActionNote = null
+        // The person asked something / stopped while the model was thinking: this plan is stale, drop it.
+        if (setAside || goal == null || SaathiService.ownUiOpen) return
         // Never lead them to Help / About / Privacy / Terms unless they asked for it.
         d.targetId?.let { screen.byId(it) }?.let { el -> if (ScreenKinds.avoid(el.label, g)) d = d.copy(targetId = null) }
         com.saathi.app.DebugLog.i("plan", "goal=\"${f?.llmGoal ?: g}\" pkg=${screen.pkg} llm=${d.fromLlm} target=${d.targetId?.let { screen.byId(it)?.label?.take(50) }} done=${d.done} noAct=${d.noAct} lowPower=$lowPower")
@@ -785,7 +860,13 @@ class Guide(
             current = Target(null, d.say, "ask_$fp"); lastSpokenKey = current?.key
             planCache[fp] = Plan(null, null, d.say, false)
             overlay.highlight(null, false)
-            overlay.showCard(d.say, Overlay.Mode.INFO)
+            // "Play the playlist, or search for something else?": two big buttons, not voice only (field: no way to
+            // answer but the mic). Tapping one answers exactly like saying it.
+            val opts = choicesIn(d.say)
+            if (opts != null) overlay.showChoice(d.say,
+                Triple(opts.first, com.saathi.app.R.drawable.ic_check, { handleUtterance(opts.first) }),
+                Triple(opts.second, com.saathi.app.R.drawable.ic_chevron_right, { handleUtterance(opts.second) }))
+            else overlay.showCard(d.say, Overlay.Mode.ASK)
             speaker.say(d.say, lang)
         } else {
             val el = d.targetId?.let { screen.byId(it) }
@@ -872,6 +953,7 @@ class Guide(
     }
 
     private fun show(t: Target, practiced: Boolean = false) {
+        if (!t.key.startsWith("map_")) stepWhy = null
         hideJob?.cancel()
         current = t
         delayedGlow?.cancel()
@@ -1510,7 +1592,12 @@ class Guide(
 
     /** One map decision for this screen. true = handled (shown / waited / done); false = not mapped → planner. */
     private fun mapTick(r: com.saathi.app.maps.Route, screen: Screen): Boolean {
-        val live = MapBridge.read(svc.rootInActiveWindow)
+        // The app's own window, never Saathi's mic sheet / card (field: the sheet's nodes read as "unknown screen" and
+        // the planner ran on YouTube mid-route). Not readable yet → wait for the next event.
+        val root = svc.rootInActiveWindow?.takeIf { it.packageName?.toString() == screen.pkg }
+            ?: runCatching { svc.windows.mapNotNull { it.root }.firstOrNull { it.packageName?.toString() == screen.pkg } }.getOrNull()
+            ?: return true
+        val live = MapBridge.read(root)
         // "Done" only after the route's last step was really reached (field test: a Short's Like button on YouTube's
         // home screen made the search route "done" before a single step).
         val rr = if (r.doneNeedsLastStep) r else r.copy(doneNeedsLastStep = true)
@@ -1523,6 +1610,13 @@ class Guide(
         }
         when (d) {
             is com.saathi.app.maps.Decision.Glow -> {
+                // Only what a finger can hit: ≥60 px above the navigation bar (field: a 130 px sliver of a playlist
+                // row behind the nav bar was glowed). Otherwise it's just below: scroll a little.
+                val usable = (android.content.res.Resources.getSystem().displayMetrics.heightPixels * 0.955f).toInt()
+                if (minOf(d.box.b, usable) - d.box.t < 60) {
+                    show(Target(null, say("Slowly scroll down a little.", "धीरे से थोड़ा नीचे स्क्रॉल कीजिए।", "నెమ్మదిగా కొంచెం కిందకు స్క్రోల్ చేయండి.").pick(lang), "map_scroll_${d.step}", scroll = true))
+                    return true
+                }
                 if (d.step > mapStep) mapStep = d.step
                 val el = MapBridge.uiElement(d.node, live.infoFor(d.node), if (d.node.editable) "input" else "button")
                     .copy(bounds = android.graphics.Rect(d.box.l, d.box.t, d.box.r, d.box.b))
@@ -1530,6 +1624,7 @@ class Guide(
                 val text = d.say.pick(lang).let { t -> if (practice) say("Your turn. ", "अब आपकी बारी। ", "ఇప్పుడు మీ వంతు. ").pick(lang) + t else t }
                 show(Target(el, text, "map_${r.id}_${d.step}", d.fill, noAct = d.risky,
                     tip = if (teach) d.why?.pick(lang) else null, progress = (d.step + 1) to r.steps.size), practiced = practice)
+                stepWhy = d.why?.pick(lang)
             }
             is com.saathi.app.maps.Decision.Scroll -> show(Target(null, d.hint.pick(lang), "map_scroll_${d.step}", scroll = true))
             is com.saathi.app.maps.Decision.WrongScreen -> {
@@ -1741,7 +1836,14 @@ class Guide(
             val a = Conversation.answer(if (aside != null) "$aside\nMy question: $q" else q, lang, Prefs.name(svc), svc).let { raw ->
                 // No source: only safe, general advice passes; facts, medical, legal, money → the kind fallback.
                 val c = com.saathi.app.policy.AnswerCheck.verify(q, raw, null, lang)
-                if (c.ok || IntentRouter.isGreeting(q)) raw else c.fallback?.pick(lang) ?: raw
+                // Help with the phone itself ("what does the magnifying glass mean?", a doubt mid-task) is not a fact
+                // to source-check: allow a short answer when "no source" is the ONLY objection (medical, money, secrets,
+                // current facts and garbled text still fall back). Field: every mid-task doubt got "I could not check".
+                val phoneHelp = aside != null || IntentRouter.aboutPhone(svc, q) ||
+                    Regex("(?i)\\b(button|icon|symbol|sign|screen|tap|app|phone|mean|arrow|dots|menu)\\b|बटन|निशान|मतलब|బటన్|గుర్తు|అర్థం").containsMatchIn(q)
+                val okHelp = phoneHelp && c.reasons == listOf("no_supported_offline_advice") && raw.length <= 400
+                if (!c.ok) com.saathi.app.DebugLog.i("answer", "check ${c.reasons} phoneHelp=$phoneHelp raw=\"${raw.take(160)}\"")
+                if (c.ok || okHelp || IntentRouter.isGreeting(q)) raw else c.fallback?.pick(lang) ?: raw
             }
             overlay.setAura(false)
             Conversation.remember(q, a)

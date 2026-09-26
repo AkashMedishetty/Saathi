@@ -218,17 +218,22 @@ class SaathiService : AccessibilityService() {
 
     /** Debug: the raw tree to logcat (uiautomator dump would kill a11y services, trap #23). */
     private fun dumpTree() {
+        // Also to files/dump.txt: this phone's logcat sometimes drops the main process's lines (scripts/capture-tree.sh
+        // falls back to the file).
+        val out = StringBuilder()
         fun walk(n: android.view.accessibility.AccessibilityNodeInfo?, d: Int) {
             n ?: return
             val r = android.graphics.Rect().also { n.getBoundsInScreen(it) }
-            Log.i("SaathiDump", "  ".repeat(d) + "${n.className?.toString()?.substringAfterLast('.')} " +
+            val line = "  ".repeat(d) + "${n.className?.toString()?.substringAfterLast('.')} " +
                 "t=${n.text} d=${n.contentDescription} id=${n.viewIdResourceName?.substringAfter('/')} " +
                 "${if (n.isClickable) "C" else ""}${if (n.isScrollable) "S" else ""}${if (n.isCheckable) "K" else ""}" +
                 "${if (n.isFocusable) "F" else ""} ri=${n.rangeInfo?.let { "${it.min}..${it.max}=${it.current}" }} " +
-                "acts=${n.actionList.joinToString(",") { it.id.toString() }} $r")
+                "acts=${n.actionList.joinToString(",") { it.id.toString() }} $r"
+            Log.i("SaathiDump", line); out.append(line).append('\n')
             for (i in 0 until n.childCount) walk(n.getChild(i), d + 1)
         }
         walk(rootInActiveWindow, 0)
+        runCatching { java.io.File(filesDir, "dump.txt").writeText(out.toString()) }
         com.saathi.app.guide.ScreenReader.read(rootInActiveWindow)?.let { Log.i("SaathiDump", "READ:\n" + it.forPrompt(90)) }
     }
 
