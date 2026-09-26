@@ -356,7 +356,9 @@ class Overlay(
         } else if (mode == Mode.ASK || mode == Mode.CHOICE) {
             // A question can be answered out loud too ("yes", "WhatsApp"): the mic stays (field: no way to reply).
             btnAgain.visibility = View.GONE
-            btnMic.visibility = View.VISIBLE
+            // Two long choices need the room: then the mic steps aside (the buttons are the answer).
+            val roomy = mode == Mode.ASK || ((choiceA?.first?.length ?: 0) <= 10 && (choiceB?.first?.length ?: 0) <= 10)
+            btnMic.visibility = if (roomy) View.VISIBLE else View.GONE
             btnMic.round(say("Answer by voice", "बोलकर बताइए", "మాటతో చెప్పండి").pick(l), R.drawable.ic_mic, quietBg, quietFg)
         } else if (mode == Mode.LOST) {
             // Lost: Back · Ask family · Close, all one tap.

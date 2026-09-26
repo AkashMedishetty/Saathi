@@ -137,6 +137,10 @@ class Guide(
     private var lastActionNote: String? = null
     /** The task is set aside while Saathi answers something else; the loop waits until they continue. */
     private var setAside = false
+    /** Arrived on a Settings page: the page's own control is the last step (slider / switch / choice list). */
+    private data class Settle(val routeId: String, val kind: String, val label: String, val say: String,
+        var start: String, var last: String, var changedAt: Long = 0L, var asked: Boolean = false)
+    private var settle: Settle? = null
     /** What they answered to Saathi's questions in this task ("play the playlist"): the planner sees it every time. */
     private val answers = mutableListOf<String>()
     /** The current map step's checked explanation ("The magnifying glass means search."): the grounded answer to a doubt. */
@@ -644,7 +648,8 @@ class Guide(
         val screen = readScreen() ?: run { if (active) schedule(600, force = true); return }
         if (screen.pkg == svc.packageName) return
         updateIme() // a keyboard opening doesn't change the app's tree, so check it before the "nothing changed" exit
-        if (screen.signature == lastSig) return
+        // A slider moving or a switch flipping doesn't change the signature: the Settings last step watches values.
+        if (screen.signature == lastSig) { settle?.let { st -> lang = Prefs.lang(svc); settleTick(st, screen) }; return }
         lastSig = screen.signature
         lang = Prefs.lang(svc)
 
@@ -706,6 +711,7 @@ class Guide(
         if (screen.pkg.startsWith("com.whatsapp") && Prefs.waNotSetUp(svc) &&
             screen.elements.any { Regex("^(Chats|Calls|Message|Type a message)$").matches(it.label) }) Prefs.setWaNotSetUp(svc, false)
         // 4b. App-map route: known screens → the exact next step (Kiro's maps). Unknown screens fall through.
+        settle?.let { st -> if (settleTick(st, screen)) return }
         mapRoute?.let { r -> if (mapTick(r, screen)) return }
         // 5. Keyboard, notification shade, permission dialog: just wait.
         if (isTransient(screen.pkg)) return
@@ -1279,7 +1285,7 @@ class Guide(
         goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
-        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false; needApp = null; learn = false; form = null; loop = null; mapRoute = null; mapStep = -1
+        goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false; needApp = null; learn = false; form = null; loop = null; mapRoute = null; mapStep = -1; settle = null
         delayedGlow?.cancel()
         Memory.clearTask()
         clearVisuals()
@@ -1675,10 +1681,84 @@ class Guide(
                     finish(com.saathi.app.maps.AppMaps.fillIn(r.doneSay, mapSlots).pick(lang),
                         Triple(say("Show me how to use it", "इसे चलाना सिखाओ", "దీన్ని వాడటం నేర్పు").pick(lang), com.saathi.app.R.drawable.ic_school,
                             { learnTask("how do I use $newApp") }))
+                } else if (r.id.startsWith("settings_") && enterSettle(r, screen)) {
+                    // The page is open: now its own control, then "is it good like this?".
                 } else if (f != null) complete(f) else finish(r.doneSay.pick(lang))
             }
             is com.saathi.app.maps.Decision.Unknown -> return false
         }
+        return true
+    }
+
+    // ───────── Settings: the last step is the page's own control ─────────
+
+    /** The page's main control: a slider, else the switch for this topic, else a list of choices. */
+    private fun settleControl(screen: Screen, term: String): Pair<String, UiElement?>? {
+        screen.elements.firstOrNull { it.role == "slider" }?.let { return "slider" to it }
+        val words = term.lowercase().split(Regex("[^a-z]+")).filter { it.length >= 3 }
+        screen.elements.firstOrNull { e -> e.role == "switch" && words.any { e.label.lowercase().contains(it) } }?.let { return "switch" to it }
+        if (screen.elements.count { it.role == "switch" } >= 3) return "list" to screen.scrollable()
+        screen.elements.filter { it.role == "switch" }.takeIf { it.size in 1..2 }?.first()?.let { return "switch" to it }
+        return null
+    }
+
+    /** What the control says now: the slider's value, the switch's state, which choice is ticked. */
+    private fun settleValue(kind: String, screen: Screen, el: UiElement?): String = when (kind) {
+        "slider" -> el?.node?.let { n -> runCatching { n.refresh(); n.rangeInfo?.current?.toString() }.getOrNull() } ?: ""
+        "switch" -> el?.node?.let { n -> runCatching { n.refresh(); n.isChecked.toString() }.getOrNull() } ?: el?.checked.toString()
+        else -> screen.elements.filter { it.role == "switch" && it.checked }.joinToString { it.title }
+    }
+
+    /** The words next to a slider that name the level ("Large"): read out after a change. */
+    private fun settleLevel(screen: Screen, el: UiElement?): String? = el?.let { c ->
+        screen.elements.filter { it.role == "text" && it.label.length in 2..20 && it.bounds.bottom <= c.bounds.top + 10 && c.bounds.top - it.bounds.bottom < 260 }
+            .maxByOrNull { it.bounds.bottom }?.label
+    }
+
+    private fun enterSettle(r: com.saathi.app.maps.Route, screen: Screen): Boolean {
+        val term = mapSlots["term"] ?: return false
+        val (kind, el) = settleControl(screen, term) ?: return false
+        val lead = com.saathi.app.maps.AppMaps.fillIn(r.doneSay, mapSlots).pick(lang)
+        val how = when (kind) {
+            "slider" -> say(" Watch the words on this page change as you move it.", " सरकाते ही इस पेज के अक्षर बदलते दिखेंगे।",
+                " జరుపుతుంటే ఈ పేజీలోని అక్షరాలు మారడం చూడండి.")
+            "switch" -> say(" Tap the glowing switch to turn it on or off.", " चमकता स्विच दबाकर चालू या बंद कीजिए।", " మెరుస్తున్న స్విచ్ నొక్కి ఆన్ లేదా ఆఫ్ చేయండి.")
+            else -> say(" Tap the one you like. You can change it again any time.", " जो पसंद हो उसे दबाइए। बाद में कभी भी बदल सकते हैं।", " నచ్చినదాన్ని నొక్కండి. తర్వాత ఎప్పుడైనా మార్చవచ్చు.")
+        }.pick(lang)
+        val v = settleValue(kind, screen, el)
+        settle = Settle(r.id, kind, el?.title ?: "", lead + how, v, v)
+        com.saathi.app.DebugLog.i("settle", "${r.id}: $kind \"${el?.title}\" = $v")
+        show(Target(el, lead + how, "settle_${r.id}", noAct = true))
+        return true
+    }
+
+    /** true = handled. They change it with their own finger; once it rests, "is it good like this?". */
+    private fun settleTick(st: Settle, screen: Screen): Boolean {
+        if (screen.pkg != "com.android.settings") { settle = null; finish(say("Okay.", "ठीक है।", "సరే.").pick(lang)); return true }
+        val (kind, el) = settleControl(screen, mapSlots["term"] ?: "") ?: return true
+        val v = settleValue(kind, screen, el)
+        val now = SystemClock.uptimeMillis()
+        if (v != st.last) { st.last = v; st.changedAt = now; st.asked = false; schedule(1600, force = true) }
+        if (st.last != st.start && !st.asked && now - st.changedAt >= 1500) {
+            st.asked = true
+            val level = if (kind == "slider") settleLevel(screen, el) else null
+            val q = (if (level != null) say("Now it's “$level”. ", "अब “$level” है। ", "ఇప్పుడు “$level”. ").pick(lang) else "") +
+                say("Is it good like this?", "क्या ऐसे ठीक है?", "ఇలా బాగుందా?").pick(lang)
+            com.saathi.app.DebugLog.i("settle", "${st.routeId}: changed ${st.start} → ${st.last} (${level ?: "-"})")
+            current = Target(el, q, "settle_ask_${st.routeId}"); lastSpokenKey = current?.key
+            overlay.highlight(null, false)
+            overlay.showChoice(q,
+                Triple(say("It's good", "ठीक है", "బాగుంది").pick(lang), com.saathi.app.R.drawable.ic_check, {
+                    settle = null; flow?.let { complete(it) } ?: finish(say("Done!", "हो गया!", "అయింది!").pick(lang)) }),
+                Triple(say("Change", "बदलना है", "మార్చాలి").pick(lang), com.saathi.app.R.drawable.ic_touch_app, {
+                    st.start = st.last; lastSpokenKey = null; lastSig = 0; schedule(0, force = true) }))
+            speaker.say(q, lang)
+            return true
+        }
+        if (st.asked) return true   // the question is up: wait for their answer
+        show(Target(el, st.say, "settle_${st.routeId}", noAct = true))
+        // vivo's slider sends no event when it moves: look again every second while we wait for their change.
+        schedule(1000, force = true)
         return true
     }
 

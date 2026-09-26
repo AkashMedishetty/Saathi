@@ -40,7 +40,8 @@ object MapSlots {
             }
             v?.trim()?.takeIf { it.isNotEmpty() }?.let { out[k] = it }
         }
-        for ((k, v) in r.presets) if (k !in out) out[k] = v
+        // A route's own fixed words win ("make the text bigger" → search "font size", never "text bigger").
+        for ((k, v) in r.presets) out[k] = v
         return out
     }
 
