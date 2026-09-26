@@ -232,6 +232,11 @@ class Guide(
             begin(goalText, it.build(svc, SlotExtractor.from(goalText, Prefs.family(svc))), autoMode); return true
         }
         if (Coach.wants(goalText, u.intent) || (u.intent == "watch" && u.device == "tv")) { startCoach(goalText); return true }
+        // The model named an app ("ఇంస్టాగ్రామ్ ఎలా వాడాలి" → APP=Instagram): guide inside it, never a text answer.
+        if (u.intent in setOf("question", "other", "open_app")) u.app?.let { AppLauncher.findInGoal(svc, "open ${it}") }?.let { app ->
+            com.saathi.app.DebugLog.i("route", "model named ${app.label}: guide in the app")
+            begin(goalText, Skills.byId("learn_app")?.build(svc, SlotExtractor.from("how do I use ${app.label}")), autoMode); return true
+        }
         when (u.intent) {
             "question" -> { answerQuestion(goalText); return true }
             "weather", "lookup" -> { lookUp(goalText, if (u.intent == "weather" && !q.contains("weather", true)) "$q weather" else q); return true }

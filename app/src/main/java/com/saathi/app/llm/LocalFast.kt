@@ -38,11 +38,11 @@ object LocalFast {
         val f = ModelLocator.fast(ctx) ?: return null
         val prefs = ctx.getSharedPreferences("saathi", Context.MODE_PRIVATE)
         val key = "crash_${f.name}_NPU"
-        if (prefs.getBoolean(key, false)) { failed = true; return null }
-        prefs.edit().putBoolean(key, true).commit()
+        if (Crash.recent(ctx, prefs, key)) { failed = true; return null }
+        Crash.mark(prefs, key)
         val t0 = SystemClock.elapsedRealtime()
         val e = runCatching { LiteRtEngine(ctx, f, "NPU") }.onFailure { Log.w(TAG, "fast brain NPU load failed", it); failed = true }.getOrNull()
-        prefs.edit().putBoolean(key, false).commit()
+        Crash.clear(prefs, key)
         if (e != null) {
             engine = e; label = e.label
             com.saathi.app.DebugLog.i("npu", "fast brain ${e.label} loaded in ${SystemClock.elapsedRealtime() - t0} ms")

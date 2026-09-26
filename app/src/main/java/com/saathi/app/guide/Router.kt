@@ -30,8 +30,32 @@ object AppLauncher {
     fun labelOf(ctx: Context, pkg: String): String = installed(ctx).firstOrNull { it.pkg == pkg }?.label ?: pkg
 
     /** "open calculator" / "how do I use Instagram" → that app; the longest label match wins. */
+    /** App names people say in Hindi / Telugu script → the English label the phone uses. */
+    private val INDIC_APPS = listOf(
+        "instagram" to Regex("ఇన్‌?స్టా|ఇంస్టా|ఇన్స్టా|इंस्टा|इन्स्टा"),
+        "whatsapp" to Regex("వాట్స(ా)?ప్|వాట్సప్|व्हाट्स|वॉट्स|वाट्स"),
+        "youtube" to Regex("యూట్యూబ్|యూట్యుబ్|यूट्यूब|युट्यूब"),
+        "facebook" to Regex("ఫేస్‌?బుక్|फेसबुक|फ़ेसबुक"),
+        "chrome" to Regex("క్రోమ్|क्रोम"),
+        "gmail" to Regex("జీమెయిల్|जीमेल"),
+        "maps" to Regex("మ్యాప్స్|మ్యాప్|मैप्स|मैप"),
+        "camera" to Regex("కెమెరా|कैमरा"),
+        "calculator" to Regex("క్యాలిక్యులేటర్|కాలిక్యులేటర్|कैलकुलेटर"),
+        "phonepe" to Regex("ఫోన్‌?పే|फोनपे|फ़ोनपे"),
+        "google pay" to Regex("గూగుల్ ?పే|गूगल ?पे"),
+        "paytm" to Regex("పేటీఎం|पेटीएम"),
+        "netflix" to Regex("నెట్‌?ఫ్లిక్స్|नेटफ्लिक्स"),
+        "play store" to Regex("ప్లే ?స్టోర్|प्ले ?स्टोर"),
+        "telegram" to Regex("టెలిగ్రామ్|टेलीग्राम"),
+    )
+    fun latinAppNames(goal: String): String {
+        var g = goal.replace("\u200C", "").replace("\u200D", "")
+        INDIC_APPS.forEach { (en, rx) -> g = rx.replace(g) { " $en " } }
+        return g
+    }
+
     fun findInGoal(ctx: Context, goal: String): App? {
-        val g = " ${goal.lowercase()} "
+        val g = " ${latinAppNames(goal).lowercase()} "
         // An app named after "in / on / using / open" is the one they mean ("weather … in chrome" → Chrome, not Weather).
         // Check the words after EVERY such word (the last one usually names the app).
         val words = g.trim().split(Regex("\\s+"))
@@ -90,7 +114,7 @@ object IntentRouter {
     fun settingsTask(goal: String): Flow? =
         if (SETTINGS_TOPIC.containsMatchIn(goal) && SETTINGS_VERB.containsMatchIn(goal)) settingsSearch(goal) else null
 
-    private val HOW_TO = Regex("(?i)^\\W*(please\\s+)?(teach me|show me|help me|how (do|can|should) i|how to|how does|i want to learn)\\b|सिखा|कैसे|నేర్ప|ఎలా")
+    private val HOW_TO = Regex("(?i)^\\W*(please\\s+)?(teach me|show me how|help me (to )?(use|learn|change|set)|how (do|can|should) i|how to|how does|i want to learn)\\b|सिखा|कैसे|నేర్ప|ఎలా")
 
     /**
      * "Teach me to edit a photo", "how do I use Instagram", "how do I change my ringtone": a thing ON the phone → guide it
@@ -102,7 +126,8 @@ object IntentRouter {
         settingsTask(goal)?.let { return it }
         val slots = SlotExtractor.from(goal)
         Skills.match(goal)?.takeIf { it.id != "learn_app" }?.let { return it.build(ctx, slots) }
-        if (AppLauncher.findInGoal(ctx, goal) != null || PHONE_WORDS.containsMatchIn(goal)) return Skills.byId("learn_app")?.build(ctx, slots)
+        AppLauncher.findInGoal(ctx, goal)?.let { app -> return Skills.byId("learn_app")?.build(ctx, SlotExtractor.from("how do I use ${app.label}")) }
+        if (PHONE_WORDS.containsMatchIn(goal)) return Skills.byId("learn_app")?.build(ctx, slots)
         return null
     }
 
@@ -113,8 +138,12 @@ object IntentRouter {
         return Flow("settings_search", { Intent("android.settings.APP_SEARCH_SETTINGS") },
             listOf(Step("open_search", rx("^Search settings", "^Search$", "^Search "), say("Tap the search bar at the top.", "ऊपर खोज पट्टी दबाइए।", "పైన వెతుకు పట్టీ నొక్కండి.")),
                 Step("type", rx("Search"), say("Type “$term”. Or tap Do it and I'll type it.", "“$term” लिखिए। या 'आप कर दो' दबाइए।", "“$term” టైప్ చేయండి. లేదా 'మీరే చేయండి' నొక్కండి."),
-                role = "input", fill = term)),
-            null, say("Done!", "हो गया!", "అయింది!"),
+                role = "input", fill = term),
+                // After typing: point at the matching result (never back at the search bar; field test).
+                // A real result row ("Incoming call ringtone"), not the search-history chip that says just "ringtone".
+                Step("result", listOf(Regex("(?i)^[^·]*(\\S+\\s+" + Regex.escape(term) + "|" + Regex.escape(term) + "\\s+\\S+)")), say("Now tap the result that matches.", "अब मिलता हुआ नतीजा दबाइए।", "ఇప్పుడు సరిపోయే ఫలితం నొక్కండి."),
+                    role = "button")),
+            null, say("Here it is. Choose what you like on this page.", "यह रहा। इस पेज पर जो पसंद हो चुनिए।", "ఇదిగో. ఈ పేజీలో మీకు నచ్చింది ఎంచుకోండి."),
             say("Let's find “$term” in Settings.", "Settings में “$term” ढूँढते हैं।", "Settings లో “$term” వెతుకుదాం."),
             llmGoal = goal)
     }

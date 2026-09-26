@@ -55,9 +55,9 @@ object LocalLlm {
         for (f in files) for (backend in backendsFor(f)) {
             // Crash guard (trap #7): if this file+backend killed the process natively last time, never retry it.
             val crashKey = "crash_${f.name}_$backend"
-            if (prefs.getBoolean(crashKey, false)) { errors += "${f.name} $backend: skipped (crashed before)"; continue }
+            if (Crash.recent(ctx, prefs, crashKey)) { errors += "${f.name} $backend: skipped (crashed before)"; continue }
             _state.value = State.Loading("${f.nameWithoutExtension.take(24)} · $backend")
-            prefs.edit().putBoolean(crashKey, true).commit()
+            Crash.mark(prefs, crashKey)
             val t0 = SystemClock.elapsedRealtime()
             val e = try {
                 withContext(Dispatchers.IO) { create(ctx, f, backend) }
@@ -67,7 +67,7 @@ object LocalLlm {
                 errors += "${f.name} $backend: ${t.message?.take(90)}"
                 null
             } finally {
-                prefs.edit().putBoolean(crashKey, false).commit()
+                Crash.clear(prefs, crashKey)
             }
             if (e != null) {
                 engine = e

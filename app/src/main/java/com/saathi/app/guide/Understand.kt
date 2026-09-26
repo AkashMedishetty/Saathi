@@ -52,7 +52,21 @@ object Understand {
      * skill or is a clear lookup/watch/music/directions intent. Otherwise (disagreement, or "question", which the 1B
      * model over-uses) Gemma 4 on the GPU double-checks. Measured: NPU alone 83%, GPU alone 94%.
      */
-    suspend fun parse(goal: String, ctx: Context? = null): Intent2? {
+    private val MEDIA = Regex("(?i)\\b(videos?|songs?|movies?|films?|serials?|bhajans?|cartoons?)\\b|वीडियो|गाने|गाना|फ़िल्म|फिल्म|భజన|పాటలు|పాట|సినిమా|వీడియోలు")
+    private val CALLING = Regex("(?i)\\bcall|कॉल|కాల్")
+
+    /** "show me minecraft videos" is watching, not a video call (the 1B model mixed them up in the field). */
+    private fun fixMedia(goal: String, r: Intent2?): Intent2? {
+        if (r == null || !MEDIA.containsMatchIn(goal) || CALLING.containsMatchIn(goal)) return r
+        if (r.intent !in setOf("video_call", "photo", "message", "other", "open_app", "question")) return r
+        val music = Regex("(?i)songs?|bhajans?|गाने|गाना|పాట").containsMatchIn(goal)
+        val q = goal.replace(Regex("(?i)^\\s*(please\\s+)?(show me|play|put on|watch|i want to (watch|see|hear))\\s+"), "").trim()
+        return r.copy(intent = if (music) "music" else "watch", query = q.ifBlank { r.query }, person = null)
+    }
+
+    suspend fun parse(goal: String, ctx: Context? = null): Intent2? = fixMedia(goal, parseRaw(goal, ctx))
+
+    private suspend fun parseRaw(goal: String, ctx: Context? = null): Intent2? {
         val npu = parseLine(ctx?.let { com.saathi.app.llm.FastBrain.generate(it, SYSTEM, "$goal ->") })
         if (npu != null) {
             val kw = Skills.match(goal)?.id
