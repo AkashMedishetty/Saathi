@@ -1,3 +1,5 @@
+> **LATER (after demo 2).** Not tonight.
+
 # Codex track 2: Device tiers + understanding without any AI model (for older phones)
 
 Read `docs/handoff/00-README.md` again (same rules). Branch: `codex/tiers` (new worktree from the latest `main`).
