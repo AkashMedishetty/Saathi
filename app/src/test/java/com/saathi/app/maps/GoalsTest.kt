@@ -59,6 +59,23 @@ class GoalsTest {
         "open the settings for vibration" to "settings_search",
     ))
 
+    @Test fun photos() = check(listOf(
+        "show my latest photo" to "photos_open_latest",
+        "open my photos" to "photos_open_latest",
+        "आख़िरी फोटो दिखाओ" to "photos_open_latest",
+        "how do I crop a photo" to "photos_crop",
+        "cut the photo" to "photos_crop",
+        "फोटो काटना है" to "photos_crop",
+        "ఫోటో కట్ చేయి" to "photos_crop",
+        "make the photo brighter" to "photos_brightness",
+        "photo is too dark" to "photos_brightness",
+        "फोटो की रोशनी बढ़ाओ" to "photos_brightness",
+        "ఫోటో వెలుతురు పెంచు" to "photos_brightness",
+        "send the photo to my son" to "photos_share",
+        "फोटो भेजो" to "photos_share",
+        "ఫోటో పంపు" to "photos_share",
+    ))
+
     @Test fun noCrossMatches() = check(listOf(
         "video call my son" to null,
         "बेटे को वीडियो कॉल करो" to null,
