@@ -11,3 +11,9 @@
   Fix: LiteRT-LM 0.17.1 SIGBUS'd (its runtime calls `get_hooks`, absent from every released dispatch .so) → pinned 0.16.1.
   Debug probe: `adb shell am start -n com.saathi.app/.ui.MainActivity --es probe NPU [--es model text] [--ez vis false]`.
 - 12:32 Scripts: enable/disable-service only add/remove Saathi's own entry, never touching HackTracker.
+- 12:50 **P0-2 Engine verified on the iQOO** (EN + HI): `say.sh "make the text bigger"` → Settings opens → glow on OriginOS's
+  real row "Display, brightness & eye protection" (label quoted in the card) → "Do it" taps it → scroll hint + "Scroll for me"
+  → "Font size and weight" → OriginOS's class-less font slider (detected via rangeInfo/SET_PROGRESS) → "I'm done".
+  ScreenReader · Guide ladder 0–10 (throttle 200 ms, settle 450 ms, instant glow-clear on tap) · compact draggable card
+  (top/bottom, remembered) · Siri-style edge aura while thinking · living orb bubble · Speaker · safe Do it · scam guard ·
+  Memory · say.sh (`--doit --stop --dump --aura`).

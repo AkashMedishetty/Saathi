@@ -74,8 +74,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onPause() {
+        SaathiService.ownUiOpen = false
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
+        SaathiService.ownUiOpen = true
         if (intent.hasExtra("probe")) return
         status.text = if (SaathiService.isEnabled(this)) "● Helper on · works without internet" else "○ Helper off"
     }
