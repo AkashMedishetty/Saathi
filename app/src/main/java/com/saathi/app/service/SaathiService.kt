@@ -90,6 +90,12 @@ class SaathiService : AccessibilityService() {
         }
         if (locked) return
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) checkCallRisk(event.packageName?.toString())
+        // "Teach Saathi once": while recording, remember the label of everything they tap (never pixels).
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && com.saathi.app.guide.Recipes.recording != null) {
+            val label = event.text?.joinToString(" ")?.takeIf { it.isNotBlank() } ?: event.contentDescription?.toString()
+                ?: event.source?.let { n -> (0 until minOf(n.childCount, 4)).mapNotNull { n.getChild(it)?.text?.toString() }.joinToString(" · ") }
+            com.saathi.app.guide.Recipes.onClick(label, if (event.className?.contains("EditText") == true) "input" else "button", event.packageName?.toString() ?: "")
+        }
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> guide.onUserMotion()
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> guide.onWindowChanged()

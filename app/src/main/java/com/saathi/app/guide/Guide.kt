@@ -168,6 +168,25 @@ class Guide(
         if (IntentRouter.isExplain(goalText)) { explain(); return }
         if (IntentRouter.isBriefing(goalText)) { briefing(); return }
         rememberRequest(goalText)?.let { finish(it); return }
+        // Teach-once: "watch me: video call Rahul" … "done teaching".
+        Regex("(?i)^\\s*(watch me|learn this|let me show you|i'?ll show you|देखो मैं|मैं दिखाता|నేను చూపిస్తా)\\W*(.*)$").find(goalText)?.let { m ->
+            val name = m.groupValues[2].trim().ifBlank { "my task" }
+            Recipes.startRecording(name)
+            com.saathi.app.DebugLog.i("teach", "recording \"$name\"")
+            finish(say("I'm watching. Do “$name” now; say “done teaching” when finished.", "मैं देख रहा हूँ। “$name” करके दिखाइए; ख़त्म होने पर “सिखा दिया” कहिए।",
+                "నేను చూస్తున్నాను. “$name” చేసి చూపించండి; అయ్యాక “నేర్పించాను” అనండి.").pick(lang))
+            return
+        }
+        if (Recipes.recording != null && Regex("(?i)done teaching|finished|that's it|सिखा दिया|हो गया|నేర్పించాను|అయింది").containsMatchIn(goalText)) {
+            val r = Recipes.stopRecording(svc)
+            com.saathi.app.DebugLog.i("teach", "saved ${r?.name} taps=${r?.taps?.map { it.label }}")
+            finish(if (r != null) say("Learned “${r.name}” in ${r.taps.size} steps. Anyone can ask me for it now.", "“${r.name}” सीख लिया, ${r.taps.size} क़दम। अब कोई भी मुझसे पूछ सकता है।",
+                "“${r.name}” నేర్చుకున్నాను, ${r.taps.size} అడుగులు. ఇప్పుడు ఎవరైనా అడగవచ్చు.").pick(lang)
+                else say("I didn't see any taps, so nothing was saved.", "कोई टैप नहीं दिखा, कुछ सेव नहीं हुआ।", "ఏ ట్యాప్ కనిపించలేదు, ఏదీ సేవ్ కాలేదు.").pick(lang))
+            return
+        }
+        // Something a family member taught me? That path wins: it's known to work on this very phone.
+        Recipes.find(svc, goalText)?.let { r -> begin(goalText, Recipes.toFlow(r), autoMode); return }
         if (LlmManager.isReady) {
             // Let the model pick the helper (≈0.5 s); keywords only if it can't.
             overlay.showCard(say("Okay…", "ठीक है…", "సరే…").pick(lang), Overlay.Mode.THINKING)

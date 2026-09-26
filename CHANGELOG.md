@@ -67,3 +67,8 @@
   to answer ("will it rain today" → Google → "20% light rain at 7 PM", in Telugu); the glow teaches only the last tap
   ("guntur karam movie" → YouTube results → glow on the Guntur Kaaram video). Agent steps capped at 8. App named after
   "in/on/using" wins; model can't mislabel an app task as a question; flying buddy pointer (Clicky-style arc).
+- 16:42 **Teach Saathi once (record → replay)**: "watch me: <task>" … "done teaching" records the labels of every tap
+  (accessibility click events, no pixels); asking for that task later replays it as glow guidance, in any app, with no
+  app-specific code. Verified: recorded "open my youtube subscriptions" → replay opened YouTube and glowed Subscriptions.
+  Settings › "Things I was taught" (forget per item). No more per-app screen patching: links reach screens, recordings
+  teach app menus, the model understands and answers.

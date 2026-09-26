@@ -175,6 +175,21 @@ class SettingsActivity : AppCompatActivity() {
         }
         page.add(rt, 10)
 
+        // ── Taught by family (record once, guide forever) ──
+        section(page, s("Things I was taught", "मुझे सिखाई गई चीज़ें", "నాకు నేర్పినవి"))
+        val tb = surface()
+        val recipes = com.saathi.app.guide.Recipes.all(this)
+        if (recipes.isEmpty()) tb.add(body(s("Nothing yet. Say “watch me: video call Rahul”, do it once, then say “done teaching”.",
+            "अभी कुछ नहीं। कहिए “देखो मैं: राहुल को वीडियो कॉल”, एक बार करके दिखाइए, फिर “सिखा दिया” कहिए।",
+            "ఇంకా ఏమీ లేదు. “నేను చూపిస్తా: రాహుల్‌కి వీడియో కాల్” అని, ఒకసారి చేసి, “నేర్పించాను” అనండి."), 16f).apply { setPadding(dp(18), dp(16), dp(18), dp(16)) })
+        recipes.forEachIndexed { i, r ->
+            if (i > 0) tb.addView(divider())
+            tb.addView(row(R.drawable.ic_school, r.name, "${r.taps.size} " + s("steps · tap to forget", "क़दम · भूलने के लिए छुइए", "అడుగులు · మర్చిపోవడానికి తాకండి")) {
+                com.saathi.app.guide.Recipes.remove(this, r.name); render()
+            })
+        }
+        page.add(tb, 10)
+
         // ── Performance (proof it's light on the phone) ──
         section(page, s("Phone health", "फ़ोन की सेहत", "ఫోన్ ఆరోగ్యం"))
         val perf = surface().apply { setPadding(dp(18), dp(16), dp(18), dp(18)) }
