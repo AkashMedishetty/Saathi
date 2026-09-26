@@ -1,0 +1,13 @@
+<resources>
+    <color name="paper">#F6F0E4</color>
+    <color name="paper_2">#ECE3D2</color>
+    <color name="paper_3">#E2D6C0</color>
+    <color name="ink">#1C2523</color>
+    <color name="ink_muted">#5E6763</color>
+    <color name="line">#1F1C2523</color>
+    <color name="pine">#1F4D45</color>
+    <color name="pine_deep">#143530</color>
+    <color name="marigold">#E8A33D</color>
+    <color name="vermilion">#B3412A</color>
+    <color name="leaf">#2E7550</color>
+</resources>

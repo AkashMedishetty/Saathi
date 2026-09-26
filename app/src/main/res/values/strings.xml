@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Saathi</string>
+    <string name="a11y_description">Saathi reads your screen only to show you where to tap next. Everything stays on this phone; the app has no internet permission.</string>
+</resources>
