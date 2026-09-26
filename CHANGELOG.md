@@ -32,3 +32,8 @@
   24 skills as big rows by group, privacy footer. Settings: name, language, family contact behind the screen lock,
   speech rate, text size, dim/scam/teach toggles, Test brain + Test NPU, memory + Forget everything.
   Bubble hides on the lock screen. Offline speech packs: download from Settings (user's call).
+- 13:12 **P2-a**: "I'm lost" / "where am I" → screen explained + card with Take me home · Go back · Ask family.
+  **Family help (secured)**: redacted message (no 3+ digit numbers/amounts/emails/links; money apps → generic text) prefilled
+  to the registered family contact on WhatsApp (SMS fallback); Saathi never sends; unit-tested. Voice: "ask my son for help",
+  "बेटे से पूछो". **Caregiver first-run setup**: welcome + language, name + voice speed preview, family contact (locked
+  later behind the screen lock), helper + mic checklist.

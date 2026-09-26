@@ -37,6 +37,8 @@ object Prefs {
     /** Where the guide card sits: "auto" (away from the target), "top" or "bottom" (the person dragged it there). */
     fun cardPos(c: Context): String = sp(c).getString("card_pos", "auto") ?: "auto"
     fun setCardPos(c: Context, v: String) = sp(c).edit().putString("card_pos", v).apply()
+    fun setupDone(c: Context): Boolean = sp(c).getBoolean("setup_done", false)
+    fun setSetupDone(c: Context) = sp(c).edit().putBoolean("setup_done", true).apply()
     fun teach(c: Context): Boolean = sp(c).getBoolean("teach", true)
     fun setTeach(c: Context, v: Boolean) = sp(c).edit().putBoolean("teach", v).apply()
     fun dim(c: Context): Boolean = sp(c).getBoolean("dim", true)

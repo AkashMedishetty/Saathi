@@ -101,6 +101,7 @@ class Guide(
         hideJob?.cancel()
         Log.i(TAG, "goal: $goalText")
         if (IntentRouter.isScamCheck(goalText)) { scamCheck(); return }
+        if (IntentRouter.isFamilyHelp(goalText)) { askFamily(); return }
         if (IntentRouter.isExplain(goalText)) { explain(); return }
         rememberRequest(goalText)?.let { finish(it); return }
         val f = IntentRouter.route(svc, goalText)
@@ -495,11 +496,53 @@ class Guide(
             val text = Planner.explain(screen, AppLauncher.labelOf(svc, screen.pkg), lang)
             overlay.setAura(false)
             current = Target(null, text, "explain")
-            overlay.showCard(text, Overlay.Mode.INFO)
+            overlay.showCard(text, Overlay.Mode.LOST)
             speaker.say(text, lang)
             hideJob?.cancel()
             hideJob = scope.launch { delay(15_000); if (goal == null) overlay.hideCard() }
         }
+    }
+
+    fun goBack() {
+        svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+        scope.launch { delay(700); explain() }
+    }
+
+    fun goHome() {
+        stop()
+        svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+        val t = say("You're on the home screen. Tap the Saathi light any time.", "आप होम स्क्रीन पर हैं। कभी भी साथी की रोशनी छूइए।", "మీరు హోమ్ స్క్రీన్‌లో ఉన్నారు. ఎప్పుడైనా సాథీ వెలుగును తాకండి.").pick(lang)
+        finish(t)
+    }
+
+    /** Prefill a redacted help message to the registered family contact. Saathi never sends it. */
+    fun askFamily() {
+        lang = Prefs.lang(svc)
+        val screen = ScreenReader.read(svc.rootInActiveWindow)
+        val pkg = screen?.pkg ?: ""
+        val onOwn = pkg == svc.packageName || pkg.isBlank()
+        val title = screen?.elements?.firstOrNull { it.role == "text" && it.label.length in 3..40 }?.label
+        val text = FamilyHelp.message(Prefs.name(svc), if (onOwn) "" else AppLauncher.labelOf(svc, pkg), if (onOwn) null else title,
+            goal, Planner.isMoneyApp(pkg), lang)
+        val intent = FamilyHelp.intent(svc, text)
+        if (intent == null) {
+            finish(say("No family contact yet. Ask a family member to add their number in Saathi Settings.",
+                "अभी परिवार का नंबर नहीं है। परिवार वालों से Saathi की सेटिंग में नंबर जुड़वाइए।",
+                "ఇంకా కుటుంబ నంబర్ లేదు. Saathi సెట్టింగ్స్‌లో నంబర్ చేర్చమని కుటుంబ సభ్యుడిని అడగండి.").pick(lang))
+            return
+        }
+        val ok = runCatching { svc.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        val fam = Prefs.family(svc).ifBlank { say("your family", "परिवार", "మీ కుటుంబం").pick(lang) }
+        val t = if (ok) say("I've written a message to $fam. Read it, then press the green send button.",
+            "मैंने $fam के लिए संदेश लिख दिया है। पढ़कर हरा भेजें बटन दबाइए।",
+            "$fam కి సందేశం రాశాను. చదివి ఆకుపచ్చ పంపు బటన్ నొక్కండి.").pick(lang)
+            else say("I couldn't open the message app.", "संदेश ऐप नहीं खुला।", "సందేశ యాప్ తెరుచుకోలేదు.").pick(lang)
+        // Pause the task (if any) so we don't guide inside the chat; they can continue afterwards.
+        if (goal != null) paused = true
+        current = Target(null, t, "family")
+        overlay.highlight(null, false)
+        overlay.showCard(t, Overlay.Mode.INFO)
+        speaker.say(t, lang)
     }
 
     fun onFinalDone() { flow?.let { complete(it) } ?: finish(say("Done!", "हो गया!", "అయింది!").pick(lang)) }

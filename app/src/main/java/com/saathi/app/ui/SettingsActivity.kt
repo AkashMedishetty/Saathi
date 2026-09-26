@@ -185,8 +185,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun field(value: String, hint: String, onDone: (String) -> Unit) = EditText(this).apply {
         setText(value); this.hint = hint; textSize = 19f; typeface = Type.body(context); setTextColor(C.INK); setHintTextColor(C.MUTED)
         background = rounded(C.PAPER, dpf(18), C.LINE, dp(1)); setPadding(dp(16), dp(14), dp(16), dp(14)); isSingleLine = true
-        setOnFocusChangeListener { _, has -> if (!has) onDone(text.toString().trim()) }
-        setOnEditorActionListener { _, _, _ -> onDone(text.toString().trim()); clearFocus(); false }
+        addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(e: android.text.Editable?) { onDone(e.toString().trim()) }
+            override fun beforeTextChanged(a: CharSequence?, b: Int, c: Int, d: Int) {}
+            override fun onTextChanged(a: CharSequence?, b: Int, c: Int, d: Int) {}
+        })
     }
 
     private fun toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit): View {

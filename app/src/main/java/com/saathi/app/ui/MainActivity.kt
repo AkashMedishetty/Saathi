@@ -60,7 +60,9 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         SaathiService.ownUiOpen = true
-        if (!intent.hasExtra("probe")) render()
+        if (intent.hasExtra("probe")) return
+        if (!Prefs.setupDone(this)) { startActivity(Intent(this, SetupActivity::class.java)); return }
+        render()
     }
 
     override fun onPause() {

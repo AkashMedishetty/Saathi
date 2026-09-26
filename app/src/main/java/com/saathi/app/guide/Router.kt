@@ -42,6 +42,10 @@ object IntentRouter {
         "what is on", "what's on", "explain", "what is this", "where am i", "i'm lost", "i am lost", "samjhao",
         "समझाओ", "यह क्या है", "मैं कहाँ हूँ", "कहाँ हूँ", "ఏమిటి", "వివరించు", "ఏముంది", "ఎక్కడ ఉన్నాను")
 
+    fun isFamilyHelp(goal: String) = goal.lowercase().has(
+        "ask family", "ask my son", "ask my daughter", "ask for help", "help from family", "call for help", "tell my son", "tell my daughter",
+        "परिवार से", "बेटे से पूछो", "बेटी से पूछो", "मदद मांगो", "मदद माँगो", "కుటుంబాన్ని అడుగు", "సహాయం అడుగు", "కొడుకుని అడుగు", "కూతురుని అడుగు")
+
     fun isScamCheck(goal: String) = goal.lowercase().has("scam", "fraud", "is this safe", "धोखा", "ठगी", "మోసం")
 
     fun route(ctx: Context, goal: String): Flow? {

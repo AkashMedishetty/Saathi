@@ -66,6 +66,16 @@ class RoutingTest {
         assertEquals(wrong.joinToString("\n"), 0, wrong.size)
     }
 
+    @Test fun familyHelpIsRedacted() {
+        val m = FamilyHelp.message("Kamala", "Settings", "Account 1234 5678, pay ₹5,000 to x@y.com", "send 500 rupees http://bit.ly/x", false, Lang.EN)
+        assert(!Regex("\\d{3,}").containsMatchIn(m)) { m }
+        assert("x@y.com" !in m && "bit.ly" !in m) { m }
+        val bank = FamilyHelp.message("Kamala", "GPay", "Balance 12,000", "pay", true, Lang.EN)
+        assert("GPay" !in bank && "12" !in bank) { bank }
+        assert(IntentRouter.isFamilyHelp("ask my son for help"))
+        assert(IntentRouter.isFamilyHelp("बेटे से पूछो"))
+    }
+
     @Test fun slotsPullOutPeopleTimesAndPlaces() {
         assertEquals("Rahul", SlotExtractor.from("video call Rahul on WhatsApp").contact)
         assertEquals("Rahul", SlotExtractor.from("call my son", family = "Rahul").contact)

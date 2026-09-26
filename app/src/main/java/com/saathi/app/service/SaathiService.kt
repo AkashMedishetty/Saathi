@@ -59,6 +59,9 @@ class SaathiService : AccessibilityService() {
             onBubbleLong = { openAsk(listen = true) },
             onMic = { openAsk(listen = true) },
             onTouchOutside = { if (::guide.isInitialized) guide.onUserMotion() },
+            onBack = { guide.goBack() },
+            onHome = { guide.goHome() },
+            onFamily = { guide.askFamily() },
         )
         o.attach()
         overlay = o

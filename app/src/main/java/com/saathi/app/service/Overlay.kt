@@ -52,8 +52,11 @@ class Overlay(
     private val onBubbleLong: () -> Unit,
     private val onMic: () -> Unit,
     private val onTouchOutside: () -> Unit,
+    private val onBack: () -> Unit = {},
+    private val onHome: () -> Unit = {},
+    private val onFamily: () -> Unit = {},
 ) {
-    enum class Mode { INFO, THINKING, STEP, SCROLL, FINAL, WARN, DONE, PAUSED }
+    enum class Mode { INFO, THINKING, STEP, SCROLL, FINAL, WARN, DONE, PAUSED, LOST }
 
     private val wm = ctx.getSystemService(WindowManager::class.java)
     val glow = GlowView(ctx)
@@ -195,12 +198,14 @@ class Overlay(
             Mode.STEP -> say("Do it for me", "आप कर दो", "మీరే చేయండి").pick(l)
             Mode.SCROLL -> say("Scroll for me", "आप स्क्रॉल कर दो", "మీరే స్క్రోల్ చేయండి").pick(l)
             Mode.PAUSED -> say("Continue", "जारी रखें", "కొనసాగించు").pick(l)
+            Mode.LOST -> say("Take me home", "होम पर ले चलो", "హోమ్‌కి తీసుకెళ్ళు").pick(l)
             Mode.FINAL -> say("I'm done", "हो गया", "అయిపోయింది").pick(l)
             Mode.WARN -> if (targetCenterY != null) say("Show me the safe button", "सुरक्षित बटन दिखाओ", "సురక్షిత బటన్ చూపించు").pick(l) else null
             else -> null
         }
         val primaryIcon = when (mode) {
             Mode.PAUSED -> R.drawable.ic_play_circle
+            Mode.LOST -> R.drawable.ic_home
             Mode.FINAL -> R.drawable.ic_check
             Mode.WARN -> R.drawable.ic_shield
             Mode.SCROLL -> R.drawable.ic_arrow_downward
@@ -212,11 +217,19 @@ class Overlay(
 
         val quietBg = if (warn) 0x26FFFFFF else C.PAPER_2
         val quietFg = if (warn) C.WHITE else C.PINE_DEEP
-        btnAgain.visibility = if (mode == Mode.THINKING || mode == Mode.PAUSED) View.GONE else View.VISIBLE
-        btnAgain.round(say("Repeat", "फिर से", "మళ్ళీ").pick(l), R.drawable.ic_replay, quietBg, quietFg)
-        btnMic.visibility = if (mode == Mode.DONE || mode == Mode.WARN) View.GONE else View.VISIBLE
-        btnMic.round(say("Speak to Saathi", "साथी से बोलिए", "సాథీతో మాట్లాడండి").pick(l), R.drawable.ic_mic, quietBg, quietFg)
-        btnStop.round(if (mode == Mode.DONE) say("Close", "बंद करें", "మూసివేయి").pick(l) else say("Stop", "रोकें", "ఆపండి").pick(l),
+        if (mode == Mode.LOST) {
+            // Lost: Back · Ask family · Close, all one tap.
+            btnAgain.visibility = View.VISIBLE
+            btnAgain.round(say("Go back", "वापस जाओ", "వెనక్కి వెళ్ళు").pick(l), R.drawable.ic_arrow_back, quietBg, quietFg)
+            btnMic.visibility = View.VISIBLE
+            btnMic.round(say("Ask family", "परिवार से पूछें", "కుటుంబాన్ని అడగండి").pick(l), R.drawable.ic_family_restroom, quietBg, quietFg)
+        } else {
+            btnAgain.visibility = if (mode == Mode.THINKING || mode == Mode.PAUSED) View.GONE else View.VISIBLE
+            btnAgain.round(say("Repeat", "फिर से", "మళ్ళీ").pick(l), R.drawable.ic_replay, quietBg, quietFg)
+            btnMic.visibility = if (mode == Mode.DONE || mode == Mode.WARN) View.GONE else View.VISIBLE
+            btnMic.round(say("Speak to Saathi", "साथी से बोलिए", "సాథీతో మాట్లాడండి").pick(l), R.drawable.ic_mic, quietBg, quietFg)
+        }
+        btnStop.round(if (mode == Mode.DONE || mode == Mode.LOST || mode == Mode.INFO) say("Close", "बंद करें", "మూసివేయి").pick(l) else say("Stop", "रोकें", "ఆపండి").pick(l),
             R.drawable.ic_close, quietBg, quietFg)
         lastTargetY = targetCenterY
 
@@ -382,13 +395,13 @@ class Overlay(
         r(btnAgain); r(btnMic); r(btnStop, last = true)
         card.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(12) })
 
-        btnMic.setOnClickListener { onMic() }
-        btnAgain.setOnClickListener { onAgain() }
+        btnMic.setOnClickListener { if (mode == Mode.LOST) onFamily() else onMic() }
+        btnAgain.setOnClickListener { if (mode == Mode.LOST) onBack() else onAgain() }
         primary.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-            when (mode) { Mode.PAUSED -> onContinue?.invoke(); Mode.FINAL -> onFinalDone(); else -> onDoIt() }
+            when (mode) { Mode.PAUSED -> onContinue?.invoke(); Mode.FINAL -> onFinalDone(); Mode.LOST -> onHome(); else -> onDoIt() }
         }
-        btnStop.setOnClickListener { if (mode == Mode.DONE) hideCard() else onStop() }
+        btnStop.setOnClickListener { if (mode == Mode.DONE || mode == Mode.LOST || mode == Mode.INFO) { hideCard(); onStop() } else onStop() }
 
         // Drag anywhere on the card (not the buttons) to move it; it snaps to the nearer edge and stays there.
         var downY = 0f

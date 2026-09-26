@@ -46,7 +46,9 @@ fun Context.display(text: String, size: Float, color: Int = C.INK) = TextView(th
 /** Body text (Hind). */
 fun Context.body(text: String, size: Float = 17f, color: Int = C.MUTED, bold: Boolean = false) = TextView(this).apply {
     this.text = text; textSize = size; typeface = if (bold) Type.bold(context) else Type.body(context); setTextColor(color)
-    setLineSpacing(0f, 1.1f)
+    // Hind has tall built-in line gaps; drop the font padding and keep lines close.
+    includeFontPadding = false
+    setLineSpacing(0f, 0.92f)
 }
 
 /** Small letter-spaced section label: "TODAY", "THINGS I CAN HELP WITH". */
