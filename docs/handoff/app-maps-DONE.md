@@ -14,6 +14,8 @@ is updated with each commit.
 | Spotify | play X (Search → box → type → the result naming X, never an ad) · open a playlist · like a song · shuffle · download a playlist (says Premium is needed) | **No dump.** Hand-built trees from Spotify's labels |
 | Google Docs | new document (+ → New document → type; naming via "Untitled document" is in the same line) · save as Word (.docx) (⋮ → Share & export → Save as Word, or Send a copy → Word → OK) · open recent | **No dump.** Hand-built trees |
 | WhatsApp (+ Business) | video call · voice call (both **risky**, glow only) · message (types the `text` slot; **Send risky**) · send a photo (attach → Gallery → photo → **Send risky**) · chat backup · open a shared location (→ Google Maps) | **No dump; UNVERIFIED.** Built on WhatsApp's long-standing ids (`menuitem_search`, `search_input`, `conversations_row_contact_name`, `conversation_contact_name`, `entry`, `send`, `input_attach_button`). Re-check once the owner registers WhatsApp and a dump exists |
+| Google Maps | directions to X (search → type → the suggestion naming X → Directions → Start) · cab via Maps (… → Directions → ride tab → Uber) | **No dump; UNVERIFIED** (ids `search_omnibox_text_box` / `search_omnibox_edit_text`, labels) |
+| Uber | book a cab to X (Where to? → type → the place → ride **risky** → Choose/Confirm **risky** → Confirm pickup **risky** → Wait while finding a driver) | **No dump; UNVERIFIED** |
 
 **Checkpoint 1 (engine + YouTube + Settings + Photos): done.** Full suite `testDebugUnitTest assembleDebug` passes
 (1036 tests, 0 failures); merged manifest has no INTERNET.

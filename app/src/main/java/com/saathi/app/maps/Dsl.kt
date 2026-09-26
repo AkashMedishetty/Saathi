@@ -31,7 +31,7 @@ object MapSlots {
                 "query" -> query(goal, s.query)
                 "contact" -> s.contact
                 "text" -> s.text
-                "place" -> s.place
+                "place" -> placeFor(goal) ?: s.place
                 "term" -> SettingsTerms.termFor(goal) ?: settingsWords(goal)
                 "app" -> appName(goal)
                 "developer" -> com.saathi.app.maps.apps.PlayStoreMap.developerOf(appName(goal))
@@ -58,6 +58,16 @@ object MapSlots {
     private val INSTALL_WORDS = rx("(^|\\s)(install|download|get|find|search|open|learn|use|how|do|i|to|the|app|application|" +
         "new|from|play store|playstore|google play|please|me|a|an|on|my|phone|इंस्टॉल|डाउनलोड|ऐप|करो|चाहिए|सीखना|है|" +
         "ఇన్‌స్టాల్|డౌన్‌లోడ్|యాప్|చేయి|కావాలి)(?=\\s|$)")
+
+    private val PLACE_EN = rx("(?:directions|way|route|navigate|take me|go|get|reach|cab|taxi|auto|ride|uber|ola)\\s+(?:to|till|upto)\\s+(?:the\\s+)?(.+?)(?:\\s+(?:in|on|from|using)\\s+(?:google\\s+)?maps)?\\s*$")
+    private val PLACE_HI = Regex("^(.+?)\\s+(?:का रास्ता|की रास्ता|कैसे जाऊँ|कैसे जाएँ|के लिए|तक)")
+    private val PLACE_TE = Regex("^(.+?)(?:కి|కు)\\s+(?:దారి|ఎలా|క్యాబ్|టాక్సీ|ఆటో)")
+
+    /** "book a cab to Charminar" → "Charminar"; "चारमीनार का रास्ता" → "चारमीनार"; "చార్మినార్ కి దారి" → "చార్మినార్". */
+    fun placeFor(goal: String): String? {
+        val g = goal.trim()
+        return (PLACE_EN.find(g) ?: PLACE_HI.find(g) ?: PLACE_TE.find(g))?.groupValues?.get(1)?.trim()?.ifBlank { null }
+    }
 
     private val SETTINGS_FILLER = rx("(^|\\s)(change|open|find|show|where|is|the|my|a|an|of|for|in|on|phone|setting|settings|" +
         "please|how|do|i|to|turn|set|make|सेटिंग|फ़ोन|फोन|की|का|के|में|बदलो|खोलो|दिखाओ|సెట్టింగ్|ఫోన్|లో|మార్చు|తెరువు|చూపించు)(?=\\s|$)")
