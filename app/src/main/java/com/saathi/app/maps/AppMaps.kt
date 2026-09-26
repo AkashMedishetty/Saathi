@@ -258,9 +258,11 @@ internal class Tree(val nodes: List<Node>) {
         if (n.box.empty || n.box.l < -2 || n.box.t < -2) return null
         val c = n.box.intersect(screen)
         if (c.w < MIN_SIDE || c.h < MIN_SIDE) return null
-        if (ignoreCovers) return c
+        // ignoreCovers: the hidden page underneath doesn't count, but a header (toolbar / search bar) still does (field
+        // 03:20: a result row scrolled under vivo's search header was glowed).
         val covers = (end[i] until nodes.size).map { nodes[it] }
             .filter { it.clickable && !it.box.empty }
+            .filter { !ignoreCovers || Regex("(?i)top|toolbar|header|search_(content|edit|bar)|title").containsMatchIn(it.resId ?: it.id ?: "") }
             .map { it.box.intersect(c) }.filter { !it.empty }
         if (covers.isEmpty()) return c
         val g = GRID

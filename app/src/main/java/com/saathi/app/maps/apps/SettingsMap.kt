@@ -42,9 +42,10 @@ object SettingsMap {
     private val RESULT_VIVO = RESULT_BASE.copy(inside = Sel(resId = "search_list_view"), ignoreCovers = true)
     private val RESULT = RESULT_BASE
 
-    private fun topic(id: String, term: String, doneSay: Say, vararg g: String) = searchRoute(id, goals(*g), doneSay, mapOf("term" to term))
+    private fun topic(id: String, term: String, doneSay: Say, vararg g: String, prefer: Regex? = null) =
+        searchRoute(id, goals(*g), doneSay, mapOf("term" to term), prefer)
 
-    private fun searchRoute(id: String, g: List<Regex>, doneSay: Say, presets: Map<String, String> = emptyMap()) = Route(
+    private fun searchRoute(id: String, g: List<Regex>, doneSay: Say, presets: Map<String, String> = emptyMap(), prefer: Regex? = null) = Route(
         id = id, pkg = PKG, goals = g, slots = listOf("term"), presets = presets,
         steps = listOf(
             MapStep("set_home", SEARCH_BAR,
@@ -54,7 +55,9 @@ object SettingsMap {
             MapStep("set_search", listOf(FIELD),
                 say("Type “{term}”. Or tap Do it and I'll type it.", "“{term}” लिखिए। या 'आप कर दो' दबाइए, मैं लिख दूँगा।",
                     "“{term}” టైప్ చేయండి. లేదా 'మీరే చేయండి' నొక్కండి, నేను టైప్ చేస్తాను."), fill = "term"),
-            MapStep("set_search_typed", listOf(RESULT, RESULT_VIVO),
+            // The topic's own row first when it has one ("Incoming call ringtone", not "Alarm ringtone").
+            MapStep("set_search_typed", listOfNotNull(prefer?.let { RESULT_BASE.copy(label = it, slot = null, slotLonger = false) },
+                prefer?.let { RESULT_VIVO.copy(label = it, slot = null, slotLonger = false) }, RESULT, RESULT_VIVO),
                 say("Tap the result that says “{term}”.", "“{term}” वाला नतीजा दबाइए।", "“{term}” అని ఉన్న ఫలితం నొక్కండి."),
                 why = say("Tap the result below, not the old search word.", "नीचे वाला नतीजा दबाइए, पुराना खोजा हुआ शब्द नहीं।",
                     "కింద ఉన్న ఫలితం నొక్కండి, పాత వెతికిన పదం కాదు."),
@@ -86,7 +89,8 @@ object SettingsMap {
             topic("settings_ringtone", "ringtone",
                 choose("Tap a ringtone to hear it, then choose the one you like.", "यह रहा। सुनने के लिए किसी रिंगटोन को दबाइए, फिर पसंद वाली चुनिए।",
                     "ఇదిగో. వినడానికి ఒక రింగ్‌టోన్ నొక్కండి, నచ్చినది ఎంచుకోండి."),
-                "ring ?tone", "ringer", "रिंगटोन", "रिंग टोन", "घंटी की आवाज़", "రింగ్ ?టోన్", "రింగ్‌టోన్"),
+                "ring ?tone", "ringer", "रिंगटोन", "रिंग टोन", "घंटी की आवाज़", "రింగ్ ?టోన్", "రింగ్‌టోన్",
+                prefer = rx("^(incoming call|phone|call) ringtone")),
             topic("settings_font", "font size",
                 choose("Slide the dot to the right to make the letters bigger.", "यह रहा। अक्षर बड़े करने के लिए गोला दाईं ओर खिसकाइए।",
                     "ఇదిగో. అక్షరాలు పెద్దవి చేయడానికి చుక్కను కుడివైపు జరపండి."),
