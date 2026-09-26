@@ -50,7 +50,9 @@ data class Screen(val pkg: String, val elements: List<UiElement>, val allText: S
         .replace(Regex("[\\w.+-]+@[\\w-]+\\.[\\w.]+"), "(email)")
 
     fun byId(id: Int) = elements.firstOrNull { it.id == id }
-    fun scrollable() = elements.firstOrNull { it.scrollable }
+    /** The page's main list: the tallest scrollable, not a sideways shelf or chip row (field: "Scroll for me" moved the
+     *  Shorts shelf and the page stayed put). */
+    fun scrollable() = elements.filter { it.scrollable }.maxByOrNull { it.bounds.height() }
 }
 
 /** Accessibility tree → a flat, labelled list of what a person can see and touch. */

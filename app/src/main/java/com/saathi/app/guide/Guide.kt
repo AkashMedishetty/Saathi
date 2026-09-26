@@ -1125,6 +1125,7 @@ class Guide(
         lastOwnAction = SystemClock.uptimeMillis()
         lastActionNote = when {
             t.fill == "__BACK__" -> "I pressed Back for them."
+            t.fill == "__ENTER__" -> "I pressed the keyboard's search key for them."
             el == null -> "I scrolled down for them."
             t.fill != null -> "I typed \"${t.fill}\" into \"${el.title}\"."
             else -> "I tapped \"${el.title}\" for them."
@@ -1143,6 +1144,7 @@ class Guide(
         if (fresh == null) return
         val kind = when {
             t.fill == "__BACK__" -> com.saathi.app.policy.Kind.BACK
+            t.fill == "__ENTER__" -> com.saathi.app.policy.Kind.TAP
             el == null || el.role == "slider" -> com.saathi.app.policy.Kind.SCROLL
             el.role == "input" && t.fill != null -> com.saathi.app.policy.Kind.TYPE
             else -> com.saathi.app.policy.Kind.TAP
@@ -1167,9 +1169,21 @@ class Guide(
             svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
             lastSig = 0; replan = true; schedule(600, force = true); return
         }
+        if (t.fill == "__ENTER__") {
+            // The keyboard's search / enter key, on the box itself (Android 11+).
+            el?.node?.performAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+            lastOwnAction = SystemClock.uptimeMillis(); lastSig = 0; schedule(700, force = true); return
+        }
         if (el == null) {
-            // A scroll hint: "Do it" scrolls for them.
-            fresh?.scrollable()?.node?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            // A scroll hint: "Do it" scrolls for them: the page's main list, else a finger swipe up the middle.
+            val h = android.content.res.Resources.getSystem().displayMetrics.heightPixels
+            val w = android.content.res.Resources.getSystem().displayMetrics.widthPixels
+            val list = fresh.scrollable()?.takeIf { it.bounds.height() > h * 0.4f }
+            if (list?.node?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) != true) runCatching {
+                val path = android.graphics.Path().apply { moveTo(w / 2f, h * 0.70f); lineTo(w / 2f, h * 0.35f) }
+                svc.dispatchGesture(android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 350)).build(), null, null)
+            }
             lastOwnAction = SystemClock.uptimeMillis()
             lastSig = 0
             schedule(700, force = true)
@@ -1618,6 +1632,15 @@ class Guide(
                     return true
                 }
                 if (d.step > mapStep) mapStep = d.step
+                // The box already says what we wanted (typed, or no suggestion matches it exactly): the next move is the
+                // keyboard's search / enter key, and "Do it" presses it (field: YouTube stayed on "Type …" forever).
+                val fillNow = d.fill?.trim()
+                if (fillNow != null && d.node.editable && d.node.text?.trim()?.equals(fillNow, ignoreCase = true) == true) {
+                    val box = MapBridge.uiElement(d.node, live.infoFor(d.node), "input")
+                    show(Target(box, say("Now press the search key on the keyboard, at the bottom right.", "अब कीबोर्ड पर नीचे दाईं ओर खोज वाला बटन दबाइए।",
+                        "ఇప్పుడు కీబోర్డ్‌లో కింద కుడివైపు సెర్చ్ బటన్ నొక్కండి.").pick(lang), "submit_${r.id}", fill = "__ENTER__"))
+                    return true
+                }
                 val el = MapBridge.uiElement(d.node, live.infoFor(d.node), if (d.node.editable) "input" else "button")
                     .copy(bounds = android.graphics.Rect(d.box.l, d.box.t, d.box.r, d.box.b))
                 val teach = Prefs.teach(svc) || learn

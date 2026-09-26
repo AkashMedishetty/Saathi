@@ -170,8 +170,11 @@ internal class Tree(val nodes: List<Node>) {
         while (stack.isNotEmpty()) end[stack.removeLast()] = nodes.size
         // The screen: the root window's box, or everything that starts on screen.
         val onScreen = nodes.filter { it.box.l >= 0 && it.box.t >= 0 && !it.box.empty }
-        screen = nodes.firstOrNull()?.box?.takeIf { !it.empty && it.l >= 0 && it.t >= 0 }
+        val full = nodes.firstOrNull()?.box?.takeIf { !it.empty && it.l >= 0 && it.t >= 0 }
             ?: Box(0, 0, onScreen.maxOfOrNull { it.box.r } ?: 0, onScreen.maxOfOrNull { it.box.b } ?: 0)
+        // A full-height window runs under the navigation bar: the bottom ~4.5% can't be tapped (field: a 130 px strip of
+        // a result behind the nav bar was glowed; tapping it hits Home/Back).
+        screen = if (full.h > 1600) full.copy(b = full.t + (full.h * 0.955f).toInt()) else full
     }
 
     /** The texts inside a node that has no label of its own: a list row → "hanuman chalisa". */
