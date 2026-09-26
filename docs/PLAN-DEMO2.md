@@ -79,6 +79,24 @@ Written Sat 26 Sep, 21:00. Evidence: the phone's field log, logcat, the Settings
 - **Fine-tuning:** not by tomorrow. Recompiling for the NPU needs Qualcomm AI Hub plus hours. App maps give more
   reliability than a fine-tune would.
 
+## 1b. The pivot (Akash, 21:10): Android already does it; Saathi is the middleman who explains and navigates
+- Use what the phone already has:
+  - system intents and deep links (maps `geo:`, the share sheet, the "open with" chooser, dialer, settings pages);
+  - the phone's own apps (Photos editor, Docs, Clock, Uber);
+  - on-device OCR (ML Kit; Google Lens where present).
+- Saathi doesn't re-implement these. It **explains what the system is showing and guides the person through it**:
+  - "Android is asking which app to use: tap WhatsApp, that's where your son is."
+  - "This is the share sheet: tap Save as Word."
+- Choosers and system dialogs become first-class screens in the app maps: the share sheet, the "open with" chooser,
+  permission dialogs, the install dialog (risky), the default-app picker.
+- **Decisions (21:10):**
+  - The TV camera coach is **dropped** from the demo.
+  - "Video call" **asks** WhatsApp vs a normal phone video call (when both are available).
+  - New "learn a new app" tests: **Spotify** and **Google Docs → .docx**.
+  - **Cab booking** (Uber, from here or from a WhatsApp-shared location).
+- **UX:** calm and premium, not "AI": no dimming, no sparkles. One short line at a time, a quiet halo, and natural
+  follow-ups instead of "Done!".
+
 ## 2. What we will demo (refine, no new features)
 1. **Learn any app, perfectly** (app maps):
    - YouTube subscriptions or search, WhatsApp video call or message, a photo edit in Google Photos (crop, brightness,

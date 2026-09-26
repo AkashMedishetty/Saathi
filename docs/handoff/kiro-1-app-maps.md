@@ -83,6 +83,18 @@ Rules:
 - **Camera** (vivo `com.android.camera`), **Clock** (`com.android.deskclock` / vivo), **Instagram**
   `com.instagram.android` (open profile; view reels; post a photo: stops at Share, risky).
 
+- **Spotify** `com.spotify.music` (installed; the test for "learning a new app"): search and play a song/artist;
+  open a playlist; like a song; turn shuffle on/off; download a playlist for offline use.
+- **Google Docs** `com.google.android.apps.docs.editors.docs` (installed; the other "new app" test): create a new
+  document (+ → New document) → type a title → type text; **save or share as Word (.docx)** (⋮ → Share & export →
+  Save as Word (.docx) / Send a copy → .docx); open a recent document.
+- **Cab booking** (Uber `com.ubercab`; the owner installs and logs in): "book a cab to X" and "book a cab to the
+  location Ravi sent me". The ride-type choice and the **Confirm/Request button are risky: glow only**. Also a Google
+  Maps route: open a place → Directions → the ride/cab tab (Maps lists installed ride apps).
+- **WhatsApp shared location** → open that chat → tap the location bubble (opens Google Maps at the pin) →
+  Directions / cab. Selector for the location bubble: text/desc containing "Location", "live location" or a
+  maps.google link.
+
 Each route needs good goal regexes in EN/HI/TE: "show my subscriptions", "सब्सक्रिप्शन दिखाओ",
 "సబ్‌స్క్రిప్షన్లు చూపించు", "how do I crop a photo", "फोटो काटना", etc. Include vague forms.
 
