@@ -16,7 +16,7 @@ import java.util.Calendar
  * Stored in app-private prefs; scheduled with inexact alarms (no special permission), re-armed after reboot.
  */
 object Routines {
-    data class Routine(val id: Int, val hour: Int, val minute: Int, val goal: String, val kind: String /* "do" | "remind" */) {
+    data class Routine(val id: Int, val hour: Int, val minute: Int, val goal: String, val kind: String /* "do" | "remind" | "once" */) {
         val time get() = Skills.fmt(hour, minute)
     }
 
@@ -90,7 +90,7 @@ class RoutineReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         if (i.action == Intent.ACTION_BOOT_COMPLETED || i.action == Intent.ACTION_MY_PACKAGE_REPLACED) { Routines.rescheduleAll(c); return }
         val r = Routines.all(c).firstOrNull { it.id == i.getIntExtra("id", -1) } ?: return
-        Routines.schedule(c, r)
+        if (r.kind == "once") Routines.remove(c, r.id) else Routines.schedule(c, r)
         SaathiService.instance?.guide?.routineDue(r)
     }
 }

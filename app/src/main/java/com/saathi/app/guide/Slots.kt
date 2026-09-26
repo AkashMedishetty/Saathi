@@ -35,7 +35,7 @@ object SlotExtractor {
 
     fun from(goal: String, family: String = ""): Slots {
         val g = goal.trim()
-        var contact = Regex("(?:to|call|message|msg|text|with|ping|ring)\\s+((?:[\\p{L}.]+\\s*){1,4})", IC).find(g)
+        var contact = Regex("(?:to|call|message|msg|text|with|ping|ring)\\s+((?:[\\p{L}\\p{M}.]+\\s*){1,4})", IC).find(g)
             ?.groupValues?.get(1)?.split(Regex("\\s+"))
             ?.dropWhile { it.lowercase() in STOP }
             ?.takeWhile { it.lowercase() !in STOP && it.isNotBlank() }

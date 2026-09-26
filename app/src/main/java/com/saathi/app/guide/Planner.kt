@@ -98,7 +98,7 @@ object Planner {
     }
 
     fun heuristic(goal: String, screen: Screen, lang: Lang): Decision {
-        val words = goal.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 && it !in STOP }
+        val words = goal.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.length >= 3 && it !in STOP }
         val best = screen.elements.filter { it.role != "text" && it.enabled && !it.password }
             .maxByOrNull { e -> words.count { it in e.label.lowercase() } }
             ?.takeIf { e -> words.any { it in e.label.lowercase() } }

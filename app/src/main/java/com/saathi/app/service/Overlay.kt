@@ -129,6 +129,12 @@ class Overlay(
 
     fun setMoving(moving: Boolean) = glow.setMoving(moving)
 
+    /** Lock screen: hide glow + card without forgetting them. */
+    fun setHidden(h: Boolean) {
+        val v = if (h) View.INVISIBLE else View.VISIBLE
+        glow.visibility = v; cardWrap.visibility = v
+    }
+
     /** Listening / thinking: the edge of the screen comes alive, and so do the orbs. */
     fun setAura(on: Boolean) {
         glow.setAura(on)

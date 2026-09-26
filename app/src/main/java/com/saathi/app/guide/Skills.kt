@@ -253,6 +253,11 @@ object Skills {
             })
         },
 
+        // ───────────── TRAVEL ─────────────
+        Skill("irctc_tatkal", Cat.DAILY, R.drawable.ic_near_me, s3("Book a Tatkal train ticket", "तत्काल टिकट बुक करें", "తత్కాల్ టికెట్ బుక్ చేయండి"),
+            listOf("tatkal", "irctc", "train ticket", "book a train", "railway ticket", "तत्काल", "ट्रेन टिकट", "रेल टिकट", "తత్కాల్", "రైలు టికెట్"),
+            s3("Book a Tatkal ticket to Delhi", "दिल्ली का तत्काल टिकट बुक करो", "ఢిల్లీకి తత్కాల్ టికెట్ బుక్ చేయి")) { ctx, s -> Travel.tatkal(ctx, s) },
+
         // ───────────── LEARN ─────────────
         Skill("phone_school", Cat.LEARN, R.drawable.ic_school, s3("Phone School", "फ़ोन पाठशाला", "ఫోన్ బడి"),
             listOf("phone school", "lesson", "lessons", "teach me the phone", "पाठशाला", "पाठ", "పాఠం", "బడి"),

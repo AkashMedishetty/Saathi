@@ -175,6 +175,7 @@ class Guide(
                 "మీరు ఇది $n సార్లు చేశారు. ముందు మీరే ప్రయత్నించండి.").pick(lang)
         }
         persist()
+        if (svc.isLocked()) hello = say("Please unlock your phone first. Then I'll show you.", "पहले फ़ोन का लॉक खोलिए। फिर मैं दिखाऊँगा।", "ముందు ఫోన్ లాక్ తెరవండి. తర్వాత నేను చూపిస్తాను.").pick(lang)
         overlay.highlight(null, false)
         overlay.showCard(hello, Overlay.Mode.INFO)
         speaker.say(hello, lang)
@@ -261,8 +262,8 @@ class Guide(
     // ───────────────────────── the decision ladder (playbook §5) ─────────────────────────
 
     private suspend fun tick() {
-        // 0. Never guide inside Saathi's own screens (trap #10).
-        if (SaathiService.ownUiOpen) return
+        // 0. Never guide inside Saathi's own screens (trap #10), nor over the lock screen.
+        if (SaathiService.ownUiOpen || svc.isLocked()) return
         // 1. The person is touching or scrolling: wait.
         val wait = settling()
         if (wait > 0) { job = scope.launch { delay(wait + 30); tick() }; return }
@@ -427,7 +428,7 @@ class Guide(
 
     // ───────────────────────── auto mode ─────────────────────────
 
-    private val CONFIRM_KEYS = setOf("send", "confirm", "dial", "video", "pay", "now", "junk", "clean")
+    private val CONFIRM_KEYS = setOf("send", "confirm", "dial", "video", "pay", "now", "junk", "clean", "book")
 
     fun enableAuto() {
         if (!active) return
@@ -762,7 +763,7 @@ class Guide(
         lang = Prefs.lang(svc)
         val facts = Memory.notes() + Memory.reminders() + Routines.all(svc).map { "${it.goal} · ${it.time} daily" } +
             Prefs.contacts(svc).map { "Family: ${it.name}" }
-        val words = q.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 && it !in RECALL_STOP }
+        val words = q.lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+")).filter { it.length >= 3 && it !in RECALL_STOP }
         val hits = facts.map { f -> f to words.count { it in f.lowercase() } }.filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }
         scope.launch {
             val answer = when {

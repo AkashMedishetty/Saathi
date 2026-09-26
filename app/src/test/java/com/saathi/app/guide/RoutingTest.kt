@@ -57,6 +57,8 @@ class RoutingTest {
         "take me to the home screen" to "home",
         "होम स्क्रीन पर ले चलो" to "home",
         "read this letter for me" to "read_this",
+        "book a tatkal ticket to Delhi" to "irctc_tatkal",
+        "दिल्ली का तत्काल टिकट बुक करो" to "irctc_tatkal",
         "turn the tv volume up" to "tv",
         "टीवी बंद करो" to "tv",
         "open phone school" to "phone_school",
@@ -103,6 +105,12 @@ class RoutingTest {
         assertEquals(IrRemote.Key.DOWN, IrRemote.keyFor("tv go down"))
         assertEquals(IrRemote.Key.OK, IrRemote.keyFor("tv ok"))
         assertEquals("learn_app", Skills.match("how do I use this machine")?.id)
+    }
+
+    @Test fun tatkalStations() {
+        assertEquals("Hyderabad" to "Delhi", Travel.stations("book tatkal from Hyderabad to Delhi"))
+        assertEquals(null to "Delhi", Travel.stations("book a tatkal ticket to Delhi tomorrow"))
+        assertEquals("दिल्ली", Travel.stations("दिल्ली का तत्काल टिकट बुक करो").second)
     }
 
     @Test fun irPatternsAreStandard() {

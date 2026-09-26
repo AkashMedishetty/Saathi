@@ -58,7 +58,7 @@ class SaathiService : AccessibilityService() {
             onBubble = { openAsk(listen = false) },
             onBubbleLong = { openAsk(listen = true) },
             onMic = { openAsk(listen = true) },
-            onTouchOutside = { if (::guide.isInitialized) guide.onUserTouch() },
+            onTouchOutside = { if (::guide.isInitialized && !isLocked()) guide.onUserTouch() },
             onBack = { guide.goBack() },
             onHome = { guide.goHome() },
             onFamily = { guide.askFamily() },
@@ -86,7 +86,12 @@ class SaathiService : AccessibilityService() {
         if (event.packageName == packageName) return // our own windows (trap #9)
         // Never float over the lock screen.
         val locked = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
-        if (locked != wasLocked) { wasLocked = locked; overlay?.setBubbleVisible(!locked && !ownUiOpen) }
+        if (locked != wasLocked) {
+            wasLocked = locked
+            overlay?.setBubbleVisible(!locked && !ownUiOpen)
+            // Nothing of Saathi shows over the lock screen; the task picks up again once unlocked.
+            if (locked) overlay?.setHidden(true) else { overlay?.setHidden(false); guide.onWindowChanged() }
+        }
         if (locked) return
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) checkCallRisk(event.packageName?.toString())
         when (event.eventType) {
@@ -99,6 +104,8 @@ class SaathiService : AccessibilityService() {
     }
 
     override fun onInterrupt() {}
+
+    fun isLocked() = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
 
     /** Android is short on memory: give the models back first (they reload on demand). */
     override fun onTrimMemory(level: Int) {
