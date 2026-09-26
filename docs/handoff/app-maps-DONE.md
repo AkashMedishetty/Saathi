@@ -9,6 +9,17 @@ is updated with each commit.
 |---|---|---|
 | YouTube | search & play X · subscriptions · history · like · share to WhatsApp | home, search (empty + typed), results (ad + video, playlist), subscriptions, you: **yes**. Watch page (like/share), History page: **no fixture**, selectors from YouTube's labels |
 | Settings (vivo + AOSP search page) | ringtone · font size · brightness · wallpaper · Wi-Fi · Bluetooth · dark mode · language · screen timeout · storage · any other setting (the person's words) | **No dump of Settings exists.** Tests use hand-built trees shaped like what Saathi saw on this phone. Every route = search bar → type → the result row (never the history chip) → Done on the result page |
+| Google Photos | open latest · crop (→ Save copy) · brightness (Adjust → Brightness → slider → Save copy) · share to WhatsApp | **No dump.** Hand-built trees from Photos' labels. "Save copy" is only offered after the crop/brightness step (`needsReached`) |
+
+**Checkpoint 1 (engine + YouTube + Settings + Photos): done.** Full suite `testDebugUnitTest assembleDebug` passes
+(1036 tests, 0 failures); merged manifest has no INTERNET.
+
+## Overlaps with existing Skills (your call on the order)
+`AppMaps.route()` also matches goals that today go to Skills: brightness, dark mode, Wi-Fi/Bluetooth *settings*,
+font size (Skills' `font` flow). The map routes go through Settings search (works on every skin); the Skills open
+the exact Settings page by intent. If you keep the Skills first for those, call `AppMaps.route()` only when no
+Skill matched, or skip ids starting with `settings_` except `settings_ringtone / wallpaper / language / timeout /
+storage / search`.
 
 ## Integration calls (for Claude)
 
@@ -71,6 +82,9 @@ when (val d = AppMaps.next(route, pkg, nodes, reached, slots)) {
   Video call / Request… / Confirm… / Book … / Delete / Post / Share, is `risky = true` even if a map forgot.
 - **Screens**: all `must`, no `mustNot`; the most specific (most `must`) wins. Some screens use slots
   (`yt_results_for` = results for *our* query, vs `yt_results` for something else → "tap the search bar").
+- **`needsReached`**: a step only counts once an earlier step was reached (Photos' "Save copy" is visible in the
+  editor before the edit is done). **`doneNeedsLastStep`**: a page that merely contains the goal's word is not
+  "done" until the last step was reached (Settings, Photos edits).
 
 ## Not reliable yet
 - YouTube watch page (like / share) and History: no dump yet; selectors are YouTube's English labels.

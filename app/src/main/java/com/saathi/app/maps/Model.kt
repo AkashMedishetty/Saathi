@@ -88,6 +88,11 @@ data class MapStep(
     val pkg: String? = null,
     /** Other screens where the same step applies (the Subscriptions tab is on Home, Results and You). */
     val alsoOn: List<String> = emptyList(),
+    /**
+     * Only once this step index was reached. For targets that are visible too early: the editor's "Save copy" is on
+     * screen before the crop is done, so "latest step wins" alone would say "save" first.
+     */
+    val needsReached: Int? = null,
 ) {
     fun appliesOn(screen: String) = on == screen || screen in alsoOn
 }

@@ -3,6 +3,7 @@ package com.saathi.app.maps
 import com.saathi.app.guide.Lang
 import com.saathi.app.guide.Say
 import com.saathi.app.guide.say
+import com.saathi.app.maps.apps.PhotosMap
 import com.saathi.app.maps.apps.SettingsMap
 import com.saathi.app.maps.apps.YouTubeMap
 
@@ -15,7 +16,7 @@ import com.saathi.app.maps.apps.YouTubeMap
  */
 object AppMaps {
     /** All maps, in priority order for goal matching ties. */
-    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map) }
+    val all: List<AppMap> by lazy { listOf(YouTubeMap.map, SettingsMap.map, PhotosMap.map) }
 
     private val byPkg by lazy { all.flatMap { m -> (listOf(m.pkg) + m.alsoPkgs).map { it to m } }.toMap() }
 
@@ -72,7 +73,10 @@ object AppMaps {
         val screenId = screenOf(pkg, nodes, slots) ?: return Decision.Unknown
         app.screens.first { it.id == screenId }.wait?.let { return Decision.Wait(it) }
 
-        val here = r.steps.indices.filter { r.steps[it].appliesOn(screenId) && samePkg(pkgsOf(r.steps[it]), pkg) }
+        val here = r.steps.indices.filter { i ->
+            val st = r.steps[i]
+            st.appliesOn(screenId) && samePkg(pkgsOf(st), pkg) && (st.needsReached == null || doneSteps >= st.needsReached)
+        }
         if (here.isEmpty()) {
             val expect = r.steps.getOrNull(doneSteps.coerceIn(0, r.steps.lastIndex))?.on ?: r.steps.first().on
             val back = t.find(BACK, slots)
