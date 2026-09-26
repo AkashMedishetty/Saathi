@@ -1,0 +1,22 @@
+name: Playing video: pause louder close
+requires-installed com.google.android.youtube
+apps: com.google.android.youtube
+# Operator: start YouTube on Home. Uses current map indices from 38e53a0.
+say EN play old telugu melody songs on youtube
+expect show key=map_yt_search_0 within 15
+tap-glow
+expect show key=map_yt_search_2 within 10
+doit
+expect show key=map_yt_search_3 within 12
+tap-glow
+expect show key=map_yt_search_5 within 15
+tap-glow
+expect log "\[finish\].*playing" within 20
+say EN pause
+expect log "\[media\] "pause"" within 5
+say EN louder
+expect log "\[media\] "louder"" within 5
+say EN close this app
+expect log "\[media\] "close this app"" within 5
+expect focus "com\.bbk\.launcher/|com\.android\.launcher3/|com\.google\.android\.apps\.nexuslauncher/" within 8
+expect enabled

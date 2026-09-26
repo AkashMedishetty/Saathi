@@ -1,8 +1,10 @@
-name: Video choice accepts spoken WhatsApp
-# Demo fix 2. Requires WhatsApp available and its choice enabled. No call is placed.
+name: Spoken WhatsApp choice reaches top-bar video call
+requires-installed com.whatsapp
+# Operator: choice enabled, WhatsApp logged in, son's matching chat already open.
+# The call button only glows; no tap or Do it is sent to it.
 say EN video call my son
-expect log "\[choice\] choose_video|\[show\] key=choose_video" within 15
+expect log "\[choice\] choose_video" within 15
 say EN WhatsApp
-expect focus "com.whatsapp" within 12
-expect show key=(wall_.*|search|type|pick|video|map_wa_video_call_[0-4]) within 15
+expect show key=map_wa_video_call_3 within 15
+expect bounds top < 500
 expect enabled

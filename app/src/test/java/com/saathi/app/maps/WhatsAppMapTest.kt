@@ -75,4 +75,29 @@ class WhatsAppMapTest {
     @Test fun businessAppUsesTheSameMap() {
         assertEquals("wa_home", AppMaps.screenOf("com.whatsapp.w4b", home))
     }
+    @Test fun anotherPersonsChatIsWrongScreenForMessageAndCalls() {
+        val wrong = chat().map { if (it.id == "conversation_contact_name") it.copy(text = "Priya") else it }
+        for (id in listOf("wa_message", "wa_video_call", "wa_voice_call")) {
+            val decision = AppMaps.next(AppMaps.routeById(id)!!, pkg, wrong, 2, slots)
+            assertTrue("$id must not target Priya's chat: $decision", decision is Decision.WrongScreen)
+        }
+    }
+
+    @Test fun lowMissedCallBubbleNeverBecomesVideoTarget() {
+        val route = AppMaps.routeById("wa_video_call")!!
+        // Real failure shape: the bubble can expose exactly 'Video call' with 'No answer' as a child.
+        for (label in listOf("Video call", "Video call · No answer")) {
+            val bubble = Fixtures.tree(
+                n(1, "LinearLayout", d = label, flags = "CF", r = "100, 1600 - 1300, 2000"),
+                n(2, "TextView", t = "No answer", r = "200, 1800 - 800, 1900"))
+            val withTop = AppMaps.next(route, pkg, chat() + bubble, 2, slots) as Decision.Glow
+            assertEquals(3, withTop.step)
+            assertEquals("Video call", withTop.node.label)
+            assertTrue(withTop.box.t < 500)
+            assertTrue(withTop.risky)
+            val withoutTop = chat().filterNot { it.label == "Video call" } + bubble
+            val missing = AppMaps.next(route, pkg, withoutTop, 2, slots)
+            assertTrue("Missing top-bar control must not glow the bubble: $missing", missing is Decision.Scroll)
+        }
+    }
 }

@@ -1,0 +1,3 @@
+name: Real Settings restart heals in 75 ms
+expect log "\[service\] destroyed" within 1
+expect show key=map_settings_font_2 within 2

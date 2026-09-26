@@ -1,4 +1,5 @@
 name: Quick: Hotstar missing to Install glow
+requires-missing in.startv.hotstar
 say EN watch my serial on Hotstar
 expect log "\[missing\] app=in.startv.hotstar" within 10
 say EN yes

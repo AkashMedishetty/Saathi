@@ -6,5 +6,5 @@ expect show key=(type|map_yt_search_2) within 8
 doit
 expect show key=(go|map_yt_search_3) within 10
 tap-glow
-expect show key=(pick|map_yt_search_4) within 8
+expect show key=(pick|map_yt_search_5) within 8
 expect enabled

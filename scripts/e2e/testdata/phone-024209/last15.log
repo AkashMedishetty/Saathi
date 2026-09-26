@@ -1,0 +1,7 @@
+614	log	[service] destroyed
+666	log	[guard] the system removed Saathi's accessibility entry; put it back
+689	log	[service] connected
+819	log	[goal] "अक्षर बड़े करो" lang=HI auto=false locked=false
+827	log	[map] route settings_font (Settings)
+831	log	[begin] already in Settings: guiding from this screen
+1869	log	[show] key=map_settings_font_2 el="" role=button bounds=[83,417][1356,818] warn=false final=false noAct=false auto=false text="“font size” वाला नतीजा दबाइए।" pkg=com.android.settings

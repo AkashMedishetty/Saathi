@@ -22,6 +22,7 @@ function stamp(line, a,n,h,base) {
    sub(/^.*E2E[ \t]*: */,"",line)
    if (line ~ /^focus=/) { type="focus"; sub(/^focus=/,"",line) }
    else if (line ~ /^enabled=[01]$/) { type="enabled"; sub(/^enabled=/,"",line) }
+   else if (line ~ /^package=[A-Za-z0-9_.]+ (installed|missing)$/) { type="package"; sub(/^package=/,"",line) }
    else if (line == "end") type="end"
    else next
  }

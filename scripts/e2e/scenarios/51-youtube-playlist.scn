@@ -1,0 +1,16 @@
+name: YouTube playlist search
+requires-installed com.google.android.youtube
+apps: com.google.android.youtube
+# Operator: start YouTube on Home. Uses current map indices from 38e53a0.
+say EN play old telugu melody songs playlist on youtube
+expect show key=map_yt_search_0 within 15
+tap-glow
+expect show key=map_yt_search_2 within 10
+doit
+expect show key=map_yt_search_3 within 12
+tap-glow
+expect show key=map_yt_search_5 within 15
+tap-glow
+# A direct video may play; a playlist page must glow Play all (step 4).
+expect log "\[show\] key=map_yt_search_4 .*el="Play all"|\[finish\].*playing" within 20
+expect enabled
