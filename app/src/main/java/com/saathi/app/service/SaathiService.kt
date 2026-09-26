@@ -87,6 +87,7 @@ class SaathiService : AccessibilityService() {
         val locked = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
         if (locked != wasLocked) { wasLocked = locked; overlay?.setBubbleVisible(!locked && !ownUiOpen) }
         if (locked) return
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) checkCallRisk(event.packageName?.toString())
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> guide.onUserMotion()
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> guide.onWindowChanged()
@@ -97,6 +98,21 @@ class SaathiService : AccessibilityService() {
     }
 
     override fun onInterrupt() {}
+
+    private var lastAlarmPkg: String? = null
+    private var lastAlarmAt = 0L
+
+    /** Risky app opened during a call → alarm (once per app per minute). Needs no call permission: AudioManager mode. */
+    private fun checkCallRisk(pkg: String?) {
+        pkg ?: return
+        if (!Prefs.scamGuard(this) || !CallGuard.isRisky(pkg)) return
+        val mode = getSystemService(android.media.AudioManager::class.java)?.mode
+        if (mode != android.media.AudioManager.MODE_IN_CALL && mode != android.media.AudioManager.MODE_IN_COMMUNICATION) return
+        val now = System.currentTimeMillis()
+        if (pkg == lastAlarmPkg && now - lastAlarmAt < 60_000) return
+        lastAlarmPkg = pkg; lastAlarmAt = now
+        guide.callAlarm(com.saathi.app.guide.AppLauncher.labelOf(this, pkg))
+    }
 
     override fun onDestroy() {
         if (instance === this) instance = null

@@ -504,6 +504,22 @@ class Guide(
         }
     }
 
+    /**
+     * On-call scam alarm (§9.8): a banking/UPI/remote-access app opened while a call is active is the classic
+     * "bank officer on the line" fraud. Full stop card, spoken, before they type anything.
+     */
+    fun callAlarm(appLabel: String) {
+        lang = Prefs.lang(svc)
+        val t = say("Is someone on the phone telling you to open $appLabel? Hang up now. Banks and police never ask you to open apps or share an OTP on a call.",
+            "क्या फ़ोन पर कोई आपसे $appLabel खुलवा रहा है? अभी फ़ोन काटिए। बैंक और पुलिस कभी फ़ोन पर ऐप खुलवाते या OTP नहीं माँगते।",
+            "ఫోన్‌లో ఎవరైనా $appLabel తెరవమంటున్నారా? వెంటనే ఫోన్ పెట్టేయండి. బ్యాంకులు, పోలీసులు ఎప్పుడూ ఫోన్‌లో యాప్ తెరవమని లేదా OTP అడగరు.").pick(lang)
+        current = Target(null, t, "call_alarm", warn = true)
+        overlay.highlight(null, false)
+        overlay.showCard(t, Overlay.Mode.ALARM)
+        speaker.say(t, lang)
+        svc.buzz(); svc.buzz()
+    }
+
     fun goBack() {
         svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
         scope.launch { delay(700); explain() }
