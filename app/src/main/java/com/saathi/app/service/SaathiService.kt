@@ -63,6 +63,9 @@ class SaathiService : AccessibilityService() {
         // Know which pictures are documents before anyone asks (on the phone, ids + kinds only; see DocFinder).
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             kotlinx.coroutines.delay(20_000); runCatching { com.saathi.app.guide.DocFinder.index(this@SaathiService) } }
+        // Gemma 4 ready before anyone asks (it takes >10 s to load; the "any words" rewrite and the planner need it).
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            kotlinx.coroutines.delay(8_000); runCatching { com.saathi.app.llm.LlmManager.loadAsync(this@SaathiService) } }
         speaker = Speaker(this)
         val o = Overlay(
             this,

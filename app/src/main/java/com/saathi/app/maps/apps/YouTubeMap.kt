@@ -195,6 +195,8 @@ object YouTubeMap {
             ),
             Route(
                 id = "yt_share_whatsapp", pkg = PKG,
+                // A video CALL is a call, not sharing a video (test 04:14: "video call my daughter on whatsapp").
+                avoid = listOf(rx("video ?call|वीडियो कॉल|వీడియో కాల్")),
                 goals = goals("share (this|the)? ?video", "send (this|the) video", "video.*(to|on) whatsapp", "वीडियो (भेज|शेयर)",
                     "वीडियो.*व्हाट्सएप", "వీడియో (షేర్|పంపు)"),
                 slots = listOf("contact"),

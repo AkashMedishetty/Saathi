@@ -112,4 +112,10 @@ class WhatsAppMapTest {
         assertTrue("$d", d is Decision.Glow && d.box.t in 1600..1700)
         assertEquals(Decision.Done, AppMaps.next(r, "com.whatsapp", Fixtures.load("whatsapp", "photo_viewer"), 3, slots))
     }
+
+    /** Field (04:12): Gemma 4's rewrite of "my grandson posted a picture…" must reach the photo route, not a video call. */
+    @Test fun seeThePhotoIsNotAVideoCall() {
+        assertEquals("wa_see_photo", AppMaps.route("see the photo my grandson sent on whatsapp")?.id)
+        assertEquals("wa_video_call", AppMaps.route("video call my daughter on whatsapp")?.id)
+    }
 }

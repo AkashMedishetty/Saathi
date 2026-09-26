@@ -110,7 +110,7 @@ object PhotosMap {
             Route(
                 id = "photos_share", pkg = PKG,
                 // Theirs to send, never one someone sent them ("my grandson posted a picture in whatsapp, I want to look at it").
-                avoid = listOf(rx("posted|sent me|send me|look at|see it|received|got a")),
+                avoid = listOf(rx("posted|\\bsent\\b|send me|look at|see it|received|got a")),
                 goals = goals("(share|send) (my |the |this |a )?(photo|picture|pic)", "(photo|picture|pic).*(whatsapp|to my|family)",
                     "फोटो (भेजो|भेजना|शेयर)", "फ़ोटो भेजो", "ఫోటో (పంపు|షేర్)"),
                 slots = listOf("contact"),

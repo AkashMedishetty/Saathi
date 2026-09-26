@@ -94,6 +94,8 @@ object WhatsAppMap {
             ),
             Route(
                 id = "wa_video_call", pkg = PKG,
+                // "see the photo my grandson sent on whatsapp" is a photo, not a call (field: "see .+ on whatsapp" won).
+                avoid = listOf(rx("photo|picture|image|\\bpic|फोटो|फ़ोटो|तस्वीर|ఫోటో")),
                 goals = goals("video ?call( to)? .+", ".+ (ko|को) (video|वीडियो) (call|कॉल)", "वीडियो कॉल", "వీడియో కాల్", "(see|talk to) .+ on (video|whatsapp)"),
                 slots = listOf("contact"),
                 steps = inChat(MapStep("wa_chat_them", listOf(VIDEO), say("Tap the camera icon at the top to video call {contact}.",
@@ -133,7 +135,7 @@ object WhatsAppMap {
             Route(
                 id = "wa_photo", pkg = PKG,
                 // Sending theirs, never seeing one someone sent ("my grandson posted a picture… I want to look at it").
-                avoid = listOf(rx("posted|sent me|send me|look at|see it|received|got a|how (do i|to|can i) (see|open|view)")),
+                avoid = listOf(rx("posted|\\bsent\\b|send me|look at|see it|received|got a|how (do i|to|can i) (see|open|view)")),
                 goals = goals("send (a |the |my )?(photo|picture|pic) (to|on) .+", "(photo|picture) .*whatsapp", "(फोटो|फ़ोटो) .*(भेजो|व्हाट्सएप)", "ఫోటో .*(పంపు|వాట్సాప్)"),
                 slots = listOf("contact"),
                 steps = inChat(
