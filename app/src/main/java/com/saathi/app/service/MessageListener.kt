@@ -45,8 +45,9 @@ class MessageListener : NotificationListenerService() {
         val app = com.saathi.app.guide.AppLauncher.labelOf(this, sbn.packageName)
         keep(Msg(app, sender, text, System.currentTimeMillis()))
         if (!com.saathi.app.guide.Prefs.scamGuard(this)) return
-        MessageScam.check(text)?.let { hit ->
-            Handler(Looper.getMainLooper()).post { SaathiService.instance?.guide?.messageAlert(sender, app, hit) }
+        // Scam shield v2 (one detector; family cap only when we truly know it's family: not from a display name).
+        com.saathi.app.scam.ScamShield.onMessage(com.saathi.app.scam.MsgEvent(sbn.packageName, sender, text))?.let { w ->
+            Handler(Looper.getMainLooper()).post { SaathiService.instance?.guide?.shieldAlert(w, sbn.packageName, from = "$sender · $app") }
         }
     }
 }

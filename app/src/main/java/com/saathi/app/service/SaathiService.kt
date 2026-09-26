@@ -127,7 +127,11 @@ class SaathiService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> guide.onUserMotion()
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> guide.onWindowChanged()
-            AccessibilityEvent.TYPE_VIEW_CLICKED -> guide.onUserTap()
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                guide.onUserTap()
+                guide.onUserClick(event.packageName?.toString() ?: "",
+                    event.text?.joinToString(" ")?.takeIf { it.isNotBlank() } ?: event.contentDescription?.toString())
+            }
             // Content changes are constant; only worth reading while a task runs.
             else -> if (guide.active) guide.onScreenEvent()
         }
@@ -258,8 +262,13 @@ class SaathiService : AccessibilityService() {
                     "log_from" -> com.saathi.app.DebugLog.setFrom(this@SaathiService, i.getLongExtra("ms", 0L))
                     "ask" -> openAsk(i.getBooleanExtra("listen", false))
                     "routine" -> com.saathi.app.guide.Routines.all(this@SaathiService).firstOrNull()?.let { guide.routineDue(it) }
-                    "scam_sms" -> com.saathi.app.guide.MessageScam.check("Dear customer your SBI KYC is pending, account will be blocked today. Update now bit.ly/kyc-sbi")
-                        ?.let { guide.messageAlert("VM-SBIUPD", "Messages", it) }
+                    // Demo triggers (debug builds): the same path a real notification takes.
+                    "scam_sms" -> com.saathi.app.scam.ScamShield.onMessage(com.saathi.app.scam.MsgEvent("com.google.android.apps.messaging", "VM-SBIUPD",
+                        "Dear customer your SBI KYC is pending, account will be blocked today. Update now bit.ly/kyc-sbi"))
+                        ?.let { guide.shieldAlert(it, "com.google.android.apps.messaging", from = "VM-SBIUPD · Messages") }
+                    "scam_apk" -> com.saathi.app.scam.ScamShield.onMessage(com.saathi.app.scam.MsgEvent("com.whatsapp", "+91 98xxx",
+                        "📄 SBI YONO update.apk  Install this to keep your account active"))
+                        ?.let { guide.shieldAlert(it, "com.whatsapp", from = "+91 98xxx · WhatsApp") }
                     "tts" -> Log.i(TAG, "tts: " + Lang.entries.joinToString { "${it.tag}=${speaker.supports(it)}" })
                     null -> i.getStringExtra("goal")?.let { guide.handleUtterance(it) }
                     else -> Log.w(TAG, "unknown cmd $cmd")

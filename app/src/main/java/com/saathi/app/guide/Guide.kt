@@ -75,6 +75,8 @@ class Guide(
     /** Packages this task lives in. Anything else (except transient system UI) pauses the task. */
     private val taskPkgs = mutableSetOf<String>()
     private var adoptPkg = false
+    private var lastFrontPkg: String? = null
+    private var prevExternalPkg: String? = null
     /** Settings task: the person opens Settings themselves (trap #45: vivo switches Saathi off if Saathi opens it). */
     private var needSettings = false
     /** Just arrived in Settings: it may reopen on an old sub-page; step back to the main page first (lost-context fix). */
@@ -396,6 +398,13 @@ class Guide(
      * They tapped something (maybe our target): drop the glow right away so it never lingers on a
      * screen that's already changing, then look again as soon as the screen settles.
      */
+    /** The person tapped something labelled [label] in [pkg] (e.g. "SBI_YONO_update.apk" in a chat). */
+    fun onUserClick(pkg: String, label: String?) {
+        if (label.isNullOrBlank() || !Prefs.scamGuard(svc)) return
+        com.saathi.app.scam.ScamShield.onScreen(com.saathi.app.scam.ScreenEvent(pkg, prevExternalPkg, emptyList(), label))
+            ?.let { shieldAlert(it, pkg) }
+    }
+
     fun onUserTap() {
         lastTapAt = SystemClock.uptimeMillis()
         current?.el?.let { lastActionNote = "They tapped something (the glowing item was \"${it.title}\")." }
@@ -474,7 +483,13 @@ class Guide(
             }
             return
         }
-        if (current?.warn == true && goal == null) clearVisuals()
+        // Scam shield on the screen: APK files in chats, the installer right after a chat/browser, remote-control
+        // apps, the UPI "PIN to receive" trick. prevExternalPkg = the last different app in front.
+        if (screen.pkg != lastFrontPkg && screen.pkg.isNotBlank() && !isTransient(screen.pkg)) { prevExternalPkg = lastFrontPkg; lastFrontPkg = screen.pkg }
+        if (Prefs.scamGuard(svc)) com.saathi.app.scam.ScamShield.onScreen(com.saathi.app.scam.ScreenEvent(screen.pkg, prevExternalPkg,
+            screen.elements.map { it.label }.filter { it.isNotBlank() }, null))?.let { w -> shieldAlert(w, screen.pkg); return }
+        // An on-screen scam warning goes when that screen goes; message warnings stay until the person dismisses them.
+        if (current?.warn == true && goal == null && current?.key?.startsWith("scam_") == true) clearVisuals()
 
         // Keep the card clear of the keyboard.
         // Keyboard + the box being typed in: the card must cover neither.
@@ -1014,6 +1029,26 @@ class Guide(
     }
 
     /** An incoming message looks like a scam: say so before they act on it. */
+    /** Scam shield (com.saathi.app.scam): one warning per (id, app) per minute; STOP ones buzz and offer "back". */
+    private val shieldSeen = HashMap<String, Long>()
+    fun shieldAlert(w: com.saathi.app.scam.Warning, where: String, from: String? = null) {
+        val key = "${w.id}|$where"
+        val now = SystemClock.uptimeMillis()
+        if ((shieldSeen[key] ?: 0L) > now - 60_000) return
+        shieldSeen[key] = now
+        lang = Prefs.lang(svc)
+        com.saathi.app.DebugLog.i("alert", "shield ${w.id} ${w.level} in $where")
+        val head = from?.let { say("A message from $it.", "$it का संदेश।", "$it నుంచి సందేశం.").pick(lang) + " " } ?: ""
+        val t = head + w.say.pick(lang)
+        hideJob?.cancel()
+        current = Target(null, t, "shield_${w.id}", warn = true)
+        overlay.highlight(null, false)
+        val back: (() -> Unit)? = if (w.safeAction == "back") ({ overlay.hideCard(); svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK) }) else null
+        overlay.showCard(t, Overlay.Mode.WARN, onContinue = back)
+        speaker.say(t, lang)
+        svc.buzz(); if (w.level == com.saathi.app.scam.Level.STOP) svc.buzz()
+    }
+
     fun messageAlert(sender: String, app: String, hit: MessageScam.Hit) {
         com.saathi.app.DebugLog.i("alert", "message scam ${hit.id} from $app")
         lang = Prefs.lang(svc)

@@ -276,7 +276,7 @@ class Overlay(
             Mode.AUTO -> say("Let me do it myself", "मैं ख़ुद करूँगा", "నేనే చేస్తాను").pick(l)
             Mode.ASK -> say("Yes, please", "हाँ, कीजिए", "అవును, చేయండి").pick(l)
             Mode.FINAL -> say("I'm done", "हो गया", "అయిపోయింది").pick(l)
-            Mode.WARN -> if (targetCenterY != null) say("Show me the safe button", "सुरक्षित बटन दिखाओ", "సురక్షిత బటన్ చూపించు").pick(l) else null
+            Mode.WARN -> if (targetCenterY != null) say("Show me the safe button", "सुरक्षित बटन दिखाओ", "సురక్షిత బటన్ చూపించు").pick(l) else if (onContinue != null) say("Take me back to safety", "मुझे सुरक्षित वापस ले चलो", "నన్ను సురక్షితంగా వెనక్కి తీసుకెళ్ళు").pick(l) else null
             else -> null
         }
         val primaryIcon = when (mode) {
