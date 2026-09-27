@@ -46,7 +46,7 @@ class ProBrainTest {
             val body = json.decode(r.body)
             assertEquals("provider/model", body["model"])
             assertEquals(0.2, body["temperature"])
-            assertEquals(200.0, body["max_tokens"])
+            assertEquals(700.0, body["max_tokens"])   // room for models that think first (field 07:48)
             assertEquals(15000, r.timeoutMs)
             assertTrue(user(r).contains("Edit a video"))
             assertTrue(user(r).contains("Opened project"))
@@ -147,14 +147,14 @@ class ProBrainTest {
         for (text in listOf("TAP 0\nSAY Tap it.", "TAP +3\nSAY Tap it.", "TAP -1\nSAY Scroll.", "TYPE 2\nSAY Type here.",
             "TYPE 2 [PRIVATE]\nSAY Type here.", "TAP 2 extra\nSAY Tap it.", "BACK now\nSAY Back.",
             "TAP 99999999999999999\nSAY Tap it.", "CLICK 2\nSAY Click.", "TAP 3", "TAP 3\nSAY ",
-            "TAP 3\nSAY Tap Export.\nextra", "ASK ?\nSAY Choose.")) assertNull(text, parse(text))
+            "ASK ?\nSAY Choose.")) assertNull(text, parse(text))
     }
 
     @Test fun malformedErrorRefusalToolAndTruncatedEnvelopesReturnNull() {
         for (raw in listOf("<html>error</html>", "not json", "{}", "[]", "{\"choices\":[]}",
             "{\"choices\":[{\"message\":{\"content\":null}}]}",
             "{\"choices\":[{\"message\":{\"content\":12}}]}",
-            "{\"error\":{\"message\":\"denied\"}}", envelope("TAP 3\nSAY Tap Export.", "length"),
+            "{\"error\":{\"message\":\"denied\"}}", 
             "{\"choices\":[{\"message\":{\"refusal\":\"no\",\"content\":\"DONE\\nSAY Done.\"}}]}",
             "{\"choices\":[{\"message\":{\"tool_calls\":[],\"content\":\"DONE\\nSAY Done.\"}}]}"))
             assertNull(raw, ProBrain.parsePlanResponse(raw, json))
@@ -212,5 +212,11 @@ class ProBrainTest {
         var called = false
         assertNull(ProBrain.post(r, "") { called = true; FakeConnection(it) })
         assertFalse(called)
+    }
+
+    /** Field (07:48): a big model's extra line, or a "length" finish with the answer present, still gives the step. */
+    @Test fun tolerantOfAnExtraLineAndALengthFinish() {
+        assertEquals("TAP 3\nSAY Tap Export.", ProBrain.parsePlanResponse(envelope("TAP 3\nSAY Tap Export.\nextra", "stop"), json))
+        assertEquals("TAP 3\nSAY Tap Export.", ProBrain.parsePlanResponse(envelope("TAP 3\nSAY Tap Export.", "length"), json))
     }
 }

@@ -580,7 +580,7 @@ class Guide(
         overlay.showCard(say("Finding the right app…", "सही ऐप ढूँढ रहा हूँ…", "సరైన యాప్ వెతుకుతున్నాను…").pick(lang), Overlay.Mode.THINKING)
         val name = proTry("pick app") { cfg -> com.saathi.app.llm.ProBrain.explain(cfg,
             "Which ONE Android app from the Google Play Store should a person use to: \"$g\"? Reply with only the app's name exactly as " +
-                "it appears on the Play Store (for example: JuiceSSH, Termux, CapCut, Google Docs). No other words.", "")
+                "it appears on the Play Store (for example: JuiceSSH, Termux, CapCut, Google Docs). No other words.", "", "Play Store")
             ?.lines()?.firstOrNull { it.isNotBlank() }?.trim()?.trim('"', '.', '*', ' ')?.take(40)?.ifBlank { null } }
         com.saathi.app.DebugLog.i("pro", "app for \"$g\": ${name ?: "none"}")
         if (name.isNullOrBlank()) return false

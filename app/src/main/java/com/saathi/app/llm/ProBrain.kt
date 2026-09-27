@@ -123,7 +123,7 @@ object ProBrain {
     private fun request(cfg: ProConfig, system: String, user: String, json: JsonCodec): Request? {
         val url = endpoint(cfg) ?: return null
         if (user.length > 100_000) return null
-        val body = json.encode(linkedMapOf("model" to cfg.model, "temperature" to 0.2, "max_tokens" to 200,
+        val body = json.encode(linkedMapOf("model" to cfg.model, "temperature" to 0.2, "max_tokens" to 700,
             "messages" to listOf(mapOf("role" to "system", "content" to system), mapOf("role" to "user", "content" to user))))
         return Request(url, mapOf("Content-Type" to "application/json; charset=utf-8", "Accept" to "application/json"), body, cfg.timeoutMs)
     }
@@ -179,7 +179,8 @@ object ProBrain {
         val root = json.decode(raw)
         if (root["error"] != null) return null
         val choice = (root["choices"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: return null
-        if (choice["finish_reason"] != null && choice["finish_reason"] != "stop") return null
+        // "length" is fine when the answer is there (a model that thinks first can use up the budget after answering).
+        if (choice["finish_reason"] != null && choice["finish_reason"] != "stop" && choice["finish_reason"] != "length") return null
         val message = choice["message"] as? Map<*, *> ?: return null
         if (message["role"] != null && message["role"] != "assistant") return null
         if (message["refusal"] != null || message["tool_calls"] != null) return null
@@ -204,8 +205,11 @@ object ProBrain {
     }
 
     internal fun parsePlanResponse(raw: String, json: JsonCodec = AndroidJson): String? = runCatching {
-        val lines = clean(content(raw, json) ?: return null)?.lines() ?: return null
-        if (lines.size != 2 || !lines[1].startsWith("SAY ", true)) return null
+        // Tolerant: the first action line and the first SAY line (big models add a line now and then; field 07:48).
+        val all = clean(content(raw, json) ?: return null)?.lines()?.map { it.trim() }?.filter { it.isNotEmpty() } ?: return null
+        val actionLine = all.firstOrNull { Regex("(?i)^(TAP|TYPE|SCROLL|BACK|DONE|ASK)\\b").containsMatchIn(it) } ?: return null
+        val sayLine = all.firstOrNull { it.startsWith("SAY ", true) } ?: return null
+        val lines = listOf(actionLine, sayLine)
         val action = lines[0].trim(); val verb = action.substringBefore(' ').uppercase(Locale.ROOT)
         val rest = action.substringAfter(' ', "").trim()
         when (verb) {
