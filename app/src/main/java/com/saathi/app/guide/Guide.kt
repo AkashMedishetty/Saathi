@@ -776,9 +776,17 @@ class Guide(
             ?: Regex("(?i)\\bfrom\\s+(?:my\\s+)?([\\p{L}]+)").find(g))?.groupValues?.get(1)
             ?.takeIf { it.lowercase() !in setOf("where", "when", "what", "who", "which", "someone", "he", "she", "they", "it") }
             ?.let { if (it.lowercase() in SlotExtractor.FAMILY) Prefs.family(svc).ifBlank { it } else it }
+            // Telugu / Hindi: the sender comes first ("ఆకాష్ వాట్సాప్ లో టికెట్ పంపాడు", "आकाश ने टिकट भेजा"; field 10:29).
+            ?: Regex("^\\s*([\\p{L}\\p{M}]+)(?:\\s+ने)?\\s+.*(పంపా|పంపి|పంపించ|పంపారు|भेज)").find(g)?.groupValues?.get(1)
+                ?.let { if (it in SlotExtractor.FAMILY) Prefs.family(svc).ifBlank { it } else it }
         pendingRead = g
         com.saathi.app.DebugLog.i("ticket", "open it first (from ${who ?: "?"}), then read: \"$g\"")
-        start("open the ticket from ${who ?: "them"} on whatsapp")
+        scope.launch {
+            // WhatsApp saves "Akash", not "ఆకాష్": write a Telugu/Hindi name in English letters before searching.
+            val name = who?.let { if (Translit.needed(it)) Translit.latin(it) else it }
+            com.saathi.app.DebugLog.i("ticket", "contact: $who → $name")
+            start("open the ticket from ${name ?: "them"} on whatsapp")
+        }
         return true
     }
 
@@ -1927,7 +1935,7 @@ class Guide(
         practice = true; learn = true
         com.saathi.app.DebugLog.i("practice", "start ${f.id}")
         if (f.id.startsWith("map_")) com.saathi.app.maps.AppMaps.routeById(f.id.removePrefix("map_"))?.let { r ->
-            mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1; broughtFor = ""; broughtTries = 0 }
+            mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)).let { m -> m["contact"]?.takeIf { Translit.needed(it) }?.let { m + ("contact" to Translit.latin(it)) } ?: m }; mapStep = -1; broughtFor = ""; broughtTries = 0 }
         begin(g, f, autoMode = false)
     }
 
@@ -2451,7 +2459,7 @@ class Guide(
     private fun beginMap(g: String, r: com.saathi.app.maps.Route, autoMode: Boolean) {
         val map = com.saathi.app.maps.AppMaps.mapOf(r)
         com.saathi.app.DebugLog.i("map", "route ${r.id} (${map?.name})")
-        mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1; broughtFor = ""; broughtTries = 0
+        mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)).let { m -> m["contact"]?.takeIf { Translit.needed(it) }?.let { m + ("contact" to Translit.latin(it)) } ?: m }; mapStep = -1; broughtFor = ""; broughtTries = 0
         // Reuse the flow machinery for launch / learn-mode / Settings rules; steps come from the map.
         val f = Flow("map_${r.id}", { c -> AppLauncher.launch(c, r.pkg) }, emptyList(), null,
             r.doneSay, r.start ?: say("Let's do it together. Watch for the ring.", "साथ में करते हैं। घेरे को देखिए।", "కలిసి చేద్దాం. రింగ్ చూడండి."),
