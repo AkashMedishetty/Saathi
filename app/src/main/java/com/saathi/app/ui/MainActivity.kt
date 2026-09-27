@@ -99,6 +99,19 @@ class MainActivity : AppCompatActivity() {
         // ── Helper status + language (one segmented control) ──
         val on = SaathiService.isEnabled(this)
         page.add(statusLine(on), 14)
+        // Saathi Pro (Pro build): one tap on/off right here (no scripts, no Settings dive on stage). Off = the regular,
+        // on-device Saathi; on = the cloud brain joins for power-user tasks.
+        if (com.saathi.app.BuildConfig.PRO) {
+            val pro = Prefs.proOn(this)
+            page.add(hbox().apply {
+                background = rounded(if (pro) C.PINE_DEEP else C.PAPER_2, dpf(24)); setPadding(dp(16), dp(12), dp(16), dp(12))
+                add(body(if (pro) "Saathi Pro · ON · cloud brain for hard tasks" else "Saathi Pro · OFF · everything on this phone",
+                    16f, if (pro) C.WHITE else C.PINE_DEEP, bold = true))
+            }.pressable {
+                if (Prefs.proKey(this).isBlank()) startActivity(Intent(this, ProActivity::class.java))
+                else { Prefs.setProOn(this, !Prefs.proOn(this)); render() }
+            }, 10)
+        }
         val seg = hbox().apply { background = rounded(C.PAPER_2, dpf(28)); setPadding(dp(4), dp(4), dp(4), dp(4)) }
         Lang.entries.forEach { x ->
             val sel = x == lang
