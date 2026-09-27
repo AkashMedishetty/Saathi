@@ -65,6 +65,8 @@ class AiMonitor(private val ctx: Context, private val wm: WindowManager) {
         AiMeter.events().takeLast(4).reversed().forEach { e ->
             sb.append(String.format("%-3s %-13s %-12s %5d ms\n", e.unit, e.engine.take(13), e.what.take(12), e.ms))
         }
+        // Which Saathi is running: the basic on-device app, or Saathi Pro (and whether its cloud brain is on).
+        sb.append(if (com.saathi.app.BuildConfig.PRO) "SAATHI PRO" + (if (com.saathi.app.guide.Prefs.proOn(ctx)) " · cloud ON" else " · cloud off") else "SAATHI · on-device").append('\n')
         sb.append(live())
         text.text = sb.toString().trimEnd()
     }

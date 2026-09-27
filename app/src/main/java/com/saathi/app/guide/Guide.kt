@@ -436,9 +436,19 @@ class Guide(
         hereTask(goalText)?.let { begin(goalText, it, autoMode); return }
         ownThingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         mapRouteFor(goalText)?.let { r ->
-            // "Video call my son": their choice first (WhatsApp or the phone's own), unless they said WhatsApp.
-            if (r.id == "wa_video_call" && !Regex("(?i)whats ?app|व्हाट्स|వాట్స").containsMatchIn(goalText)) { videoCall(goalText, null, autoMode); return }
-            beginMap(goalText, r, autoMode); return
+            // The NPU checks every phrase-matched route (Gemma 3 1B, ~0.4 s): it names the app the request needs; if it
+            // disagrees, Gemma 4 rewrites the request instead of trusting the phrase (field: "see the photo my grandson
+            // sent" matched video call). A rewrite's own route isn't re-checked (no loop).
+            if (verifiedGoal == goalText.lowercase().trim()) { verifiedGoal = null; dispatchMap(goalText, r, autoMode); return }
+            scope.launch {
+                if (npuAgrees(goalText, r)) dispatchMap(goalText, r, autoMode)
+                else {
+                    val c = canonical(goalText)
+                    if (c != null && c.lowercase().trim() != goalText.lowercase().trim()) { verifiedGoal = c.lowercase().trim(); start(c, autoMode, learnMode = learn) }
+                    else dispatchMap(goalText, r, autoMode)
+                }
+            }
+            return
         }
         IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         // Saathi Pro: "how can I access my VPS through SSH from this phone" is a do-it-with-me task for a power user, not a
@@ -518,6 +528,30 @@ class Guide(
             LOST_WORDS.containsMatchIn(c) || Skills.match(c)?.id in IntentRouter.DIRECT)
         com.saathi.app.DebugLog.i("route", "model: \"$g\" → \"${out ?: "-"}\" ${if (ok) "(known route)" else "(not used)"}")
         return if (ok) c else null
+    }
+
+    private var verifiedGoal: String? = null
+
+    private fun dispatchMap(goalText: String, r: com.saathi.app.maps.Route, autoMode: Boolean) {
+        // "Video call my son": their choice first (WhatsApp or the phone's own), unless they said WhatsApp.
+        if (r.id == "wa_video_call" && !Regex("(?i)whats ?app|व्हाट्स|వాట్స").containsMatchIn(goalText)) { videoCall(goalText, null, autoMode); return }
+        beginMap(goalText, r, autoMode)
+    }
+
+    private val VERIFY_APPS = listOf("youtube", "whatsapp", "settings", "photos", "phone", "messages", "maps", "uber", "spotify",
+        "playstore", "chrome", "camera", "clock", "instagram", "docs", "hotstar")
+
+    /** NPU check of a phrase route: true = agrees (or can't tell); false = it clearly names a DIFFERENT known app. */
+    private suspend fun npuAgrees(g: String, r: com.saathi.app.maps.Route): Boolean {
+        val mapName = (com.saathi.app.maps.AppMaps.mapOf(r)?.name ?: "").lowercase().replace(" ", "").replace("google", "").replace("jio", "")
+        com.saathi.app.llm.AiMeter.purpose = "verify route"
+        val out = runCatching { com.saathi.app.llm.FastBrain.generate(svc,
+            "Which phone app does this request need? Answer with ONE word from this list: ${VERIFY_APPS.joinToString(", ")}, none.", g) }
+            .getOrNull()?.lowercase()?.replace(" ", "") ?: return true
+        val said = VERIFY_APPS.firstOrNull { out.contains(it) } ?: return true
+        val agree = mapName.contains(said) || said.contains(mapName) || (said == "phone" && r.pkg.contains("dialer|contacts".toRegex()))
+        com.saathi.app.DebugLog.i("verify", "npu=$said route=${r.id} ${if (agree) "agrees" else "DISAGREES → Gemma 4 rewrite"}")
+        return agree
     }
 
     /** The 3 likeliest known routes for [g]: same app (+5) and shared words with the route's description. */
