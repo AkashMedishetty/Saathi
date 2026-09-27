@@ -123,7 +123,10 @@ object ProBrain {
     private fun request(cfg: ProConfig, system: String, user: String, json: JsonCodec): Request? {
         val url = endpoint(cfg) ?: return null
         if (user.length > 100_000) return null
+        // Low reasoning effort: a phone step needs a quick, sure answer, not a long think (field 08:38: Gemini took 7.5 s).
+        // OpenRouter ignores it for models that don't reason.
         val body = json.encode(linkedMapOf("model" to cfg.model, "temperature" to 0.2, "max_tokens" to 700,
+            "reasoning" to mapOf("effort" to "low", "exclude" to true),
             "messages" to listOf(mapOf("role" to "system", "content" to system), mapOf("role" to "user", "content" to user))))
         return Request(url, mapOf("Content-Type" to "application/json; charset=utf-8", "Accept" to "application/json"), body, cfg.timeoutMs)
     }
@@ -224,6 +227,13 @@ object ProBrain {
         if (say.isBlank() || say.length > 160) return null
         "$verb${if (rest.isEmpty()) "" else " $rest"}\nSAY $say"
     }.getOrNull()
+
+    /** A direct question with its own system prompt ("which Play Store app for this?"). Redacted; null on any failure. */
+    suspend fun ask(cfg: ProConfig, system: String, question: String): String? = onIo {
+        if (endpoint(cfg) == null) return@onIo null
+        val req = request(cfg, system, redact(question), AndroidJson) ?: return@onIo null
+        post(req, cfg.apiKey)?.let { parseExplainResponse(it) }
+    }
 
     internal fun parseExplainResponse(raw: String, json: JsonCodec = AndroidJson): String? = runCatching {
         val text = clean(content(raw, json) ?: return null)?.removePrefix("SAY ")?.replace(Regex("\\s+"), " ")?.trim()

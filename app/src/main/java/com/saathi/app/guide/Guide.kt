@@ -642,9 +642,10 @@ class Guide(
         if (!Prefs.proOn(svc) || (!howTo && IntentRouter.phrasedAsQuestion(g))) return false
         if (WRITE_HERE.containsMatchIn(g)) return false   // typing is about the app they're in, never a new app
         overlay.showCard(say("Finding the right app…", "सही ऐप ढूँढ रहा हूँ…", "సరైన యాప్ వెతుకుతున్నాను…").pick(lang), Overlay.Mode.THINKING)
-        val name = proTry("pick app") { cfg -> com.saathi.app.llm.ProBrain.explain(cfg,
-            "Which ONE Android app from the Google Play Store should a person use to: \"$g\"? Reply with only the app's name exactly as " +
-                "it appears on the Play Store (for example: JuiceSSH, Termux, CapCut, Google Docs). No other words.", "", "Play Store")
+        val name = proTry("pick app") { cfg -> com.saathi.app.llm.ProBrain.ask(cfg,
+            "You recommend Android apps. Reply with ONLY the exact Google Play Store name of the single best app for the task, " +
+                "nothing else: no sentence, no punctuation, no explanation. Examples: JuiceSSH, Termux, CapCut, Google Docs, Snapseed.",
+            "Task: $g")
             ?.lines()?.firstOrNull { it.isNotBlank() }?.trim()?.trim('"', '.', '*', ' ')?.take(40)?.ifBlank { null } }
         com.saathi.app.DebugLog.i("pro", "app for \"$g\": ${name ?: "none"}")
         // A real app name only (field 08:26: "I'm uncertain - volume control is a built-in…" was sent to the Play Store).
