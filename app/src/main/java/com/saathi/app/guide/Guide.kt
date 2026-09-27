@@ -726,6 +726,28 @@ class Guide(
     private val CONTINUE_WORDS = Regex("(?i)^\\W*(continue|resume|go on|carry on|where was i|let'?s continue|back to (it|that|the task)|जारी रखो|जारी रखें|आगे बढ़ो|కొనసాగించు|కొనసాగించండి)\\b")
     private fun unfinishedGoal(): String? = unfinished?.takeIf { SystemClock.uptimeMillis() - it.second < 20 * 60_000L }?.first
 
+    /** The row we need is in the tree but scrolled up under the header (vivo Settings search, field 10:04): ask the list to
+     *  show it (ACTION_SHOW_ON_SCREEN, a scroll, never a tap), once per step, then look again. */
+    private var broughtFor = ""
+    private fun bringIntoView(step: Int): Boolean {
+        val term = mapSlots["term"] ?: mapSlots["query"] ?: return false
+        val key = "${mapRoute?.id}_$step"
+        if (broughtFor == key) return false
+        val root = svc.rootInActiveWindow ?: return false
+        val top = svc.resources.displayMetrics.heightPixels * 0.15
+        val hit = runCatching { root.findAccessibilityNodeInfosByText(term) }.getOrNull().orEmpty().firstOrNull { n ->
+            !n.isEditable && android.graphics.Rect().also { n.getBoundsInScreen(it) }.top < top &&
+                n.text?.toString()?.lowercase()?.contains(term.lowercase()) == true
+        } ?: return false
+        var n: AccessibilityNodeInfo? = hit; var done = false; var i = 0
+        while (n != null && i < 4 && !done) { done = n.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id); n = n.parent; i++ }
+        com.saathi.app.DebugLog.i("map", "bring into view \"$term\" for $key: $done")
+        if (!done) return false
+        broughtFor = key; lastSig = 0
+        schedule(600, force = true)
+        return true
+    }
+
     /** Torch, volume, brightness…: done at once, the task's card comes back. False when [text] isn't one. */
     private fun instantAside(text: String): Boolean {
         // "Tell him to turn on the torch" / "type volume up" are words for the task, not a command.
@@ -1784,7 +1806,7 @@ class Guide(
         practice = true; learn = true
         com.saathi.app.DebugLog.i("practice", "start ${f.id}")
         if (f.id.startsWith("map_")) com.saathi.app.maps.AppMaps.routeById(f.id.removePrefix("map_"))?.let { r ->
-            mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1 }
+            mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1; broughtFor = "" }
         begin(g, f, autoMode = false)
     }
 
@@ -2308,7 +2330,7 @@ class Guide(
     private fun beginMap(g: String, r: com.saathi.app.maps.Route, autoMode: Boolean) {
         val map = com.saathi.app.maps.AppMaps.mapOf(r)
         com.saathi.app.DebugLog.i("map", "route ${r.id} (${map?.name})")
-        mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1
+        mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1; broughtFor = ""
         // Reuse the flow machinery for launch / learn-mode / Settings rules; steps come from the map.
         val f = Flow("map_${r.id}", { c -> AppLauncher.launch(c, r.pkg) }, emptyList(), null,
             r.doneSay, r.start ?: say("Let's do it together. Watch for the ring.", "साथ में करते हैं। घेरे को देखिए।", "కలిసి చేద్దాం. రింగ్ చూడండి."),
@@ -2365,7 +2387,7 @@ class Guide(
                     tip = if (teach) d.why?.pick(lang) else null, progress = (d.step + 1) to r.steps.size), practiced = practice)
                 stepWhy = d.why?.pick(lang)
             }
-            is com.saathi.app.maps.Decision.Scroll -> show(Target(null, d.hint.pick(lang), "map_scroll_${d.step}", scroll = true))
+            is com.saathi.app.maps.Decision.Scroll -> if (!bringIntoView(d.step)) show(Target(null, d.hint.pick(lang), "map_scroll_${d.step}", scroll = true))
             is com.saathi.app.maps.Decision.WrongScreen -> {
                 val back = d.node?.let { MapBridge.uiElement(it, live.infoFor(it), "button") }
                 show(Target(back, d.backHint.pick(lang), "map_back_${d.expect}", noAct = true))

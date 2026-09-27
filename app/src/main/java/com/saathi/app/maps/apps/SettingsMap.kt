@@ -37,7 +37,9 @@ object SettingsMap {
 
     /** A result row that contains the topic AND more ("Incoming call ringtone"): never the bare history chip. */
     private val RESULT_BASE = Sel(slot = "term", slotLonger = true, clickable = true, editable = false, below = 0.1f, pick = Pick.TOP,
-        not = rx("^(clear( all)?|search history|history|recent searches)$| · (remove|delete|clear)$"))
+        // Not another app's own setting ("Default font size · Apps > System app settings > Notes > …", field 10:01: the
+        // font route opened vivo Notes' font page).
+        not = rx("^(clear( all)?|search history|history|recent searches)$| · (remove|delete|clear)$|(^| · )apps\\s*>"))
     /** vivo: results live in search_list_view, with the main page still in the tree under them (not really covering). */
     private val RESULT_VIVO = RESULT_BASE.copy(inside = Sel(resId = "search_list_view"), ignoreCovers = true)
     private val RESULT = RESULT_BASE
@@ -91,11 +93,14 @@ object SettingsMap {
                     "ఇదిగో. వినడానికి ఒక రింగ్‌టోన్ నొక్కండి, నచ్చినది ఎంచుకోండి."),
                 "ring ?tone", "ringer", "रिंगटोन", "रिंग टोन", "घंटी की आवाज़", "రింగ్ ?టోన్", "రింగ్‌టోన్",
                 prefer = rx("^(incoming call|phone|call) ringtone")),
-            topic("settings_font", "font size",
+            // vivo names it "Font size and weight"; searching "font size" put Notes' own "Default font size" in view and
+            // scrolled the right row up under the search bar (field 10:02).
+            topic("settings_font", if (runCatching { android.os.Build.MANUFACTURER }.getOrNull().orEmpty().equals("vivo", true)) "font size and weight" else "font size",
                 choose("Slide the dot to the right to make the letters bigger.", "यह रहा। अक्षर बड़े करने के लिए गोला दाईं ओर खिसकाइए।",
                     "ఇదిగో. అక్షరాలు పెద్దవి చేయడానికి చుక్కను కుడివైపు జరపండి."),
                 "font", "text (size|bigger|smaller)", "(letters|text|writing) (are )?(too )?(small|big)", "bigger (text|letters)",
-                "अक्षर (बड़े|छोटे)", "फ़ॉन्ट", "फॉन्ट", "అక్షరాలు (పెద్ద|చిన్న)", "ఫాంట్"),
+                "अक्षर (बड़े|छोटे)", "फ़ॉन्ट", "फॉन्ट", "అక్షరాలు (పెద్ద|చిన్న)", "ఫాంట్",
+                prefer = rx("^font size and (weight|style)|display.*> font")),
             topic("settings_brightness", "brightness",
                 choose("Slide the dot right for a brighter screen, left for darker.", "यह रहा। तेज़ रोशनी के लिए गोला दाईं ओर, कम के लिए बाईं ओर खिसकाइए।",
                     "ఇదిగో. ఎక్కువ వెలుతురుకు చుక్కను కుడివైపు, తక్కువకు ఎడమవైపు జరపండి."),
