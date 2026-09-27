@@ -294,7 +294,8 @@ class Guide(
         val inputs = screen.elements.filter { it.role == "input" && !it.password }
         if (inputs.isEmpty()) return false
         val focused = runCatching { root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
-        val box = inputs.firstOrNull { it.node == focused } ?: inputs.maxByOrNull { it.bounds.height() * it.bounds.width() } ?: return false
+        val biggest = inputs.maxByOrNull { it.bounds.height() * it.bounds.width() }
+        var box = inputs.firstOrNull { it.node == focused } ?: biggest ?: return false
         val body = Regex("(?i)^\\s*(?:write|type|note down|put|add)\\s+(?:down\\s+)?(?:that\\s+|this\\s+|:\\s*)?(.+)$").find(text)?.groupValues?.get(1)?.trim() ?: text.trim()
         // A description to compose ("a birthday wish for my son", "a note about tomorrow's doctor visit") vs the words themselves.
         val describe = Regex("(?i)^(a|an|some|something|my)\\b|\\b(wish|letter|message for|poem|note about|about|for my|reply)\\b").containsMatchIn(body)
@@ -306,9 +307,11 @@ class Guide(
                 ?.lines()?.filter { it.isNotBlank() }?.joinToString(" ")?.trim('"', ' ')?.take(400)
         } else body
         if (words.isNullOrBlank()) return false
+        // A sentence or more goes in the body (the biggest box), not a one-line title.
+        if (words.length > 40 && biggest != null) box = biggest
         com.saathi.app.DebugLog.i("write", "${screen.pkg} box=\"${box.title.take(30)}\" composed=$describe")
+        // One step, not a task: no planner afterwards (field 06:58: it replaced the text with "type 'love ver'").
         stop()
-        goal = "write: ${words.take(40)}"; taskPkgs += screen.pkg
         show(Target(box, say("I'll write: “$words”. Tap Do it and I'll type it here.", "मैं लिखूँगा: “$words”। 'आप कर दो' दबाइए, मैं यहाँ लिख दूँगा।",
             "నేను రాస్తాను: “$words”. 'మీరే చేయండి' నొక్కండి, ఇక్కడ టైప్ చేస్తాను.").pick(lang), "write_here", fill = words))
         return true
