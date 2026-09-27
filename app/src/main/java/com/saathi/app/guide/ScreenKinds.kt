@@ -20,6 +20,9 @@ object ScreenKinds {
 
     /** A login / first-run screen that only the person (or family) should complete. */
     fun wall(s: Screen): Wall? {
+        // The Play Store is already signed in; its pages are ads whose text says "log in", "code", "PIN" (field 08:59: a
+        // false "log in with your phone number" wall on "install JuiceSSH"). Approved by Akash 09:12.
+        if (s.pkg == "com.android.vending") return null
         if (!WALL.containsMatchIn(s.allText)) return null
         val hasPassword = s.elements.any { it.password }
         val setup = Regex("(?i)welcome to|agree and continue|enter (your )?(phone|mobile) number|verify your").containsMatchIn(s.allText) || secretEntry(s)

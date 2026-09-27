@@ -77,7 +77,10 @@ object ProBrain {
         val app = appLabel.lowercase(Locale.ROOT)
         if (CallGuard.isSensitive(app) || Regex("(?i)google\\s*pay|gpay|amazon\\s*pay|bhim|payzapp").containsMatchIn(app)) return true
         // HOME retains money-screen rules without applying unrelated target-action restrictions.
-        return ActionPolicy.check(ActionRequest(Kind.HOME, app, null, null, false, null, context, Mode.AUTO)) is Verdict.Block
+        // Not the Play Store's own page text: it is ads for UPI apps, which read as a money screen (field 08:40: every cloud
+        // plan step was refused in 10 ms and the fallback glowed an ad). Install stays the person's own tap. Approved 09:12.
+        val screen = if (Regex("(?i)play store|google play|com\\.android\\.vending").containsMatchIn(app)) "" else context
+        return ActionPolicy.check(ActionRequest(Kind.HOME, app, null, null, false, null, screen, Mode.AUTO)) is Verdict.Block
     }
 
     private fun privateKeys(text: String) = text.replace(Regex(
