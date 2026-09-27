@@ -146,7 +146,8 @@ object IntentRouter {
         Skills.all.firstOrNull { it.id in setOf("learn_video", "learn_photo") && Skills.matches(it, goal) }?.let { return it.build(ctx, slots) }
         Skills.match(goal)?.takeIf { it.id != "learn_app" }?.let { return it.build(ctx, slots) }
         AppLauncher.findInGoal(ctx, goal)?.let { app -> return Skills.byId("learn_app")?.build(ctx, SlotExtractor.from("how do I use ${app.label}")) }
-        if (PHONE_WORDS.containsMatchIn(goal)) return Skills.byId("learn_app")?.build(ctx, slots)
+        // A how-to about the phone with no app named and nothing physical: a question to answer, not a camera lesson.
+        if (PHONE_WORDS.containsMatchIn(goal) && !Regex("(?i)\\b(ssh|vps|server|website|account|email)\\b").containsMatchIn(goal)) return Skills.byId("learn_app")?.build(ctx, slots)
         return null
     }
 

@@ -18,6 +18,7 @@ object SlotExtractor {
         "message", "msg", "hello", "hi", "about", "now", "please", "to", "for", "at", "from", "photo", "picture", "me",
         // "how to SEE IT" is not a person (field: contact = "see it").
         "see", "watch", "open", "use", "do", "make", "find", "show", "get", "go", "read", "hear", "know", "learn", "look",
+        "send", "share", "write", "set", "book", "play", "search", "type", "add", "give", "access", "connect", "whatsapp", "sms",
         "it", "this", "that", "them", "him", "her", "us",
     )
     /** Relations resolve to the registered family contact when there is one. */

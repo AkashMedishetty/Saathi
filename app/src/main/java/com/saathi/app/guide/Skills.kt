@@ -295,7 +295,9 @@ object Skills {
             s3("Teach me how to use Google Photos", "यह ऐप सिखाओ", "ఈ యాప్ నేర్పు")) { ctx, s ->
             val app = AppLauncher.findInGoal(ctx, s.raw)
             // No app named ("how do I use this", "यह कैसे चलाते हैं") → it's a thing in front of them: use the camera.
-            if (app == null && !Regex("(?i)\\bapp\\b|ऐप|యాప్").containsMatchIn(s.raw)) return@Skill Flow("object_help", null, emptyList(), null, NONE, NONE, quiet = true, action = { c ->
+            // …but never "this mobile / phone / app / screen / website" (field 07:56: "how to access my VPS from this mobile" opened the camera).
+            val notAThing = Regex("(?i)\\b(this|that|my|the) (mobile|phone|app|screen|page|website|site|laptop|computer|vps|server)\\b|\\b(ssh|vps|server|website|wifi|internet|account|email|password)\\b").containsMatchIn(s.raw)
+            if (app == null && !notAThing && !Regex("(?i)\\bapp\\b|ऐप|యాప్").containsMatchIn(s.raw)) return@Skill Flow("object_help", null, emptyList(), null, NONE, NONE, quiet = true, action = { c ->
                 c.startActivity(Intent(c, com.saathi.app.ui.ReadActivity::class.java)
                     .putExtra(com.saathi.app.ui.ReadActivity.EXTRA_MODE, com.saathi.app.ui.ReadActivity.MODE_OBJECT).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 NONE

@@ -431,13 +431,13 @@ class Guide(
             beginMap(goalText, r, autoMode); return
         }
         IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
-        IntentRouter.phoneHowTo(svc, goalText)?.let { begin(goalText, it, autoMode); return }
         // Saathi Pro: "how can I access my VPS through SSH from this phone" is a do-it-with-me task for a power user, not a
-        // question to answer (field 07:53: it went to web results). Pro picks the app and guides; else answer as before.
+        // question or an old lesson (field 07:53 / 07:56: web results, then the camera). Pro picks the app and guides.
         if (Prefs.proOn(svc) && PRO_HOWTO.containsMatchIn(goalText)) {
             scope.launch { if (!proStart(goalText, howTo = true)) respond(goalText) }
             return
         }
+        IntentRouter.phoneHowTo(svc, goalText)?.let { begin(goalText, it, autoMode); return }
         if (IntentRouter.isQuestion(svc, goalText)) { respond(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
         IntentRouter.openOnly(svc, goalText)?.let { begin(goalText, it, autoMode); return }
@@ -1992,7 +1992,8 @@ class Guide(
         val steps = listOfNotNull(
             who?.let { w -> Step("pick", listOf(Regex("(?i)^" + Regex.escape(w))), say("Tap $w in the list.", "सूची में $w को दबाइए।", "జాబితాలో $w ని నొక్కండి."),
                 unlessVisible = listOf(Regex("(?i)^(Add a caption|Add caption)"))) },
-            Step("send", listOf(Regex("(?i)^Send$")), sendSay),
+            // Only once THEIR person is the one ticked (the picker keeps earlier ticks: field 07:57 "to other" went to Akash).
+            Step("send", listOf(Regex("(?i)^Send$")), sendSay, screenHas = who?.let { Regex("(?i)" + Regex.escape(it.split(" ").first())) }),
         )
         return Flow("share_screenshot", { send }, steps,
             { sc -> sc.pkg.startsWith("com.whatsapp") && sc.elements.any { Regex("(?i)^(Message|Type a message)$").matches(it.label) } &&
