@@ -392,6 +392,7 @@ class Guide(
         Log.i(TAG, "goal: $goalText (auto=$autoMode)")
         com.saathi.app.DebugLog.i("goal", "\"$goalText\" lang=$lang auto=$autoMode locked=${svc.isLocked()}")
         if (IntentRouter.isSos(goalText)) { sos(); return }
+        if (navButtonHelp(goalText)) return
         // Teach-once first: "watch me …" used to sit ~20 checks deep, so almost any sentence was grabbed earlier.
         if (teachOnce(goalText)) return
         Routines.parse(goalText)?.let { (h, m, g) -> addRoutine(h, m, g); return }
@@ -453,7 +454,10 @@ class Guide(
         IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         // Saathi Pro: "how can I access my VPS through SSH from this phone" is a do-it-with-me task for a power user, not a
         // question or an old lesson (field 07:53 / 07:56: web results, then the camera). Pro picks the app and guides.
-        if (Prefs.proOn(svc) && PRO_HOWTO.containsMatchIn(goalText)) {
+        // Only for power-user topics, or when Saathi's own phone help has nothing (field 09:07: "how to show battery
+        // percentage" went to the Play Store for a "Battery Percentage" app instead of the phone's own setting).
+        if (Prefs.proOn(svc) && PRO_HOWTO.containsMatchIn(goalText) &&
+            (PRO_TOPIC.containsMatchIn(goalText) || IntentRouter.phoneHowTo(svc, goalText) == null)) {
             scope.launch { if (!proStart(goalText, howTo = true)) respond(goalText) }
             return
         }
@@ -635,6 +639,45 @@ class Guide(
     }
 
     /** A task no route, skill or phrase knows: the cloud brain names the Play Store app for it; install or open it. */
+    private val PRO_TOPIC = Regex("(?i)\\b(ssh|terminal|vps|server|linux|code|coding|program|website|domain|edit (a |my )?video|video edit|workspace|spreadsheet|excel|pdf|vpn)\\b")
+
+    // ── "Where is the home button?": the phone's own buttons (3-button bar: ≡ recents · ○ home · ‹ back) ──
+    private val NAV_BTN = Regex("(?i)\\b(where|which|show me|find|what is)\\b.*\\b(home|back|recent|recents|overview)\\s*(button|key)|" +
+        "(home|back|recent|होम|बैक|హోమ్|బ్యాక్)\\s*(button|key|बटन|బటన్)?.*(kahan|kahaan|कहाँ|कहां|कहा|ఎక్కడ)")
+    private var navGlowAt = 0L
+
+    private fun navButtonHelp(g: String): Boolean {
+        if (!NAV_BTN.containsMatchIn(g)) return false
+        val t = g.lowercase()
+        val which = when {
+            Regex("back|बैक|పీఛే|పీచే|వెనక|బ్యాక్").containsMatchIn(t) -> 2
+            Regex("recent|overview").containsMatchIn(t) -> 0
+            else -> 1
+        }
+        val b = svc.getSystemService(android.view.WindowManager::class.java).currentWindowMetrics.bounds
+        val id = svc.resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        val navH = if (id > 0) svc.resources.getDimensionPixelSize(id) else (48 * svc.resources.displayMetrics.density).toInt()
+        val cx = (b.width() * floatArrayOf(0.21f, 0.5f, 0.79f)[which]).toInt()
+        val r = android.graphics.Rect(cx - navH * 3 / 4, b.height() - navH, cx + navH * 3 / 4, b.height())
+        val text = when (which) {
+            0 -> say("This is the recent apps button, the three lines at the bottom left. Tap it to see the apps you opened.",
+                "यह हाल के ऐप्स वाला बटन है, नीचे बाईं ओर तीन लाइनें। इसे दबाकर खुले ऐप्स देखिए।",
+                "ఇది ఇటీవలి యాప్‌ల బటన్, కింద ఎడమ వైపు మూడు గీతలు. దీన్ని నొక్కితే తెరిచిన యాప్‌లు కనిపిస్తాయి.")
+            2 -> say("This is the back button, the arrow at the bottom right. Tap it to go one step back.",
+                "यह वापस जाने वाला बटन है, नीचे दाईं ओर तीर। एक कदम पीछे जाने के लिए इसे दबाइए।",
+                "ఇది వెనక్కి వెళ్ళే బటన్, కింద కుడి వైపు బాణం. ఒక అడుగు వెనక్కి వెళ్ళడానికి దీన్ని నొక్కండి.")
+            else -> say("This is the home button, the circle at the bottom middle. Tap it any time to come back to the main screen.",
+                "यह होम बटन है, नीचे बीच में गोला। मुख्य स्क्रीन पर लौटने के लिए इसे कभी भी दबाइए।",
+                "ఇది హోమ్ బటన్, కింద మధ్యలో ఉన్న గుండ్రటి బటన్. ప్రధాన స్క్రీన్‌కి రావడానికి ఎప్పుడైనా దీన్ని నొక్కండి.")
+        }.pick(lang)
+        com.saathi.app.DebugLog.i("nav", "button=$which rect=$r")
+        finish(text)
+        overlay.highlight(r, false)
+        val at = SystemClock.uptimeMillis().also { navGlowAt = it }
+        scope.launch { delay(12_000); if (navGlowAt == at && goal == null) overlay.highlight(null, false) }
+        return true
+    }
+
     private val PRO_HOWTO = Regex("(?i)\\bhow (can|do|should|would) i\\b|\\bhow to\\b|\\bhelp me (set ?up|install|configure|connect|edit|make|create)|" +
         "\\b(set ?up|configure|connect to|ssh|terminal|vps|server|edit (a |my )?video|code|coding|workspace)\\b")
 

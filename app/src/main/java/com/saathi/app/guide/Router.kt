@@ -110,7 +110,7 @@ object IntentRouter {
 
     private val SETTINGS_TOPIC = Regex("(?i)ringtone|ring tone|wallpaper|language|date|time zone|password|screen lock|lock screen|fingerprint|face unlock|" +
         "notification sound|vibrat|hotspot|mobile data|data usage|location|gps|software update|system update|about phone|keyboard|auto.?rotate|" +
-        "do not disturb|airplane|flight mode|sim|nfc|default app|app permission|eye (protection|comfort)|blue light|night light|reading mode|screen timeout|auto.?lock|रिंगटोन|वॉलपेपर|भाषा|पासवर्ड|रिंगटోన్|రింగ్‌టోన్|వాల్‌పేపర్|భాష|పాస్‌వర్డ్")
+        "do not disturb|airplane|flight mode|battery percent|battery saver|power sav|dark mode|dark theme|sim|nfc|default app|app permission|eye (protection|comfort)|blue light|night light|reading mode|screen timeout|auto.?lock|रिंगटोन|वॉलपेपर|भाषा|पासवर्ड|रिंगटోన్|రింగ్‌టోన్|వాల్‌పేపర్|భాష|పాస్‌వర్డ్")
 
     /** Starts like a real question ("what / why / how …", or ends with "?"), not a command like "make the text bigger". */
     fun phrasedAsQuestion(g: String) = QUESTION.containsMatchIn(g.trim())
