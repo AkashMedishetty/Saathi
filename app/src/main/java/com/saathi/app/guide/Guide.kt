@@ -2522,7 +2522,7 @@ class Guide(
     }
 
     /** "change my ringtone" → "ringtone": the words worth typing into a search box. */
-    private val NAV_WORDS = Regex("(?i)^(search|search .*|menu|more|more options|next|continue|ok|okay|done|allow|open|home|back|navigate up|settings|library|you|profile|account|tabs?|skip|not now|no thanks|later|maybe later|got it|close|dismiss|accept|agree|start|get started)$|search")
+    private val NAV_WORDS = Regex("(?i)^(search|search .*|menu|more|more options|next|continue|ok|okay|done|allow|open|home|back|navigate up|settings|library|you|profile|account|tabs?|skip|not now|no thanks|later|maybe later|got it|close|dismiss|accept|agree|start|get started)$|search|^(new|create|add|compose|write)\\b")
 
     /** The goal's own words ("ringtone", "liked", "akash"): what a screen closer to the goal would show. */
     private fun goalWords(goal: String): List<String> {

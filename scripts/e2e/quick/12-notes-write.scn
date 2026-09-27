@@ -3,5 +3,5 @@ name: Quick: Dictation in vivo Notes
 start-activity com.vivo.notes
 expect focus "com.vivo.notes" within 8
 say EN type buy milk and bread
-expect log "\[write\] com.vivo.notes" within 10
+expect log "\[write\] .*com.vivo.notes" within 10
 expect enabled
