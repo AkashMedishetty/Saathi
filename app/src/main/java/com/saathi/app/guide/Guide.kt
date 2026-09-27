@@ -212,7 +212,7 @@ class Guide(
         // continues it; it is not a new request (field 05:50 / 06:25: each one restarted the task or was rewritten).
         if (active && !paused && isFollowUp(text)) { followUp(text); return }
         // On-screen context with no task: in Notes / a chat / a form, "write …" / "type …" goes into the box on screen.
-        if (!active && WRITE_HERE.containsMatchIn(text)) { scope.launch { if (!writeHere(text)) start(text) }; return }
+        if (!active && WRITE_HERE.containsMatchIn(text)) { scope.launch { if (!writeHere(text)) writeElsewhere(text) }; return }
         if (active && isAsideQuestion(text)) {
             com.saathi.app.DebugLog.i("aside", "mid-task question: \"$text\" (task: \"$goal\")")
             // About this step ("what does the magnifying glass mean?", "why this?"): the map's own checked
@@ -316,6 +316,15 @@ class Guide(
         show(Target(box, say("I'll write: “$words”. Tap Do it and I'll type it here.", "मैं लिखूँगा: “$words”। 'आप कर दो' दबाइए, मैं यहाँ लिख दूँगा।",
             "నేను రాస్తాను: “$words”. 'మీరే చేయండి' నొక్కండి, ఇక్కడ టైప్ చేస్తాను.").pick(lang), "write_here", fill = words))
         return true
+    }
+
+    /** "Type …" with no box on screen (Notes on its list page): plan from here in THIS app (e.g. "tap + for a new note"),
+     *  never go find another app (field 08:15: Pro started installing Google Keep). On the home screen: the normal path. */
+    private fun writeElsewhere(text: String) {
+        val here = runCatching { appRoot()?.packageName?.toString() }.getOrNull()
+        if (here == null || here == launcherPkg() || here == svc.packageName) { start(text); return }
+        com.saathi.app.DebugLog.i("write", "no box in $here: plan from here")
+        begin(text, plannerTask(text, null), false)
     }
 
     /** Not a new task: names no other app and isn't a clear command of its own. */
@@ -594,6 +603,7 @@ class Guide(
 
     private suspend fun proStart(g: String, howTo: Boolean = false): Boolean {
         if (!Prefs.proOn(svc) || (!howTo && IntentRouter.phrasedAsQuestion(g))) return false
+        if (WRITE_HERE.containsMatchIn(g)) return false   // typing is about the app they're in, never a new app
         overlay.showCard(say("Finding the right app…", "सही ऐप ढूँढ रहा हूँ…", "సరైన యాప్ వెతుకుతున్నాను…").pick(lang), Overlay.Mode.THINKING)
         val name = proTry("pick app") { cfg -> com.saathi.app.llm.ProBrain.explain(cfg,
             "Which ONE Android app from the Google Play Store should a person use to: \"$g\"? Reply with only the app's name exactly as " +
@@ -2361,12 +2371,18 @@ class Guide(
             else -> {
                 val q = say("Video call on WhatsApp, or a normal phone video call?", "WhatsApp पर वीडियो कॉल, या फ़ोन से सीधी वीडियो कॉल?",
                     "WhatsApp లో వీడియో కాల్ చేయాలా, లేక మామూలు ఫోన్ వీడియో కాల్?").pick(lang)
-                if (goal != null) stop() // (no stop() otherwise: its card fade-out would remove this card)
+                // A task was running: its card fades out after stop(); show the choice once that's done, or the fade
+                // removes it (field 08:15: the spoken "WhatsApp" found no card and became a new request).
+                val hadTask = goal != null
+                if (hadTask) stop()
                 hideJob?.cancel()
                 current = Target(null, q, "choose_video"); lastSpokenKey = current?.key
                 com.saathi.app.DebugLog.i("choice", "choose_video: WhatsApp | Phone")
-                overlay.showChoice(q, Triple("WhatsApp", com.saathi.app.R.drawable.ic_chat, wa),
-                    Triple(say("Phone call", "फ़ोन कॉल", "ఫోన్ కాల్").pick(lang), com.saathi.app.R.drawable.ic_call, phone))
+                scope.launch {
+                    if (hadTask) delay(350)
+                    overlay.showChoice(q, Triple("WhatsApp", com.saathi.app.R.drawable.ic_chat, wa),
+                        Triple(say("Phone call", "फ़ोन कॉल", "ఫోన్ కాల్").pick(lang), com.saathi.app.R.drawable.ic_call, phone))
+                }
                 speaker.say(q, lang)
             }
         }
