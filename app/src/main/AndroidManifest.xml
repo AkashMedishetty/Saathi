@@ -77,8 +77,16 @@
         <!-- Form helper: paper-form camera walk-through, and "My details" (opens behind the screen lock). -->
         <activity
             android:name=".ui.FormActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
+            android:exported="true"
+            android:label="Fill this form with Saathi"
+            android:screenOrientation="portrait">
+            <!-- Share a photo of a form (gallery, WhatsApp) → the same box-by-box walk-through. Image only; read on the phone. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".ui.ProfileActivity"
             android:exported="false"

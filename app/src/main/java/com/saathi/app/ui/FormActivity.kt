@@ -101,6 +101,30 @@ class FormActivity : AppCompatActivity() {
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera()
         else requestPermissions(arrayOf(Manifest.permission.CAMERA), 5)
         if (FormUi.profileIsEmpty(profile)) askForProfile() else talk(FormUi.introSay())
+        // A form photo shared from the gallery or a chat ("Share → Fill this form with Saathi"): read it straight away.
+        sharedImage()?.let { uri -> if (!FormUi.profileIsEmpty(profile)) fromPhoto(uri) }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun sharedImage(): android.net.Uri? = intent?.takeIf { it.action == Intent.ACTION_SEND || it.action == Intent.ACTION_VIEW }
+        ?.let { it.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM) ?: it.data }
+
+    private fun fromPhoto(uri: android.net.Uri) {
+        busy = true
+        aura.setAura(true)
+        showCard("", s("Reading the form…", "फ़ॉर्म पढ़ रहा हूँ…", "ఫారం చదువుతున్నాను…"), null, emptyList())
+        lifecycleScope.launch {
+            val bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, o) }
+                    var sample = 1; while (maxOf(o.outWidth, o.outHeight) / sample > MAX_SIDE * 2) sample *= 2
+                    val b = contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) }
+                    b?.let { val sc = MAX_SIDE.toFloat() / maxOf(it.width, it.height); if (sc < 1f) Bitmap.createScaledBitmap(it, (it.width * sc).toInt(), (it.height * sc).toInt(), true) else it }
+                }.getOrNull()
+            }
+            if (bmp == null) message(PaperForm.nothingFound()) else understand(bmp)
+        }
     }
 
     override fun onResume() {

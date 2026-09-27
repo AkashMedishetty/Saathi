@@ -322,15 +322,89 @@
       <div class="row"><div class="k">Unique</div><div>It finishes the last mile — the slider — instead of just opening a page.</div></div>
     </div>
   </div>
-  <div class="grid3">
-    <div class="card"><h3>10 · Scam guard</h3><p>Always on: scam SMS (“KYC expired, click…”), APKs sent in chats, remote-control apps, and “Is someone on the phone telling you to open this?” when a money app opens during a call.</p></div>
-    <div class="card"><h3>11 · Teach once — “watch me”</h3><p>A family member says “watch me”, does a task once, and Saathi saves it as a lesson the elder can replay with glows, step by step.</p></div>
-    <div class="card"><h3>12 · Reminders & routines</h3><p>“Remind me in 10 minutes to stretch”, “every day at 8, medicine” — spoken in their language, even during another task.</p></div>
-    <div class="card"><h3>13 · Paper forms & letters</h3><p>Point the camera at a form: OCR finds the boxes and what goes in each, skips office-use sections and never fills Aadhaar/PAN/bank boxes. “Read this letter” explains it simply.</p></div>
-    <div class="card"><h3>14 · Learn any app</h3><p>“How do I use Spotify?” — guided first steps on the real app; unmapped apps are planned by the GPU with drift checks (“where am I?”).</p></div>
-    <div class="card"><h3>15 · Saathi Pro</h3><p>“How do I reach my server over SSH?” — the cloud picks JuiceSSH and plans each Play Store step (~2.5 s). User’s own key, redacted data, money apps refused.</p></div>
+  <div class="card" style="margin-top:2mm"><h3>Apps Saathi already knows (57 verified routes)</h3>
+    <p><b>WhatsApp</b> video/voice call, message, photo, voice note, take-a-photo-and-send, open a document, see a photo, backup, share location · <b>YouTube</b> search, subscriptions, history, like, share · <b>Google Maps</b> directions & navigation, <b>book a cab</b> (Maps → Uber) · <b>Uber</b> cab booking · <b>Photos</b> open latest, crop, brightness, share · <b>Phone</b> call · <b>Messages</b> read latest, block · <b>Clock</b> new alarm, alarm off · <b>Camera</b> photo, selfie · <b>Chrome</b> search, new tab · <b>Instagram</b> profile, reels, post · <b>Play Store</b> install, update all, uninstall · <b>Spotify</b> play, playlist, like, shuffle, download · <b>JioHotstar</b> watch · <b>Google Docs</b> new, open recent, save as Word · <b>Settings</b> ringtone, font, brightness, wallpaper, Wi-Fi, Bluetooth, dark mode, language, screen timeout, storage.</p>
+    <p style="margin:0">Plus 31 instant skills (torch, volume, battery, TV remote, alarms, medicine…) and the GPU planner for any other app.</p>
   </div>
   <div class="folio"><span>Saathi</span><span>Walkthrough</span></div>
+</section>
+
+<!-- FORMS -->
+<section class="page">
+  <div class="num serif" style="color:var(--saffron);font-size:11pt">10 · Highlight</div>
+  <h3 class="serif" style="font-weight:400;font-size:17pt">Paper form helper — “help me fill this form”</h3>
+  <div class="strip" style="margin:5mm 0 6mm">
+    <div style="text-align:center"><div class="phone"><img src="img/20-form-name.jpg"></div><div class="cap">Aadhaar enrolment form: field 1 of 8, the box glows, the value in big letters to copy</div></div>
+    <div style="text-align:center"><div class="phone"><img src="img/21-form-unsure.jpg"></div><div class="cap">Not in the saved details (“Post Office”): “ask your family”</div></div>
+    <div style="text-align:center"><div class="phone"><img src="img/22-form-icici.jpg"></div><div class="cap">Bank form: “To be filled in by the bank” is left out; 5 fields for the person</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Happens</h3><p>Point the camera at a paper form — or share a photo of it from the gallery or WhatsApp (“Fill this form with Saathi”). ML Kit OCR on the phone finds each label and its box, then walks one field at a time: zoomed to the box, the box glows, the card says what to write and shows it in big letters. Back / Next / Read again. Saathi never writes on the paper and nothing leaves the phone.</p></div>
+    <div class="card"><h3>Leaves out what isn’t theirs</h3><p>Sections meant for someone else are skipped by position and heading: “To be filled in by the bank”, “Certifier: to be filled by the District Child Protection Officer”, “For office use”, signatures, stamps, photo boxes. Aadhaar, PAN, bank and card boxes are never filled — the person writes those.</p></div>
+    <div class="card"><h3>Values come from “My details”</h3><p>The answers are preset once in the app’s <b>My details</b> profile (opens behind the phone’s screen lock). In this demo the profile holds sample values — name “Akash”, house/street “None”, area “Neon”, city and district “Karimnagar” — “None” is itself a preset value, not an OCR mistake. Missing ones (middle name, post office) are said plainly, never guessed.</p></div>
+    <div class="card"><h3>Online forms too</h3><p>On any form inside an app or web page, “help me fill this form” walks the editable fields in reading order, glows each and offers to type the saved value. Password, OTP and PIN fields are recognised and never filled.</p></div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Forms</span></div>
+</section>
+
+<!-- LEARN -->
+<section class="page">
+  <div class="eyebrow">Learning</div>
+  <h2>Saathi learns with the person — and from the family</h2>
+  <div class="rule"></div>
+  <div class="grid2" style="gap:8mm">
+    <div style="text-align:center"><div class="phone" style="width:56mm"><img src="img/30-school.jpg"></div><div class="cap"><b>Phone School.</b> Every skill as a small lesson; progress comes from doing it.</div></div>
+    <div style="text-align:center"><div class="phone" style="width:56mm"><img src="img/34-watch.jpg"></div><div class="cap"><b>“Watch me …”</b> A family member shows a task once.</div></div>
+  </div>
+  <div class="grid3" style="margin-top:6mm">
+    <div class="card"><h3>Fading help</h3><p>Each skill is tracked: new → practising → “You can do this!”. After three successes Saathi lets the person try first and only glows if they get stuck — teaching, not replacing.</p></div>
+    <div class="card"><h3>Teach once — “watch me”</h3><p>Saathi records the taps and safe typed values of a task shown once (“watch me open the school app”) and saves it as a lesson, replayed later with glows, step by step, by name and by voice.</p></div>
+    <div class="card"><h3>New apps & new things</h3><p>“How do I use Spotify / Google Docs?” gives guided first steps on the real app. For apps no one mapped, Gemma 4 plans each step from what is on screen, with drift checks (“where am I?”).</p></div>
+  </div>
+  <p class="small" style="margin-top:4mm">How the “model learns”: models are not retrained on the phone. Saathi learns by storing lessons, labels and progress in private on-device memory; the models receive that memory as context, so the same Gemma plans better on this person’s phone the more it is used.</p>
+  <div class="folio"><span>Saathi</span><span>Learning</span></div>
+</section>
+
+<!-- EVERYDAY -->
+<section class="page">
+  <div class="eyebrow">Everyday safety & comfort</div>
+  <h2>Small things that matter every day</h2>
+  <div class="rule"></div>
+  <div class="grid3" style="gap:6mm">
+    <div style="text-align:center"><div class="phone" style="width:50mm"><img src="img/32-scam-apk.jpg"></div><div class="cap"><b>Scam guard, caught live:</b> an “RTO E-CHALLAN.apk” forwarded in a chat → “Don’t open it. It can steal your money.”</div></div>
+    <div style="text-align:center"><div class="phone" style="width:50mm"><img src="img/31-tv.jpg"></div><div class="cap"><b>TV remote</b> through the iQOO’s IR blaster — huge buttons, or by voice: “TV volume up”, “channel 245”.</div></div>
+    <div style="text-align:center"><div class="phone" style="width:50mm"><img src="img/33-read.jpg"></div><div class="cap"><b>Read this for me</b> — magnifier + OCR; letters, bills, signs; medicine strip → reminder.</div></div>
+  </div>
+  <div class="grid3" style="margin-top:6mm">
+    <div class="card"><h3>SOS</h3><p>“Help!”, “बचाओ”, “కాపాడండి” → one screen: call family, call 112, prefill “I need help”.</p></div>
+    <div class="card"><h3>Ask family — can’t be hijacked</h3><p>Prefills a message to the registered family contact only; redacted; the person presses send; no remote control ever.</p></div>
+    <div class="card"><h3>Routines & reminders</h3><p>“Every morning at 7 play Hanuman Chalisa”, medicine reminders — spoken, confirmed with Yes, re-armed after reboot. Battery-aware: under 15% it skips the big model.</p></div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Everyday</span></div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section class="page">
+  <div class="eyebrow">Architecture</div>
+  <h2>Add a skill once — it works everywhere</h2>
+  <div class="rule"></div>
+  <div class="pipe" style="grid-template-columns:repeat(4,1fr)">
+    <div class="step"><div class="n">In</div><b>Any way of asking</b><span>Voice or typing, English/Hindi/Telugu, mixed; follow-ups mid-task; misheard words.</span></div>
+    <div class="step"><div class="n">≈</div><b>One meaning</b><span>Phrase index over every skill → NPU verifies → GPU rewrites paraphrases onto a known skill; slots (contact, text, place, query) extracted; Telugu/Hindi names transliterated.</span></div>
+    <div class="step"><div class="n">▦</div><b>Knowledge</b><span><b>31 skills</b> · <b>57 app routes</b> in 16 apps · <b>family lessons</b> (watch me) · <b>Gemma 4 planner</b> for everything else.</span></div>
+    <div class="step"><div class="n">✓</div><b>Same runtime</b><span>Glow + card + voice, Do it for me, last-mile settle, Continue, safety policy, AI monitor.</span></div>
+  </div>
+  <div class="grid2" style="margin-top:4mm">
+    <div class="card"><h3>What “adding a skill” means</h3><ul class="clean">
+      <li><b>A skill</b> = keywords + steps (or an instant action) in one registry.</li>
+      <li><b>An app route</b> = screens described by what is on them (labels, ids, positions) + steps with slots — one file per app, tested against real captured screen trees.</li>
+      <li><b>A lesson</b> = recorded once by the family, no code.</li></ul></div>
+    <div class="card"><h3>What it gets for free</h3><ul class="clean">
+      <li>Works by voice in three languages and with any phrasing (the models map paraphrases onto it).</li>
+      <li>Resumes after interruptions; answers doubts mid-task; recovers when lost.</li>
+      <li>Every safety rule applies automatically; unknown screens fall back to the planner.</li></ul></div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Architecture</span></div>
 </section>
 
 <!-- 10 · AI INSIDE -->
