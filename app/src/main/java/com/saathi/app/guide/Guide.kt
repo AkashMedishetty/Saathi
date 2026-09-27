@@ -392,6 +392,11 @@ class Guide(
         Log.i(TAG, "goal: $goalText (auto=$autoMode)")
         com.saathi.app.DebugLog.i("goal", "\"$goalText\" lang=$lang auto=$autoMode locked=${svc.isLocked()}")
         if (IntentRouter.isSos(goalText)) { sos(); return }
+        // "Stop" / "cancel" with nothing running: just close quietly (field 09:17: it was answered as a question,
+        // "'Stop' means to finish an action…").
+        if (Regex("(?i)^\\W*(stop|cancel|close|never ?mind|leave it|bas|बस|बंद करो|रुको|रहने दो|ఆపు|ఆపండి|వద్దు|వదిలేయ్)\\W*$").matches(goalText.trim())) {
+            stop(); overlay.highlight(null, false); overlay.hideCard(); return
+        }
         if (navButtonHelp(goalText)) return
         // Teach-once first: "watch me …" used to sit ~20 checks deep, so almost any sentence was grabbed earlier.
         if (teachOnce(goalText)) return
@@ -1971,9 +1976,10 @@ class Guide(
     private fun showWall(w: ScreenKinds.Wall, screen: Screen) {
         stopAuto()
         val app = AppLauncher.labelOf(svc, screen.pkg)
-        val t = if (w.setup) say("$app is asking you to log in with your phone number and a code sent by SMS. Only you, or family, should type these. I'll wait here.",
-                "$app आपका फ़ोन नंबर और SMS पर आया कोड माँग रहा है। इन्हें सिर्फ़ आप या परिवार वाले लिखें। मैं यहीं इंतज़ार करूँगा।",
-                "$app మీ ఫోన్ నంబర్, SMS లో వచ్చే కోడ్ అడుగుతోంది. వీటిని మీరు లేదా కుటుంబం మాత్రమే టైప్ చేయాలి. నేను ఇక్కడే వేచి ఉంటాను.").pick(lang)
+        // Calm, not alarming (Akash 09:18: a "phone number and OTP" card scares people): a normal first-time step.
+        val t = if (w.setup) say("$app wants you to sign in once. This is a normal first-time step. Type your details yourself, or ask family to help. I'll wait.",
+                "$app एक बार साइन इन करने को कह रहा है। यह पहली बार का आम कदम है। अपनी जानकारी खुद लिखिए, या परिवार से मदद लीजिए। मैं रुकता हूँ।",
+                "$app ఒకసారి సైన్ ఇన్ చేయమంటోంది. ఇది మొదటిసారి మామూలుగా వచ్చే దశే. మీ వివరాలు మీరే టైప్ చేయండి, లేదా కుటుంబం సహాయం తీసుకోండి. నేను వేచి ఉంటాను.").pick(lang)
             else say("$app needs you to sign in first. Only you should type your password. Tap “${w.button?.title ?: "Sign in"}”.",
                 "$app में पहले साइन इन करना होगा। पासवर्ड सिर्फ़ आप लिखिए। “${w.button?.title ?: "Sign in"}” दबाइए।",
                 "$app లో ముందు సైన్ ఇన్ చేయాలి. పాస్‌వర్డ్ మీరే టైప్ చేయండి. “${w.button?.title ?: "Sign in"}” నొక్కండి.").pick(lang)

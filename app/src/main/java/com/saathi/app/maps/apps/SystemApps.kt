@@ -21,7 +21,8 @@ import com.saathi.app.maps.rx
 object PhoneMap {
     const val PKG = "com.android.contacts"
 
-    private val TAB_CONTACTS = lbl("^Contacts$", clickable = true)
+    // The bottom tab, not the "Contacts" page title in the header (field 09:20: the glow sat on the top bar).
+    private val TAB_CONTACTS = lbl("^Contacts$", clickable = true).copy(below = 0.6f)
     private val TAB_DIAL = lbl("^(Dial|Keypad|Phone)$")
     private val SEARCH = listOf(lbl("^(Search contacts|Search|Search \\d+ contacts)$", clickable = true), id("search_box"))
     private val FIELD = Sel(editable = true, above = 0.25f)
