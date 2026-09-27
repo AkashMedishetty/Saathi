@@ -314,14 +314,19 @@ object Skills {
             s3("Make the text bigger", "अक्षर बड़े करो", "అక్షరాలు పెద్దవి చేయి")) { _, _ -> CoreFlows.fontSize() },
 
         Skill("volume", Cat.FIX, R.drawable.ic_volume_up, s3("I can't hear the phone", "फ़ोन की आवाज़ नहीं आ रही", "ఫోన్ శబ్దం వినబడట్లేదు"),
-            listOf("volume", "can't hear", "cant hear", "cannot hear", "silent", "no sound", "louder", "आवाज़", "आवाज", "सुनाई नहीं", "సౌండ్", "శబ్దం", "వినబడట్లేదు"),
-            s3("My phone is silent", "आवाज़ नहीं आ रही", "సౌండ్ రావట్లేదు")) { _, _ ->
+            listOf("volume", "can't hear", "cant hear", "cannot hear", "silent", "no sound", "louder", "sound", "आवाज़", "आवाज", "सुनाई नहीं", "वॉल्यूम",
+                "సౌండ్", "శబ్దం", "వినబడట్లేదు", "వినపడట్లేదు", "వినిపించడం లేదు", "వాల్యూమ్"),
+            s3("My phone is silent", "आवाज़ नहीं आ रही", "సౌండ్ రావట్లేదు")) { _, sl ->
+            // "Full / max / ఫుల్ / పూర్తిగా / पूरा" → 100 % (field: "make the volume full" only went to 85 %).
+            val full = Regex("(?i)\\b(full|max|maximum|highest|100)\\b|ఫుల్|పూర్తి|పూర్తిగా|గరిష్ఠ|पूरा|पूरी|फुल|सबसे ज़्यादा|मैक्स").containsMatchIn(sl.raw)
             Flow("volume", null, emptyList(), null, NONE, NONE, action = { ctx ->
                 val am = ctx.getSystemService(AudioManager::class.java)
                 runCatching { am.ringerMode = AudioManager.RINGER_MODE_NORMAL }
                 for (stream in listOf(AudioManager.STREAM_RING, AudioManager.STREAM_MUSIC, AudioManager.STREAM_VOICE_CALL, AudioManager.STREAM_NOTIFICATION)) {
-                    runCatching { am.setStreamVolume(stream, (am.getStreamMaxVolume(stream) * 0.85f).toInt(), AudioManager.FLAG_SHOW_UI) }
+                    runCatching { am.setStreamVolume(stream, if (full) am.getStreamMaxVolume(stream) else (am.getStreamMaxVolume(stream) * 0.85f).toInt(), AudioManager.FLAG_SHOW_UI) }
                 }
+                if (full) s3("Done. The volume is now full, for calls, ringing and videos.", "हो गया। अब आवाज़ पूरी है, कॉल, घंटी और वीडियो सबके लिए।",
+                    "అయింది. ఇప్పుడు కాల్స్, రింగ్, వీడియోలు అన్నింటికీ సౌండ్ పూర్తిగా ఉంది.") else
                 s3("I've turned the sound up. Calls and videos will be loud now.",
                     "मैंने आवाज़ बढ़ा दी है। अब कॉल और वीडियो ज़ोर से सुनाई देंगे।",
                     "శబ్దం పెంచాను. ఇప్పుడు కాల్స్, వీడియోలు గట్టిగా వినిపిస్తాయి.")
