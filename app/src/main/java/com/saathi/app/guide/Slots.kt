@@ -16,7 +16,7 @@ object SlotExtractor {
     private val STOP = setOf(
         "on", "in", "via", "using", "whatsapp", "saying", "that", "and", "a", "an", "the", "my", "video", "call",
         "message", "msg", "hello", "hi", "about", "now", "please", "to", "for", "at", "from", "photo", "picture", "me",
-        "of", "screen", "screenshot", "current", "paper", "voice", "note",
+        "of", "screen", "screenshot", "current", "paper", "voice", "note", "where", "when", "what", "which",
         // "how to SEE IT" is not a person (field: contact = "see it").
         "see", "watch", "open", "use", "do", "make", "find", "show", "get", "go", "read", "hear", "know", "learn", "look",
         "send", "share", "write", "set", "book", "play", "search", "type", "add", "give", "access", "connect", "whatsapp", "sms",

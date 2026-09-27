@@ -133,6 +133,20 @@ object WhatsAppMap {
                 done = emptyList(),
                 doneSay = say("Sent.", "भेज दिया।", "పంపబడింది."),
             ),
+            // "Akash sent me a flight ticket, open it": his chat → the newest document (or picture) → Saathi reads it (Guide).
+            Route(
+                id = "wa_open_doc", pkg = PKG,
+                goals = goals("open (the )?(ticket|document|pdf|file) from .+"),
+                slots = listOf("contact"),
+                steps = inChat(MapStep("wa_chat_them", listOf(Sel(label = rx("\\.(pdf|docx?|jpe?g|png)\\b|\\bPDF$"), pick = Pick.BOTTOM),
+                    lbl("^(Enlarge photo|View photo)$").copy(pick = Pick.BOTTOM)),
+                    say("Tap the ticket to open it. I'll read it for you.", "टिकट खोलने के लिए उसे दबाइए। मैं पढ़कर बताऊँगा।",
+                        "టికెట్ తెరవడానికి దాన్ని నొక్కండి. నేను చదివి చెప్తాను."),
+                    scrollHint = say("Slowly scroll up in the chat to find the ticket.", "चैट में धीरे से ऊपर स्क्रॉल करके टिकट ढूँढिए।",
+                        "చాట్‌లో నెమ్మదిగా పైకి స్క్రోల్ చేసి టికెట్ వెతకండి."), alsoOn = listOf("wa_chat_label"))),
+                done = emptyList(),
+                doneSay = say("The ticket is open.", "टिकट खुल गया।", "టికెట్ తెరుచుకుంది."),
+            ),
             // "Take a photo of this paper and send it to my son": his chat → the camera in the message box → shutter → send.
             Route(
                 id = "wa_camera", pkg = PKG,

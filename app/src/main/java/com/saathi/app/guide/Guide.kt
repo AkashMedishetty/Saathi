@@ -435,6 +435,7 @@ class Guide(
             stop(); overlay.highlight(null, false); overlay.hideCard(); return
         }
         if (navButtonHelp(goalText)) return
+        if (ticketRead(goalText)) return
         // Teach-once first: "watch me …" used to sit ~20 checks deep, so almost any sentence was grabbed earlier.
         if (teachOnce(goalText)) return
         Routines.parse(goalText)?.let { (h, m, g) -> addRoutine(h, m, g); return }
@@ -729,6 +730,7 @@ class Guide(
     /** The row we need is in the tree but scrolled up under the header (vivo Settings search, field 10:04): ask the list to
      *  show it (ACTION_SHOW_ON_SCREEN, a scroll, never a tap), once per step, then look again. */
     private var broughtFor = ""
+    private var broughtTries = 0
     private fun bringIntoView(step: Int): Boolean {
         val term = mapSlots["term"] ?: mapSlots["query"] ?: return false
         val key = "${mapRoute?.id}_$step"
@@ -739,6 +741,15 @@ class Guide(
             !n.isEditable && android.graphics.Rect().also { n.getBoundsInScreen(it) }.top < top &&
                 n.text?.toString()?.lowercase()?.contains(term.lowercase()) == true
         } ?: return false
+        // First: type the search again, which redraws the results from the top (the old query kept a scrolled list).
+        val field = runCatching { root.findAccessibilityNodeInfosByText(term) }.getOrNull().orEmpty().firstOrNull { it.isEditable }
+        if (field != null && broughtTries++ == 0) {
+            fun set(t: String) = field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t) })
+            set(""); set(term)
+            com.saathi.app.DebugLog.i("map", "retyped \"$term\" to redraw the results")
+            lastSig = 0; schedule(900, force = true)
+            return true
+        }
         var n: AccessibilityNodeInfo? = hit; var done = false; var i = 0
         while (n != null && i < 4 && !done) { done = n.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id); n = n.parent; i++ }
         com.saathi.app.DebugLog.i("map", "bring into view \"$term\" for $key: $done")
@@ -746,6 +757,71 @@ class Guide(
         broughtFor = key; lastSig = 0
         schedule(600, force = true)
         return true
+    }
+
+    // ── A ticket someone sent: open it in WhatsApp, read the screen (ML Kit OCR), Gemma 4 says date / time / from / to ──
+    private var pendingRead: String? = null
+    private val TICKET = Regex("(?i)\\b(ticket|boarding pass|flight|pnr|itinerary|booking|टिकट|టికెట్)\\b")
+
+    private fun ticketRead(g: String): Boolean {
+        if (g.startsWith("open the ticket from ")) return false   // our own next step (field 10:16: it recursed)
+        if (!TICKET.containsMatchIn(g) || !Regex("(?i)sent|send|whatsapp|open|when|time|date|where|read|tell|भेज|పంప").containsMatchIn(g)) return false
+        // Already looking at it (the picture open, no text box): read it now.
+        val here = ScreenReader.read(appRoot())
+        if (here != null && here.pkg.startsWith("com.whatsapp") && here.elements.none { it.role == "input" }) { readScreenFor(g); return true }
+        // The sender first ("Akash sent me…"), never "where" from "from where to where" (field 10:13).
+        val who = (Regex("(?i)^\\s*(?:my\\s+)?([\\p{L}]+)\\s+(?:has\\s+)?(?:sent|shared|forwarded|send)\\b").find(g)
+            ?: Regex("(?i)\\bfrom\\s+(?:my\\s+)?([\\p{L}]+)").find(g))?.groupValues?.get(1)
+            ?.takeIf { it.lowercase() !in setOf("where", "when", "what", "who", "which", "someone", "he", "she", "they", "it") }
+            ?.let { if (it.lowercase() in SlotExtractor.FAMILY) Prefs.family(svc).ifBlank { it } else it }
+        pendingRead = g
+        com.saathi.app.DebugLog.i("ticket", "open it first (from ${who ?: "?"}), then read: \"$g\"")
+        start("open the ticket from ${who ?: "them"} on whatsapp")
+        return true
+    }
+
+    private fun readScreenFor(q: String) {
+        lang = Prefs.lang(svc)
+        overlay.highlight(null, false); overlay.hideCard()
+        scope.launch {
+            delay(700)   // the card fades out of the picture first
+            val bmp = screenshot()
+            overlay.showCard(say("Reading it…", "पढ़ रहा हूँ…", "చదువుతున్నాను…").pick(lang), Overlay.Mode.THINKING)
+            if (bmp == null) { finish(say("I couldn't see the screen. Please try again.", "स्क्रीन नहीं देख पाया। फिर से कोशिश कीजिए।", "స్క్రీన్ చూడలేకపోయాను. మళ్ళీ ప్రయత్నించండి.").pick(lang)); return@launch }
+            val text = com.saathi.app.llm.AiMeter.time("CPU", "ML Kit OCR") { ocr(bmp) }.orEmpty()
+            com.saathi.app.DebugLog.i("ticket", "ocr ${text.length} chars")
+            if (text.length < 20) { finish(say("I can't read any writing here. Open the ticket full screen and ask again.", "यहाँ कुछ लिखा नहीं दिख रहा। टिकट पूरा खोलकर फिर पूछिए।", "ఇక్కడ రాత కనిపించట్లేదు. టికెట్‌ని పూర్తిగా తెరిచి మళ్ళీ అడగండి.").pick(lang)); return@launch }
+            if (!LlmManager.isReady) { LlmManager.loadAsync(svc); var w = 0; while (!LlmManager.isReady && w < 20_000) { delay(250); w += 250 } }
+            com.saathi.app.llm.AiMeter.purpose = "read ticket"
+            val a = if (LlmManager.isReady) LlmManager.generate(
+                "You read a ticket aloud for an elderly person. Use ONLY the ticket text. Say, in ${if (lang == Lang.EN) "simple English" else lang.label}: " +
+                    "the date, the departure time, from where to where (city names), the flight or train number, and the seat or PNR if shown. " +
+                    "Short sentences, no markdown, no guessing. If something is missing, leave it out.", "Ticket text:\n${text.take(3000)}\n\nQuestion: $q")
+                ?.lines()?.map { it.trim().trim('*', '#', '-', ' ') }?.filter { it.isNotBlank() }?.joinToString(" ")?.take(500) else null
+            com.saathi.app.DebugLog.i("ticket", "answer: ${a?.take(200)}")
+            finish(a ?: say("Here is what it says: ", "इसमें लिखा है: ", "ఇందులో ఉన్నది: ").pick(lang) + text.take(240))
+        }
+    }
+
+    private suspend fun screenshot(): android.graphics.Bitmap? = kotlinx.coroutines.suspendCancellableCoroutine { c ->
+        if (android.os.Build.VERSION.SDK_INT < 30) { c.resume(null) {}; return@suspendCancellableCoroutine }
+        runCatching {
+            svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, svc.mainExecutor, object : android.accessibilityservice.AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(r: android.accessibilityservice.AccessibilityService.ScreenshotResult) {
+                    val hw = android.graphics.Bitmap.wrapHardwareBuffer(r.hardwareBuffer, r.colorSpace)
+                    val soft = hw?.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                    r.hardwareBuffer.close()
+                    c.resume(soft) {}
+                }
+                override fun onFailure(code: Int) { com.saathi.app.DebugLog.i("ticket", "screenshot failed $code"); c.resume(null) {} }
+            })
+        }.onFailure { c.resume(null) {} }
+    }
+
+    private suspend fun ocr(bmp: android.graphics.Bitmap): String? = kotlinx.coroutines.suspendCancellableCoroutine { c ->
+        com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+            .process(com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0))
+            .addOnSuccessListener { c.resume(it.text) {} }.addOnFailureListener { c.resume(null) {} }
     }
 
     /** Torch, volume, brightness…: done at once, the task's card comes back. False when [text] isn't one. */
@@ -1163,6 +1239,22 @@ class Guide(
         if (screen.signature == lastSig) { settle?.let { st -> lang = Prefs.lang(svc); settleTick(st, screen) }; return }
         lastSig = screen.signature
         lang = Prefs.lang(svc)
+        // The ticket is open (a PDF viewer / the picture: no message box any more): read it out.
+        // "Open with" (no default PDF app): say pick one and wait for the viewer (field 10:17: it read the chooser).
+        if (pendingRead != null && mapRoute?.id == "wa_open_doc" && (screen.pkg == "android" || screen.pkg.contains("resolver"))) {
+            show(Target(null, say("Choose an app to open the ticket, then tap Just once.", "टिकट खोलने के लिए कोई ऐप चुनिए, फिर 'Just once' दबाइए।",
+                "టికెట్ తెరవడానికి ఒక యాప్ ఎంచుకుని, 'Just once' నొక్కండి.").pick(lang), "ticket_chooser", noAct = true))
+            return
+        }
+        if (pendingRead != null && mapRoute?.id == "wa_open_doc" && mapStep >= 3 && screen.pkg != launcherPkg() &&
+            screen.elements.none { it.role == "input" }) {
+            val q = pendingRead!!; pendingRead = null
+            com.saathi.app.DebugLog.i("ticket", "opened in ${screen.pkg}: reading")
+            mapRoute = null; goal = null; flow = null
+            delay(1200)   // let the page render
+            readScreenFor(q)
+            return
+        }
 
         // 3. Scam guard: always on, even with no task.
         if (Prefs.scamGuard(svc)) ScamGuard.check(screen)?.let { alert ->
@@ -1806,7 +1898,7 @@ class Guide(
         practice = true; learn = true
         com.saathi.app.DebugLog.i("practice", "start ${f.id}")
         if (f.id.startsWith("map_")) com.saathi.app.maps.AppMaps.routeById(f.id.removePrefix("map_"))?.let { r ->
-            mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1; broughtFor = "" }
+            mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1; broughtFor = ""; broughtTries = 0 }
         begin(g, f, autoMode = false)
     }
 
@@ -2330,7 +2422,7 @@ class Guide(
     private fun beginMap(g: String, r: com.saathi.app.maps.Route, autoMode: Boolean) {
         val map = com.saathi.app.maps.AppMaps.mapOf(r)
         com.saathi.app.DebugLog.i("map", "route ${r.id} (${map?.name})")
-        mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1; broughtFor = ""
+        mapRoute = r; mapSlots = com.saathi.app.maps.MapSlots.of(r, g, Prefs.family(svc)); mapStep = -1; broughtFor = ""; broughtTries = 0
         // Reuse the flow machinery for launch / learn-mode / Settings rules; steps come from the map.
         val f = Flow("map_${r.id}", { c -> AppLauncher.launch(c, r.pkg) }, emptyList(), null,
             r.doneSay, r.start ?: say("Let's do it together. Watch for the ring.", "साथ में करते हैं। घेरे को देखिए।", "కలిసి చేద్దాం. రింగ్ చూడండి."),
@@ -2395,6 +2487,8 @@ class Guide(
             is com.saathi.app.maps.Decision.Wait -> show(Target(null, d.say.pick(lang), "map_wait", noAct = true))
             is com.saathi.app.maps.Decision.Done -> {
                 com.saathi.app.DebugLog.i("map", "done ${r.id}")
+                // "Akash sent me a flight ticket, when is it?": the ticket is open now, read it out.
+                if (r.id == "wa_see_photo" && pendingRead != null) { val q = pendingRead!!; pendingRead = null; mapRoute = null; goal = null; readScreenFor(q); return true }
                 val f = flow; mapRoute = null
                 val newApp = mapSlots["query"] ?: mapSlots["app"]
                 if (r.pkg == "com.android.vending" && newApp != null && r.id.contains("install", true)) {
