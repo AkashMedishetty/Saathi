@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Saathi Pro: its own app, next to the basic on-device Saathi. -->
+    <string name="app_name">Saathi Pro</string>
+</resources>

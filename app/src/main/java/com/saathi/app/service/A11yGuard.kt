@@ -35,11 +35,33 @@ object A11yGuard {
         })
     }
 
+    /** The other Saathi app's service (basic ↔ Pro): "com.saathi.app.pro/…" for the basic one, and the reverse. */
+    private fun sibling(c: Context): String {
+        val other = if (c.packageName.endsWith(".pro")) c.packageName.removeSuffix(".pro") else c.packageName + ".pro"
+        return "$other/${SaathiService::class.java.name}"
+    }
+
+    /** "Use this Saathi": this app's helper on, the other Saathi's off. HackTracker and everyone else stay exactly as they are. */
+    fun makeActive(c: Context): Boolean {
+        if (!canHeal(c)) return false
+        val me = ComponentName(c, SaathiService::class.java).flattenToString()
+        val sib = sibling(c)
+        val cur = Settings.Secure.getString(c.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        val entries = cur.split(':').filter { it.isNotBlank() && it != "null" && !it.equals(sib, true) && !it.equals(me, true) }
+        return runCatching {
+            Settings.Secure.putString(c.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, (entries + me).joinToString(":"))
+            Settings.Secure.putInt(c.contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, 1)
+            com.saathi.app.DebugLog.i("guard", "made active; other Saathi switched off")
+        }.isSuccess
+    }
+
     private fun heal(c: Context) {
         val me = ComponentName(c, SaathiService::class.java).flattenToString()
         val cur = Settings.Secure.getString(c.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
         val entries = cur.split(':').filter { it.isNotBlank() && it != "null" }
         if (entries.any { it.equals(me, true) }) return
+        // The other Saathi is on: it was switched on deliberately ("Use this Saathi"), so this one stays off.
+        if (entries.any { it.equals(sibling(c), true) }) return
         // Append ours; everything else untouched and in the same order.
         runCatching {
             Settings.Secure.putString(c.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, (entries + me).joinToString(":"))

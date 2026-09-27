@@ -31,6 +31,9 @@ android {
         // INTERNET permission (src/pro/AndroidManifest.xml); the normal Saathi stays fully offline.
         create("pro") {
             initWith(getByName("debug"))
+            // A separate app next to the basic Saathi: "Saathi Pro" (com.saathi.app.pro), switched with "Use this Saathi".
+            applicationIdSuffix = ".pro"
+            versionNameSuffix = "-pro"
             matchingFallbacks += listOf("debug")
             buildConfigField("boolean", "PRO", "true")
         }

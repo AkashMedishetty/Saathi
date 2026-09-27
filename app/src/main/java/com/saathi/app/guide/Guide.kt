@@ -451,6 +451,9 @@ class Guide(
         if (IntentRouter.isQuestion(svc, goalText)) { respond(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
         IntentRouter.openOnly(svc, goalText)?.let { begin(goalText, it, autoMode); return }
+        // An instant phone action named in their words ("make the volume full", "turn on the torch"): do it now, before
+        // any model (field 08:26: volume went to the rewrite, then Pro tried to install an "app" for it).
+        Skills.match(goalText)?.takeIf { it.id in IntentRouter.DIRECT }?.let { sk -> begin(goalText, sk.build(svc, SlotExtractor.from(goalText, Prefs.family(svc))), autoMode); return }
         if (LlmManager.isReady || com.saathi.app.llm.ModelLocator.fast(svc) != null) {
             // Let the model pick the helper (NPU ≈0.25 s); keywords only if it can't.
             overlay.showCard(say("Okay…", "ठीक है…", "సరే…").pick(lang), Overlay.Mode.THINKING)
@@ -610,7 +613,9 @@ class Guide(
                 "it appears on the Play Store (for example: JuiceSSH, Termux, CapCut, Google Docs). No other words.", "", "Play Store")
             ?.lines()?.firstOrNull { it.isNotBlank() }?.trim()?.trim('"', '.', '*', ' ')?.take(40)?.ifBlank { null } }
         com.saathi.app.DebugLog.i("pro", "app for \"$g\": ${name ?: "none"}")
-        if (name.isNullOrBlank()) return false
+        // A real app name only (field 08:26: "I'm uncertain - volume control is a built-in…" was sent to the Play Store).
+        if (name.isNullOrBlank() || name.split(Regex("\\s+")).size > 5 ||
+            Regex("(?i)uncertain|not sure|built.?in|no app|none|n/a|sorry|cannot|can't|don't|settings app|i'm|i am").containsMatchIn(name)) return false
         val app = AppLauncher.findInGoal(svc, name) ?: AppLauncher.installed(svc).firstOrNull { it.label.equals(name, true) }
         if (app != null) { begin(g, plannerTask(g, app.pkg), false); return true }
         proPending = g

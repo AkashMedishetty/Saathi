@@ -13,6 +13,15 @@ and brings them back when they get lost. On-device, in their language.
 - [ ] Optional: uninstall JioHotstar for the install moment (item 7), else show the installed route.
 - [ ] Laptop: `scripts/applog.sh 20` shows what Saathi decided, if a judge asks.
 
+## Two apps on the phone
+- **Saathi** (basic): everything on the phone, **no internet permission**. Tap **"Use this Saathi"** on its home screen to make it the active helper.
+- **Saathi Pro**: same app plus the cloud brain (OpenRouter: Gemini 3.8 Flash → Qwen 3.8 Flash → Nemotron Ultra free) for power users.
+  Tap **"Use Saathi Pro"** on its home screen to switch. One tap each way, no scripts. HackTracker is never touched.
+- Pro demo line: "How can I access my VPS from this mobile through SSH?" → cloud picks JuiceSSH → Play Store Install (their tap) →
+  "Set it up now" → each step planned by the cloud brain (AI monitor shows `CLOUD …`).
+- Show the models working: after a mapped task (CPU · App map, 60 ms), ask something odd ("the writing on my phone is too tiny")
+  → NPU understand + GPU rewrite; "write a birthday wish for my son" in Notes → GPU compose.
+
 ## The run (about 7 minutes)
 | # | Say / do | What Saathi does | Why it matters |
 |---|---|---|---|

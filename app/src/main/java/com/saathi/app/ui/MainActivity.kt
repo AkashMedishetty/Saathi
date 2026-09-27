@@ -99,6 +99,10 @@ class MainActivity : AppCompatActivity() {
         // ── Helper status + language (one segmented control) ──
         val on = SaathiService.isEnabled(this)
         page.add(statusLine(on), 14)
+        // Two apps (basic + Pro) on one phone: one tap makes THIS the active helper and switches the other one off.
+        if (!on && com.saathi.app.service.A11yGuard.canHeal(this)) page.add(primaryButton(
+            if (com.saathi.app.BuildConfig.PRO) "Use Saathi Pro" else say("Use this Saathi", "यह साथी चालू करें", "ఈ సాథీని వాడండి").pick(lang),
+            R.drawable.ic_touch_app) { com.saathi.app.service.A11yGuard.makeActive(this); window.decorView.postDelayed({ render() }, 1200) }, 10)
         // Saathi Pro (Pro build): one tap on/off right here (no scripts, no Settings dive on stage). Off = the regular,
         // on-device Saathi; on = the cloud brain joins for power-user tasks.
         if (com.saathi.app.BuildConfig.PRO) {
