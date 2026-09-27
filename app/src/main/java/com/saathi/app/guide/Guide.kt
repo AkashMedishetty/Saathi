@@ -278,7 +278,8 @@ class Guide(
         return if (a.length in 2..40 && b.length in 2..40) a to b else null
     }
 
-    private val WRITE_HERE = Regex("(?i)^\\s*(write|type|note down)\\b|लिखो|लिख दो|टाइप करो|రాయి|రాసి|టైప్ చేయి")
+    // "writer / right / rite a letter": how speech recognition hears "write a letter" (field 09:31).
+    private val WRITE_HERE = Regex("(?i)^\\s*(right|rite)\\s+(a|an|me|my|down|that|this|the|some|for|it)\\b|^\\s*(write|writer|type|note down)\\b|लिखो|लिख दो|टाइप करो|రాయి|రాసి|టైప్ చేయి")
 
     /**
      * "Write a birthday wish for my son" / "type buy milk" on a screen with a text box: literal words are typed as they
@@ -289,15 +290,16 @@ class Guide(
         lang = Prefs.lang(svc)
         var waited = 0
         while (waited < 2500 && SaathiService.ownUiOpen) { delay(150); waited += 150 }
-        val root = appRoot() ?: return false
-        if (root.packageName?.toString() in listOf(svc.packageName, launcherPkg())) return false
-        val screen = ScreenReader.read(root) ?: return false
+        fun no(why: String): Boolean { com.saathi.app.DebugLog.i("write", "not here: $why"); return false }
+        val root = appRoot() ?: return no("no app window")
+        if (root.packageName?.toString() in listOf(svc.packageName, launcherPkg())) return no("on ${root.packageName}")
+        val screen = ScreenReader.read(root) ?: return no("screen unreadable")
         val inputs = screen.elements.filter { it.role == "input" && !it.password }
-        if (inputs.isEmpty()) return false
+        if (inputs.isEmpty()) return no("no text box in ${screen.pkg}")
         val focused = runCatching { root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
         val biggest = inputs.maxByOrNull { it.bounds.height() * it.bounds.width() }
         var box = inputs.firstOrNull { it.node == focused } ?: biggest ?: return false
-        val body = Regex("(?i)^\\s*(?:write|type|note down|put|add)\\s+(?:down\\s+)?(?:that\\s+|this\\s+|:\\s*)?(.+)$").find(text)?.groupValues?.get(1)?.trim() ?: text.trim()
+        val body = Regex("(?i)^\\s*(?:write|writer|right|rite|type|note down|put|add)\\s+(?:down\\s+)?(?:that\\s+|this\\s+|:\\s*)?(.+)$").find(text)?.groupValues?.get(1)?.trim() ?: text.trim()
         // A description to compose ("a birthday wish for my son", "a note about tomorrow's doctor visit") vs the words themselves.
         val describe = Regex("(?i)^(a|an|some|something|my)\\b|\\b(wish|letter|message for|poem|note about|about|for my|reply)\\b").containsMatchIn(body)
         val words = if (describe) {
@@ -318,10 +320,23 @@ class Guide(
                 "Only the text itself, no quotes, no explanation, no markdown.", body)
                 ?.lines()?.map { it.trim().trim('*', '#', ' ') }?.filter { it.isNotBlank() }?.joinToString(if (long) "\n" else " ")?.trim('"', ' ')?.take(900)
         } else body
-        if (words.isNullOrBlank()) return false
+        if (words.isNullOrBlank()) {
+            com.saathi.app.DebugLog.i("write", "compose gave nothing (describe=$describe)")
+            if (!describe) return false
+            finish(say("I couldn't write that just now. Please say it once more.", "अभी नहीं लिख पाया। कृपया एक बार फिर कहिए।",
+                "ఇప్పుడు రాయలేకపోయాను. దయచేసి మళ్ళీ ఒకసారి చెప్పండి.").pick(lang))
+            return true
+        }
         // A sentence or more goes in the body (the biggest box), not a one-line title (field 09:27: "Title" got the letter).
         if ((describe || words.length > 40) && biggest != null) box = inputs.filterNot { Regex("(?i)^title").containsMatchIn(it.title) }
-            .maxByOrNull { it.bounds.height() * it.bounds.width() } ?: biggest
+            .maxByOrNull { it.bounds.height() * it.bounds.width() }
+            // vivo Notes: the body has the cursor but isn't reported as a text box (field 09:33: only "Title" was).
+            ?: screen.elements.firstOrNull { focused != null && it.node == focused && !Regex("(?i)^title").containsMatchIn(it.title) }?.copy(role = "input")
+            ?: focused?.takeIf { f -> inputs.none { it.node == f } }?.let { f ->
+                android.graphics.Rect().also { f.getBoundsInScreen(it) }.takeIf { it.height() > 0 }?.let { r ->
+                    UiElement(999, f.hintText?.toString() ?: "note", "input", r, true, false, false, false, f) } }
+            ?: biggest
+        com.saathi.app.DebugLog.i("write", "focused=${focused?.className}/${focused?.viewIdResourceName} editable=${focused?.isEditable}")
         com.saathi.app.DebugLog.i("write", "${screen.pkg} box=\"${box.title.take(30)}\" composed=$describe")
         // One step, not a task: no planner afterwards (field 06:58: it replaced the text with "type 'love ver'").
         stop()
@@ -656,6 +671,38 @@ class Guide(
     }
 
     /** A task no route, skill or phrase knows: the cloud brain names the Play Store app for it; install or open it. */
+    /** "what is 2 + 2", "25 times 4", "100 divided by 8", "15% of 200": the answer, or null. */
+    internal fun mathAnswer(q: String): String? {
+        var e = " " + q.lowercase() + " "
+        Regex("(\\d+(?:\\.\\d+)?)\\s*(?:%|percent)\\s*of\\s*(\\d+(?:\\.\\d+)?)").find(e)?.let { m ->
+            e = e.replace(m.value, " (${m.groupValues[1]}/100*${m.groupValues[2]}) ") }
+        e = e.replace(Regex("\\bplus\\b|\\band\\b|जमा|ప్లస్"), "+").replace(Regex("\\bminus\\b|\\bless\\b|घटा|మైనస్"), "-")
+            .replace(Regex("\\bmultiplied by\\b|\\btimes\\b|\\binto\\b|\\bx\\b|×|गुणा|ఇంటు"), "*")
+            .replace(Regex("\\bdivided by\\b|\\bdivide by\\b|\\bover\\b|÷|भाग"), "/")
+        val expr = Regex("[0-9.()+\\-*/ ]+").findAll(e).map { it.value.trim() }.filter { it.isNotEmpty() }.maxByOrNull { it.length } ?: return null
+        if (!Regex("\\d").containsMatchIn(expr) || !Regex("\\d\\s*\\)?\\s*[+\\-*/]\\s*\\(?\\s*\\d").containsMatchIn(expr)) return null
+        // Only a question that is the sum itself (not "call 98480 22222" or "set alarm 6 - 7").
+        val rest = e.replace(expr, " ").replace(Regex("(?i)what('s| is)|how much is|calculate|tell me|equals?|is|the|answer|please|\\?|=|क्या|कितना|होता|है|ఎంత|అవుతుంది"), " ").trim()
+        if (rest.isNotEmpty()) return null
+        val v = runCatching { Calc(expr.replace(" ", "")).parse() }.getOrNull() ?: return null
+        if (v.isNaN() || v.isInfinite()) return null
+        val out = if (v == Math.rint(v) && kotlin.math.abs(v) < 1e15) v.toLong().toString() else "%.4f".format(v).trimEnd('0').trimEnd('.')
+        return say("${expr.trim()} = $out", "${expr.trim()} = $out", "${expr.trim()} = $out").pick(lang)
+    }
+
+    private class Calc(val s: String) {
+        var i = 0
+        fun parse(): Double { val v = sum(); if (i != s.length) throw IllegalArgumentException(); return v }
+        fun sum(): Double { var v = prod(); while (i < s.length && (s[i] == '+' || s[i] == '-')) { val op = s[i++]; val r = prod(); v = if (op == '+') v + r else v - r }; return v }
+        fun prod(): Double { var v = unit(); while (i < s.length && (s[i] == '*' || s[i] == '/')) { val op = s[i++]; val r = unit(); v = if (op == '*') v * r else v / r }; return v }
+        fun unit(): Double {
+            if (i < s.length && s[i] == '-') { i++; return -unit() }
+            if (i < s.length && s[i] == '(') { i++; val v = sum(); if (i >= s.length || s[i] != ')') throw IllegalArgumentException(); i++; return v }
+            val st = i; while (i < s.length && (s[i].isDigit() || s[i] == '.')) i++
+            return s.substring(st, i).toDouble()
+        }
+    }
+
     private val PRO_TOPIC = Regex("(?i)\\b(ssh|terminal|vps|server|linux|code|coding|program|website|domain|edit (a |my )?video|video edit|workspace|spreadsheet|excel|pdf|vpn)\\b")
 
     // ── "Where is the home button?": the phone's own buttons (3-button bar: ≡ recents · ○ home · ‹ back) ──
@@ -1565,6 +1612,8 @@ class Guide(
             }
             val el = t.el?.let { old ->
                 fresh?.elements?.firstOrNull { it.label == old.label && it.role == old.role }
+                    // A box the reader doesn't list (vivo Notes' body, field 09:37), still on screen: use it as is.
+                    ?: old.takeIf { t.key == "write_here" && old.node?.refresh() == true }
                     ?: run { lastSig = 0; schedule(200, force = true); return@launch }
             }
             act(t, fresh, el)
@@ -1648,7 +1697,12 @@ class Guide(
         if (el.role == "input" && t.fill != null) {
             el.node?.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
             val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t.fill) }
-            el.node?.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+            // Rich editors (vivo Notes' body) may refuse SET_TEXT: paste it instead.
+            if (el.node?.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args) != true) runCatching {
+                svc.getSystemService(android.content.ClipboardManager::class.java)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("Saathi", t.fill))
+                el.node?.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+            }
         } else if (el.role == "slider") {
             el.node?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
         } else if (!clickUp(el.node)) {
@@ -2533,6 +2587,9 @@ class Guide(
             speaker.say(t, lang)
             return
         }
+        // Sums: answered at once (field 09:32: "what is 2 + 2" opened a web search when the model's extra words failed
+        // the grounding check).
+        mathAnswer(q)?.let { com.saathi.app.DebugLog.i("respond", "math → $it"); finish(it); return }
         com.saathi.app.DebugLog.i("respond", "general question → look it up")
         lookUp(q, q)
     }
