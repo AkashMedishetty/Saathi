@@ -65,7 +65,7 @@ object LocalFast {
 
     private fun touch() {
         idle?.cancel()
-        idle = scope.launch { delay(8 * 60_000L); lock.withLock { runCatching { engine?.close() }; engine = null } }
+        idle = scope.launch { delay(15 * 60_000L); /* hot through a task: 15 min after the last use (Akash 09:48), not 8 */ lock.withLock { runCatching { engine?.close() }; engine = null } }
     }
 
     fun unload() { runCatching { engine?.close() }; engine = null }

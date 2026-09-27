@@ -16,6 +16,7 @@ object SlotExtractor {
     private val STOP = setOf(
         "on", "in", "via", "using", "whatsapp", "saying", "that", "and", "a", "an", "the", "my", "video", "call",
         "message", "msg", "hello", "hi", "about", "now", "please", "to", "for", "at", "from", "photo", "picture", "me",
+        "of", "screen", "screenshot", "current", "paper", "voice", "note",
         // "how to SEE IT" is not a person (field: contact = "see it").
         "see", "watch", "open", "use", "do", "make", "find", "show", "get", "go", "read", "hear", "know", "learn", "look",
         "send", "share", "write", "set", "book", "play", "search", "type", "add", "give", "access", "connect", "whatsapp", "sms",
@@ -40,7 +41,8 @@ object SlotExtractor {
 
     fun from(goal: String, family: String = ""): Slots {
         val g = goal.trim()
-        var contact = Regex("(?:to|call|message|msg|text|with|ping|ring)\\s+((?:[\\p{L}\\p{M}.]+\\s*){1,4})", IC).find(g)
+        // Whole words only: "photo of the screen" is not "to" + "of" (field 09:43: it asked them to tap "of").
+        var contact = Regex("\\b(?:to|call|message|msg|text|with|ping|ring)\\s+((?:[\\p{L}\\p{M}.]+\\s*){1,4})", IC).find(g)
             ?.groupValues?.get(1)?.split(Regex("\\s+"))
             ?.dropWhile { it.lowercase() in STOP }
             ?.takeWhile { it.lowercase() !in STOP && it.isNotBlank() }

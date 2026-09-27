@@ -25,7 +25,9 @@ import com.saathi.app.llm.LlmManager.State
  */
 object LocalLlm {
     private const val TAG = "SaathiLLM"
-    private const val IDLE_UNLOAD_MS = 3 * 60_000L
+    // 15 min after the last use, not 3: a cold model mid-flow meant dictation instead of a letter and "model not ready" routes (Akash 09:45/09:48:
+    // hot through a task, 15 min so memory and battery come back soon after). The iQOO 15 has the RAM; Settings → free memory still unloads on demand.
+    private const val IDLE_UNLOAD_MS = 15 * 60_000L
 
 
     private val _state = MutableStateFlow<State>(State.Idle)

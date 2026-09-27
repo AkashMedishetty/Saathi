@@ -110,7 +110,8 @@ object PhotosMap {
             Route(
                 id = "photos_share", pkg = PKG,
                 // Theirs to send, never one someone sent them ("my grandson posted a picture in whatsapp, I want to look at it").
-                avoid = listOf(rx("posted|\\bsent\\b|send me|look at|see it|received|got a")),
+                // "Take a photo of this paper and send it": a new photo (WhatsApp's camera), not the newest one here (field 09:39).
+                avoid = listOf(rx("posted|\\bsent\\b|send me|look at|see it|received|got a|\\b(take|click|capture|snap|khinch|खींच|తీసి|తీయి)\\b")),
                 goals = goals("(share|send) (my |the |this |a )?(photo|picture|pic)", "(photo|picture|pic).*(whatsapp|to my|family)",
                     "फोटो (भेजो|भेजना|शेयर)", "फ़ोटो भेजो", "ఫోటో (పంపు|షేర్)"),
                 slots = listOf("contact"),

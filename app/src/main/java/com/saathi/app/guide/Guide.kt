@@ -210,6 +210,11 @@ class Guide(
         // the task in mind, and the task waits; it is not a new goal (field: every mid-task question wiped the task).
         // A follow-up inside the task ("I want to go to JBS", "title as purple hat", "type jbs in the where to field")
         // continues it; it is not a new request (field 05:50 / 06:25: each one restarted the task or was rewritten).
+        // "Continue" while the task is running: say the step again (field 09:55: it was taken as task context).
+        if (active && !paused && CONTINUE_WORDS.containsMatchIn(text)) { lastSpokenKey = null; repeat(); schedule(100, force = true); return }
+        // An instant phone action mid-task ("turn on the torch", "volume up"): do it, and the task carries on
+        // (field 09:55: "turn on the torch" was taken as context for the WhatsApp message and nothing happened).
+        if (active && instantAside(text)) return
         if (active && !paused && isFollowUp(text)) { followUp(text); return }
         // On-screen context with no task: in Notes / a chat / a form, "write …" / "type …" goes into the box on screen.
         if (!active && WRITE_HERE.containsMatchIn(text)) { scope.launch { if (!writeHere(text)) writeElsewhere(text) }; return }
@@ -419,6 +424,11 @@ class Guide(
         Log.i(TAG, "goal: $goalText (auto=$autoMode)")
         com.saathi.app.DebugLog.i("goal", "\"$goalText\" lang=$lang auto=$autoMode locked=${svc.isLocked()}")
         if (IntentRouter.isSos(goalText)) { sos(); return }
+        if (goal == null && CONTINUE_WORDS.containsMatchIn(goalText) && resumeUnfinished()) return
+        // A new request while a task is running: remember that task, "continue" brings it back.
+        goal?.takeIf { it != goalText && it.length > 3 && !CONTINUE_WORDS.containsMatchIn(goalText) }?.let { unfinished = it to SystemClock.uptimeMillis() }
+        // Hot for the whole task: the GPU brain loads now, not at the first step that needs it.
+        if (!LlmManager.isReady) LlmManager.loadAsync(svc)
         // "Stop" / "cancel" with nothing running: just close quietly (field 09:17: it was answered as a question,
         // "'Stop' means to finish an action…").
         if (Regex("(?i)^\\W*(stop|cancel|close|never ?mind|leave it|bas|बस|बंद करो|रुको|रहने दो|ఆపు|ఆపండి|వద్దు|వదిలేయ్)\\W*$").matches(goalText.trim())) {
@@ -709,6 +719,35 @@ class Guide(
     private val NAV_BTN = Regex("(?i)\\b(where|which|show me|find|what is)\\b.*\\b(home|back|recent|recents|overview)\\s*(button|key)|" +
         "(home|back|recent|होम|बैक|హోమ్|బ్యాక్)\\s*(button|key|बटन|బటన్)?.*(kahan|kahaan|कहाँ|कहां|कहा|ఎక్కడ)")
     private var navGlowAt = 0L
+
+    // ── Tasks that ended midway (a new request, left the app, a time-out): "continue" brings them back ──
+    /** The last task stopped before it was done, and when (field 09:45: tasks ended midway and nothing brought them back). */
+    private var unfinished: Pair<String, Long>? = null
+    private val CONTINUE_WORDS = Regex("(?i)^\\W*(continue|resume|go on|carry on|where was i|let'?s continue|back to (it|that|the task)|जारी रखो|जारी रखें|आगे बढ़ो|కొనసాగించు|కొనసాగించండి)\\b")
+    private fun unfinishedGoal(): String? = unfinished?.takeIf { SystemClock.uptimeMillis() - it.second < 20 * 60_000L }?.first
+
+    /** Torch, volume, brightness…: done at once, the task's card comes back. False when [text] isn't one. */
+    private fun instantAside(text: String): Boolean {
+        // "Tell him to turn on the torch" / "type volume up" are words for the task, not a command.
+        if (Regex("(?i)^\\s*(tell|say|ask|type|write|message|text|saying)\\b|\\b(tell|ask) (him|her|them)\\b|saying").containsMatchIn(text)) return false
+        val skill = Skills.match(text) ?: return false
+        val f = runCatching { skill.build(svc, SlotExtractor.from(text, Prefs.family(svc))) }.getOrNull() ?: return false
+        val act = f.action ?: return false
+        val done = runCatching { act(svc).pick(lang) }.getOrNull() ?: return false
+        com.saathi.app.DebugLog.i("aside", "instant \"$text\" → $done (task goes on: \"$goal\")")
+        speaker.say(done, lang)
+        lastSpokenKey = null; lastSig = 0
+        schedule(1500, force = true)
+        return true
+    }
+
+    private fun resumeUnfinished(): Boolean {
+        val g = unfinishedGoal() ?: return false
+        unfinished = null
+        com.saathi.app.DebugLog.i("resume", "unfinished task: \"$g\"")
+        start(g)
+        return true
+    }
 
     private fun navButtonHelp(g: String): Boolean {
         if (!NAV_BTN.containsMatchIn(g)) return false
@@ -1749,7 +1788,14 @@ class Guide(
         begin(g, f, autoMode = false)
     }
 
-    private fun finish(text: String, first: Triple<String, Int, () -> Unit>? = null) {
+    private fun finish(text: String, first0: Triple<String, Int, () -> Unit>? = null) {
+        // Another task was cut short to do this one: offer to go back to it.
+        if (unfinished?.first == goal) unfinished = null
+        val back = unfinishedGoal()?.takeIf { first0 == null }?.let { g ->
+            com.saathi.app.DebugLog.i("resume", "offer: \"$g\"")
+            Triple(say("Continue: ${g.take(28)}", "जारी रखें: ${g.take(28)}", "కొనసాగించు: ${g.take(28)}").pick(lang), com.saathi.app.R.drawable.ic_replay, { resumeUnfinished(); Unit })
+        }
+        val first = first0 ?: back
         LlmManager.endChat()
         goal?.let { Conversation.remember(it, text) }
         com.saathi.app.DebugLog.i("finish", "\"${text.take(120)}\" goal=\"$goal\"")
@@ -1774,6 +1820,7 @@ class Guide(
         LlmManager.endChat()
         goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
+        goal?.takeIf { it.length > 3 }?.let { unfinished = it to SystemClock.uptimeMillis() }
         auto = false; awaitingConfirm = false; autoJob?.cancel(); watchdog?.cancel()
         goal = null; flow = null; paused = false; taskPkgs.clear(); needSettings = false; settingsFresh = false; practice = false; needApp = null; learn = false; form = null; loop = null; mapRoute = null; mapStep = -1; settle = null
         delayedGlow?.cancel()

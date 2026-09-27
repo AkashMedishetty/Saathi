@@ -62,6 +62,7 @@ object WhatsAppMap {
             ScreenDef("wa_attach", listOf(lbl("^(Gallery|Document|Camera|Location|Contact|Audio|Poll)$", clickable = true), lbl("^(Gallery|Document)$"))),
             ScreenDef("wa_gallery", listOf(lbl("^(Recents|Recent|All media|Gallery|Photos)$"), lbl("^(Photo|Image|Video),? .*", clickable = true))),
             ScreenDef("wa_preview", listOf(lbl("^(Add a caption.*|Add caption.*)$"), SEND.last())),
+            ScreenDef("wa_camera", listOf(Sel(resId = "shutter"))),
             ScreenDef("wa_settings", listOf(lbl("^(Account|Privacy|Chats|Notifications|Storage and data|Help)$", clickable = true), lbl("^Settings$"))),
             ScreenDef("wa_chats_settings", listOf(lbl("^Chat backup$", clickable = true))),
             ScreenDef("wa_backup", listOf(lbl("^(Back up|Back Up|BACK UP)$", clickable = true), lbl("^(Last backup|Google Account|Backup to Google).*"))),
@@ -120,7 +121,7 @@ object WhatsAppMap {
             Route(
                 id = "wa_message", pkg = PKG,
                 goals = goals("(message|text|msg|write to) .+", "send (a )?message", "मैसेज (भेजो|करो)", ".+ (को|ko) (मैसेज|msg|message)", "మెసేజ్ (పంపు|చేయి)"),
-                avoid = listOf(rx("photo|picture|फोटो|ఫోటో|location|लोकेशन|లొకేషన్|\\bsms\\b|size|bigger|smaller|font|अक्षर|అక్షర")),
+                avoid = listOf(rx("photo|picture|फोटो|ఫోటో|location|लोकेशन|లొకేషన్|\\bsms\\b|size|bigger|smaller|font|अक्षर|అక్షర|voice (note|message|msg)|audio (note|message)|वॉयस|వాయిస్")),
                 slots = listOf("contact", "text"),
                 steps = inChat(
                     MapStep("wa_chat_them", ENTRY, say("Tap the box at the bottom and type your message.[ I can type: “{text}”.]",
@@ -132,10 +133,46 @@ object WhatsAppMap {
                 done = emptyList(),
                 doneSay = say("Sent.", "भेज दिया।", "పంపబడింది."),
             ),
+            // "Take a photo of this paper and send it to my son": his chat → the camera in the message box → shutter → send.
+            Route(
+                id = "wa_camera", pkg = PKG,
+                avoid = listOf(rx("posted|\\bsent\\b|send me|look at|see it|received|video ?call")),
+                goals = goals("(take|click|capture|snap) (a |the )?(photo|picture|pic|snap)", "photo of (this|the|my) .+ (to|and send|send)",
+                    "(फोटो|फ़ोटो) (खींच|ले) .*(भेज)", "ఫోటో (తీసి|తీయి).*(పంపు)"),
+                slots = listOf("contact"),
+                steps = inChat(
+                    MapStep("wa_chat_them", listOf(id("camera_btn"), lbl("^Camera$", clickable = true)),
+                        say("Tap the camera icon in the message box. Hold the paper flat, in good light.", "संदेश बॉक्स में कैमरे का निशान दबाइए। कागज़ सीधा, रोशनी में रखिए।",
+                            "మెసేజ్ బాక్స్‌లో కెమెరా గుర్తు నొక్కండి. కాగితాన్ని వెలుతురులో సమంగా పట్టుకోండి."), alsoOn = listOf("wa_chat_label")),
+                    MapStep("wa_camera", listOf(id("shutter"), lbl("^(Take photo|Take picture|Shutter|Capture|Take a photo).*", clickable = true)),
+                        say("Keep the whole paper in the frame, then tap the big round button.", "पूरा कागज़ फ़्रेम में रखिए, फिर बड़ा गोल बटन दबाइए।",
+                            "కాగితం మొత్తం ఫ్రేమ్‌లో ఉంచి, పెద్ద గుండ్రటి బటన్ నొక్కండి."), risky = true),
+                    MapStep("wa_preview", SEND, say("Check the photo is clear. Then tap the green send arrow.", "देख लीजिए फोटो साफ़ है। फिर हरा भेजें वाला तीर दबाइए।",
+                        "ఫోటో స్పష్టంగా ఉందో చూడండి. తర్వాత ఆకుపచ్చ పంపు బాణం నొక్కండి."), risky = true),
+                ),
+                done = emptyList(),
+                doneSay = say("Photo sent.", "फोटो भेज दी।", "ఫోటో పంపబడింది."),
+            ),
+            // "Send a voice note to Akash": his chat → press and hold the mic. Saathi never records or sends for them.
+            Route(
+                id = "wa_voice_note", pkg = PKG,
+                goals = goals("voice (note|message|msg|record)", "audio (note|message|msg)", "record (a )?(voice|message)", "वॉयस (नोट|मैसेज|मेसेज)",
+                    "आवाज़ (में )?(भेज|मैसेज)", "వాయిస్ (నోట్|మెసేజ్)"),
+                slots = listOf("contact"),
+                steps = inChat(
+                    MapStep("wa_chat_them", listOf(id("voice_note_btn"), lbl("^Voice message$", clickable = true)),
+                        say("Press and hold the microphone at the bottom right. Keep holding while you speak. Let go to send.",
+                            "नीचे दाईं ओर माइक को दबाकर रखिए। दबाए रखते हुए बोलिए। छोड़ते ही भेज दिया जाएगा।",
+                            "కింద కుడి వైపు మైక్‌ని నొక్కి పట్టుకోండి. పట్టుకునే మాట్లాడండి. వదిలితే పంపబడుతుంది."),
+                        risky = true, alsoOn = listOf("wa_chat_label")),
+                ),
+                done = emptyList(),
+                doneSay = say("Voice note sent.", "वॉयस नोट भेज दिया।", "వాయిస్ నోట్ పంపబడింది."),
+            ),
             Route(
                 id = "wa_photo", pkg = PKG,
                 // Sending theirs, never seeing one someone sent ("my grandson posted a picture… I want to look at it").
-                avoid = listOf(rx("posted|\\bsent\\b|send me|look at|see it|received|got a|how (do i|to|can i) (see|open|view)")),
+                avoid = listOf(rx("posted|\\bsent\\b|send me|look at|see it|received|got a|how (do i|to|can i) (see|open|view)|\\b(take|click|capture|snap|खींच|తీసి|తీయి)\\b")),
                 goals = goals("send (a |the |my )?(photo|picture|pic) (to|on) .+", "(photo|picture) .*whatsapp", "(फोटो|फ़ोटो) .*(भेजो|व्हाट्सएप)", "ఫోటో .*(పంపు|వాట్సాప్)"),
                 slots = listOf("contact"),
                 steps = inChat(
