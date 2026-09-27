@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Saathi — Project Submission</title>
+<style>
+  @page { size: A4; margin: 0; }
+  :root { --ink:#1c2622; --muted:#6a7671; --pine:#143a30; --pine2:#1f5446; --saffron:#e48a26; --cream:#fbf7ef; --line:#e7e0d2; --soft:#f4efe4; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--ink); font-size: 10pt; line-height: 1.5; }
+  .page { width: 210mm; height: 297mm; padding: 18mm 18mm 16mm; position: relative; page-break-after: always; overflow: hidden; }
+  .page:last-child { page-break-after: auto; }
+  .serif { font-family: Georgia, "Times New Roman", serif; }
+  h1 { font-family: Georgia, serif; font-weight: 400; font-size: 44pt; line-height: 1; margin: 0; color: var(--pine); letter-spacing: -1px; }
+  h2 { font-family: Georgia, serif; font-weight: 400; font-size: 22pt; color: var(--pine); margin: 0 0 4mm; letter-spacing: -0.3px; }
+  h3 { font-size: 11.5pt; margin: 0 0 1.5mm; color: var(--pine); }
+  p { margin: 0 0 2.6mm; }
+  .eyebrow { font-size: 8pt; letter-spacing: 2.2px; text-transform: uppercase; color: var(--saffron); font-weight: 700; margin-bottom: 2mm; }
+  .lead { font-size: 12pt; color: #33423c; line-height: 1.55; }
+  .rule { height: 2px; width: 22mm; background: var(--saffron); margin: 0 0 6mm; }
+  .folio { position: absolute; bottom: 8mm; left: 18mm; right: 18mm; display: flex; justify-content: space-between; font-size: 7.5pt; color: #a09a8e; letter-spacing: 1px; text-transform: uppercase; }
+
+  /* phones */
+  .phone { background: #0f1513; border-radius: 6.5mm; padding: 1.5mm; box-shadow: 0 3mm 7mm rgba(20,40,34,.18); display: inline-block; }
+  .phone img { display: block; width: 100%; border-radius: 5.2mm; }
+  .cap { font-size: 8pt; color: var(--muted); text-align: center; margin-top: 2.5mm; line-height: 1.35; }
+
+  /* cover */
+  .cover { background: linear-gradient(165deg, #fdf8ef 0%, #f8ead2 60%, #f1d7aa 100%); }
+  .orb { width: 16mm; height: 16mm; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fde0a8, #e48a26 62%, #c5691a); box-shadow: 0 0 10mm rgba(228,138,38,.55); display:inline-block; vertical-align: middle; margin-right: 4mm; }
+  .cover-phones { position: absolute; left: 0; right: 0; bottom: 30mm; display: flex; justify-content: center; align-items: flex-end; gap: 7mm; }
+  .cover-phones .phone { width: 50mm; }
+  .cover-phones .mid { width: 56mm; margin-bottom: 8mm; }
+  .chips { margin-top: 6mm; }
+  .chip { display: inline-block; font-size: 8.3pt; padding: 1.2mm 3.2mm; border-radius: 10mm; border: 1px solid #d8c7a6; color: #4a4336; margin: 0 1.5mm 1.5mm 0; background: rgba(255,255,255,.55); }
+
+  /* blocks */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; }
+  .card { background: var(--cream); border: 1px solid var(--line); border-radius: 3mm; padding: 4mm 4.5mm; }
+  .card h3 { font-size: 10.5pt; }
+  .card p, .card li { font-size: 9.2pt; color: #3b4843; }
+  .quote { font-family: Georgia, serif; font-size: 13pt; color: var(--pine); border-left: 2px solid var(--saffron); padding: 1mm 0 1mm 4mm; margin: 5mm 0; }
+  ul.clean { list-style: none; margin: 0; padding: 0; } ul.clean li { padding-left: 4mm; position: relative; margin: 1.2mm 0; }
+  ul.clean li:before { content: ""; width: 1.6mm; height: 1.6mm; border-radius: 50%; background: var(--saffron); position: absolute; left: 0; top: 1.9mm; }
+
+  /* pipeline */
+  .pipe { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2.5mm; margin: 4mm 0 6mm; }
+  .step { background: #fff; border: 1px solid var(--line); border-radius: 3mm; padding: 3.5mm; position: relative; }
+  .step .n { font-family: Georgia, serif; font-size: 18pt; color: var(--saffron); line-height: 1; }
+  .step b { display: block; color: var(--pine); margin: 1.5mm 0 1mm; font-size: 10pt; }
+  .step span { font-size: 8.4pt; color: #4a5752; line-height: 1.4; display: block; }
+
+  /* use cases */
+  .uc { display: grid; grid-template-columns: 50mm 1fr; gap: 8mm; align-items: start; margin-bottom: 9mm; }
+  .uc .phone { width: 50mm; }
+  .uc .num { font-family: Georgia, serif; color: var(--saffron); font-size: 11pt; margin-bottom: 1mm; }
+  .uc h3 { font-family: Georgia, serif; font-weight: 400; font-size: 15pt; line-height: 1.25; margin-bottom: 3mm; }
+  .said { font-family: Georgia, serif; font-style: italic; color: #3d4a45; font-size: 10.5pt; background: #fff8ec; border-radius: 2mm; padding: 2.5mm 3.5mm; margin-bottom: 3.5mm; }
+  .row { display: grid; grid-template-columns: 19mm 1fr; gap: 3mm; margin-bottom: 2.4mm; font-size: 9.3pt; }
+  .row .k { font-size: 7.4pt; letter-spacing: 1.2px; text-transform: uppercase; font-weight: 700; color: var(--pine2); padding-top: .6mm; }
+  .engines { margin-top: 2mm; }
+  .eng { display: inline-block; font-size: 7.6pt; font-weight: 600; padding: .8mm 2.4mm; border-radius: 10mm; margin: 0 1.2mm 1.2mm 0; }
+  .eng.npu { background: #e7efe9; color: #1f5446; } .eng.gpu { background: #fbe7cf; color: #8a4a0c; } .eng.cpu { background: #ecebf6; color: #3b3a78; } .eng.cloud { background: #e5eef7; color: #1f4b78; }
+
+  .strip { display: flex; gap: 6mm; justify-content: center; margin: 4mm 0 5mm; }
+  .strip .phone { width: 46mm; }
+  .arrow { align-self: center; color: var(--saffron); font-size: 18pt; }
+
+  /* monitor */
+  .monitor { background: #16211d; color: #d6e5dc; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9pt; border-radius: 3mm; padding: 4mm 5mm; line-height: 1.7; }
+  .monitor .h { color: #8fb5a4; font-size: 7.6pt; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 1.5mm; }
+  .monitor .l { display: grid; grid-template-columns: 14mm 36mm 1fr 18mm; }
+  .monitor .t { text-align: right; color: #f3b563; }
+  .monitor .u.npu { color: #8fe0b4; } .monitor .u.gpu { color: #ffc27a; } .monitor .u.cpu { color: #b9b6ff; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.9pt; }
+  th { text-align: left; font-weight: 600; color: #fff; background: var(--pine); padding: 2.2mm 2.6mm; }
+  td { padding: 2.2mm 2.6mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.s { font-weight: 600; color: var(--pine); background: #fbf6ec; }
+  .stat { font-family: Georgia, serif; font-size: 20pt; color: var(--pine); line-height: 1.05; }
+  .stat-l { font-size: 8.4pt; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- 1 · COVER -->
+<section class="page cover">
+  <div class="eyebrow">iQOO AI Hackathon · Project submission</div>
+  <div style="margin-top:8mm"><span class="orb"></span><h1 style="display:inline-block;vertical-align:middle">Saathi</h1></div>
+  <p class="lead" style="margin-top:7mm;max-width:150mm">An on-device AI companion that guides India’s elderly through <b>their own phone</b> — in English, हिंदी and తెలుగు — by glowing exactly where to tap, saying one simple step, and doing it with them, safely.</p>
+  <div class="chips">
+    <span class="chip">Runs offline on the iQOO 15</span><span class="chip">NPU + GPU + CPU, every engine used</span><span class="chip">3 languages, spoken</span><span class="chip">Never touches money, OTPs or IDs</span>
+  </div>
+  <div class="cover-phones">
+    <div><div class="phone"><img src="img/01-home.jpg"></div></div>
+    <div class="mid"><div class="phone" style="width:56mm"><img src="img/04-video-call.jpg"></div></div>
+    <div><div class="phone"><img src="img/13-ticket.jpg"></div></div>
+  </div>
+  <div class="folio"><span>Saathi · साथी · సాథీ — “companion”</span><span>github.com/AkashMedishetty/Saathi</span></div>
+</section>
+
+<!-- 2 · IDEA + PROBLEM -->
+<section class="page">
+  <div class="eyebrow">01 · Project idea</div>
+  <h2>A companion that sits on top of every app</h2>
+  <div class="rule"></div>
+  <p class="lead">The person says what they want, the way they would ask a grandchild — <i>“video call my son”</i>, <i>“find my Aadhaar and send it to him”</i>, <i>“Akash sent me a flight ticket, when is it?”</i> — and Saathi walks them through it on the real app: a warm glow around the exact button, one short sentence in their language, spoken aloud, and a <b>Do it for me</b> button when they just want it done.</p>
+
+  <div class="eyebrow" style="margin-top:9mm">02 · Problem statement</div>
+  <h2>Digital India left its elders one tap behind</h2>
+  <div class="rule"></div>
+  <p>Pensions, Aadhaar, train and flight tickets, bills, doctors, family — it all lives in smartphone apps now. Yet millions of parents and grandparents were never taught how these apps work, many read their own language far better than English, and every phone brand and every update moves things around.</p>
+  <div class="grid2" style="margin-top:5mm">
+    <div class="card"><h3>Every task needs someone else</h3><p>A video call, sending a photo, bigger text, finding a document — each waits for a son, daughter or neighbour to be free. Asking again and again costs independence and dignity.</p></div>
+    <div class="card"><h3>English-first, ever-changing apps</h3><p>Menus and icons change with every update and brand. A step learned last month is somewhere else today. Almost all help is English and generic.</p></div>
+    <div class="card"><h3>Fear of breaking something</h3><p>One wrong tap can call a stranger, delete a chat or open a popup nobody can close — so many simply stop trying.</p></div>
+    <div class="card"><h3>Scams aim at exactly this person</h3><p>“Share your screen”, “install this app”, “tell me the OTP”. Those least sure of their phone are the easiest to trick, and remote “help” is how most of these frauds begin.</p></div>
+  </div>
+  <div class="card" style="margin-top:5mm;background:#fff">
+    <h3>Why today’s tools don’t close the gap</h3>
+    <ul class="clean">
+      <li><b>Voice assistants</b> run a handful of commands and answer questions — they don’t walk you through the app on your screen, don’t teach, and mostly need the cloud.</li>
+      <li><b>Screen readers</b> are built for blind users; they read everything aloud but don’t know your goal.</li>
+      <li><b>Remote help</b> from family needs someone free and online, and trains people to let others control their phone — the habit scammers exploit.</li>
+      <li><b>Video tutorials</b> are generic, English, for another phone, and you can’t ask them anything.</li>
+    </ul>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Idea & problem</span></div>
+</section>
+
+<!-- 3 · SOLUTION -->
+<section class="page">
+  <div class="eyebrow">03 · Detailed solution</div>
+  <h2>Understand the goal. Show the next step. Keep them safe.</h2>
+  <div class="rule"></div>
+  <p>Saathi is an Android <b>accessibility-service overlay</b> with a stack of <b>on-device models</b>. It reads the structure of whatever app is on screen (the same accessibility tree screen readers use), understands what the person wants, decides the next step and shows it on the real app — then watches the screen change and moves on.</p>
+  <div class="pipe">
+    <div class="step"><div class="n">1</div><b>Hear</b><span>Voice in English, Hindi or Telugu (on-device speech), or typing. One big light, SOS always there.</span></div>
+    <div class="step"><div class="n">2</div><b>Understand</b><span>Instant phrase routes, verified by <b>Gemma 3 1B on the NPU</b> (~90 ms). Unclear? <b>Gemma 4 on the GPU</b> rewrites it (~0.8 s).</span></div>
+    <div class="step"><div class="n">3</div><b>Decide</b><span><b>App maps</b> for WhatsApp, YouTube, Settings, Photos, Play Store, Phone… (CPU, ms). Other apps: the <b>GPU planner</b>.</span></div>
+    <div class="step"><div class="n">4</div><b>Show</b><span>Glow on the exact button + one sentence, spoken. Do it for me · Read again · mic · close.</span></div>
+    <div class="step"><div class="n">5</div><b>Guard</b><span>Policy on every action: no money apps, no OTP/PIN; Send, Pay, Install and Call stay the person’s tap.</span></div>
+  </div>
+  <h3 style="margin-top:2mm">Key features</h3>
+  <div class="grid2" style="margin-top:3mm">
+    <div>
+      <ul class="clean">
+        <li><b>Guides on the real app</b> — glows the actual button, recovers when the person wanders (“I’m lost” → where you are and the way back).</li>
+        <li><b>Teach me, or Do it for me</b> — same task, two modes; the final risky tap is always theirs.</li>
+        <li><b>Three languages, mixed freely</b> — speech, cards and answers; Telugu/Hindi names become English letters to find contacts (ఆకాష్ → akash).</li>
+        <li><b>Understands natural sentences</b> — the NPU checks every route, the GPU rewrites unclear requests and plans in apps nobody mapped.</li>
+        <li><b>Reads documents</b> — screen capture → OCR → Gemma 4: tickets, letters, forms, labels.</li>
+      </ul>
+    </div>
+    <div>
+      <ul class="clean">
+        <li><b>Writes for them</b> — letters and replies composed on-device, typed into the box they are looking at.</li>
+        <li><b>Never loses the thread</b> — questions mid-task are answered while the task waits; interrupted tasks come back with “Continue”.</li>
+        <li><b>Scam guard</b> — warnings on scam SMS, APKs, remote-control apps, money apps opened during a call.</li>
+        <li><b>Live AI monitor</b> — shows which engine ran each step and how long it took.</li>
+        <li><b>Saathi Pro</b> — a separate optional app with cloud help for power users; basic Saathi stays fully offline.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="grid3" style="margin-top:7mm">
+    <div class="card"><div class="stat">~90 ms</div><div class="stat-l">NPU check on every request</div></div>
+    <div class="card"><div class="stat">0.8–2.5 s</div><div class="stat-l">GPU: understand, plan, write</div></div>
+    <div class="card"><div class="stat">0 bytes</div><div class="stat-l">leave the phone — basic Saathi has no internet permission</div></div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Solution</span></div>
+</section>
+
+<!-- 4 · THE APP -->
+<section class="page">
+  <div class="eyebrow">04 · The app</div>
+  <h2>Calm, large, and in their language</h2>
+  <div class="rule"></div>
+  <div class="grid3" style="gap:8mm;margin-top:6mm">
+    <div style="text-align:center"><div class="phone" style="width:52mm"><img src="img/01-home.jpg"></div><div class="cap"><b>Home.</b> One light to tap and speak, three languages, Type instead, SOS. “Helper on · works offline”.</div></div>
+    <div style="text-align:center"><div class="phone" style="width:52mm"><img src="img/15-telugu.jpg"></div><div class="cap"><b>Listening in Telugu.</b> Examples in their own language: “call Akash on video”, “play Hanuman Chalisa”.</div></div>
+    <div style="text-align:center"><div class="phone" style="width:52mm"><img src="img/02-settings.jpg"></div><div class="cap"><b>Settings.</b> Name, language, family contacts — changeable only with the phone’s own screen lock.</div></div>
+  </div>
+  <div class="grid2" style="margin-top:9mm">
+    <div class="card"><h3>Designed for the person, not the phone</h3>
+      <ul class="clean"><li>Warm paper colours, large serif text, one action per card.</li><li>The card never covers the button it points at, nor the keyboard.</li><li>Text size, voice speed, dim-around-the-glow and scam warnings in Settings.</li></ul></div>
+    <div class="card"><h3>Two apps, one switch</h3>
+      <ul class="clean"><li><b>Saathi</b>: fully on-device, no internet permission.</li><li><b>Saathi Pro</b>: adds a cloud model (the user’s own OpenRouter key) for power-user tasks such as SSH or video editing.</li><li>“Use this Saathi” makes one active; the other steps aside.</li></ul></div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>The app</span></div>
+</section>
+
+<!-- 5 · USE CASES 1-2 -->
+<section class="page">
+  <div class="eyebrow">05 · Walkthrough</div>
+  <h2>Every use case, step by step</h2>
+  <div class="rule"></div>
+  <div class="uc">
+    <div class="phone"><img src="img/03-home-button.jpg"></div>
+    <div>
+      <div class="num">01</div><h3>“Where is the home button?”</h3>
+      <div class="said">“This is the home button, the circle at the bottom middle. Tap it any time to come back to the main screen.”</div>
+      <div class="row"><div class="k">Happens</div><div>The real Home button on the navigation bar glows. Also back and recent apps, in all three languages — instantly, no model needed.</div></div>
+      <div class="row"><div class="k">Solves</div><div>The most basic fear of all: “how do I get out of here?”</div></div>
+      <div class="row"><div class="k">Unique</div><div>It points at the phone itself, not at a drawing of a phone.</div></div>
+      <div class="engines"><span class="eng cpu">CPU · instant</span></div>
+    </div>
+  </div>
+  <div class="uc">
+    <div class="phone"><img src="img/04-video-call.jpg"></div>
+    <div>
+      <div class="num">02</div><h3>“Video call my son”</h3>
+      <div class="said">“Video call on WhatsApp, or a normal phone video call?”</div>
+      <div class="row"><div class="k">Happens</div><div>“My son” is the family contact set up once. One plain question, then WhatsApp → search → his name → the video-call button in his chat glows. A wrong chat is noticed (“tap the back arrow”). The call itself is their tap.</div></div>
+      <div class="row"><div class="k">Solves</div><div>The number-one reason an elder hands their phone to someone else.</div></div>
+      <div class="row"><div class="k">Unique</div><div>Same in Hindi and Telugu — “बेटे को वीडियो कॉल करो”, “కొడుకుకి వీడియో కాల్ చేయి”.</div></div>
+      <div class="engines"><span class="eng npu">NPU · verify route</span><span class="eng cpu">CPU · WhatsApp map</span></div>
+    </div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Walkthrough</span></div>
+</section>
+
+<!-- 6 · USE CASES 3 + 4 intro -->
+<section class="page">
+  <div class="uc">
+    <div class="phone"><img src="img/05-aadhaar.jpg"></div>
+    <div>
+      <div class="num">03 · Highlight</div><h3>“Find my Aadhaar” → “send it to my son”</h3>
+      <div class="said">“Here’s your Aadhaar card. It’s in your photos, so you can find it here any time.” [ Send to Akash ]</div>
+      <div class="row"><div class="k">Happens</div><div>On the phone, Saathi has already read the photo gallery with ML Kit OCR and remembers only “photo #123 is an Aadhaar” — never the number. It opens that picture. “Send it to my son” opens WhatsApp’s share sheet with it attached; “it” is understood from context. Works for PAN, voter ID, licence, prescriptions and bills. (Shown: a SAMPLE card.)</div></div>
+      <div class="row"><div class="k">Solves</div><div>“Which of 4,000 photos was the Aadhaar?” — asked at every office, hospital and bank counter.</div></div>
+      <div class="row"><div class="k">Unique</div><div>Private by design: no document leaves the phone, no numbers are stored, Saathi never types an ID number.</div></div>
+      <div class="engines"><span class="eng cpu">CPU · ML Kit OCR index</span><span class="eng npu">NPU · verify</span></div>
+    </div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Walkthrough</span></div>
+</section>
+
+<section class="page">
+  <div class="num serif" style="color:var(--saffron);font-size:11pt">04 · Highlight</div>
+  <h3 class="serif" style="font-weight:400;font-size:15pt">“Akash sent me a flight ticket on WhatsApp — when is it, from where to where?”</h3>
+  <div class="strip" style="margin:7mm 0 8mm">
+    <div style="text-align:center"><div class="phone"><img src="img/13a-ticket-glow.jpg"></div><div class="cap">1 · His chat — the newest document glows</div></div>
+    <div class="arrow">›</div>
+    <div style="text-align:center"><div class="phone"><img src="img/13b-ticket-chooser.jpg"></div><div class="cap">2 · “Open with” — the app glows, then Just once, Open only</div></div>
+    <div class="arrow">›</div>
+    <div style="text-align:center"><div class="phone"><img src="img/13-ticket.jpg"></div><div class="cap">3 · Read aloud: both journeys (personal details blurred)</div></div>
+  </div>
+  <div class="grid3">
+    <div class="card"><h3>Happens</h3><p>Screen capture → ML Kit OCR (~0.3 s) → text rebuilt row by row so every city keeps its own time → Gemma 4 on the GPU (~7 s): “4 Sep 2026, Chennai 18:20 → Hyderabad 19:35, 6E 562 …”. In Telugu the answer comes in Telugu.</p></div>
+    <div class="card"><h3>Solves</h3><p>Tickets, reports and bills arrive as PDFs in tiny print, usually in English. Now they can simply ask.</p></div>
+    <div class="card"><h3>Unique</h3><p>End to end on the phone — the booking is never sent to a server — and the answer is checked journey by journey, never mixed.</p></div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Walkthrough</span></div>
+</section>
+
+<!-- 7 · USE CASES 5,6 -->
+<section class="page">
+  <div class="num serif" style="color:var(--saffron);font-size:11pt">05</div>
+  <h3 class="serif" style="font-weight:400;font-size:15pt">In Notes: “Write a sick-leave letter for my kid”</h3>
+  <div class="strip">
+    <div style="text-align:center"><div class="phone"><img src="img/12a-letter-offer.jpg"></div><div class="cap">An empty note — Saathi knows where they are</div></div>
+    <div class="arrow">›</div>
+    <div style="text-align:center"><div class="phone"><img src="img/12-letter.jpg"></div><div class="cap">Gemma 4 composes, “Do it” types it into the body</div></div>
+    <div style="width:62mm;align-self:center">
+      <div class="row"><div class="k">Happens</div><div>On-screen context: the note body is the box. Gemma 4 writes a proper short letter on the GPU (~2.4 s) with greeting and closing. Misheard speech (“writer a letter”) still works.</div></div>
+      <div class="row"><div class="k">Solves</div><div>Writing is the hardest part of a phone for many elders.</div></div>
+      <div class="row"><div class="k">Unique</div><div>Writes where you are; never turns into plain dictation.</div></div>
+      <div class="engines"><span class="eng gpu">GPU · compose</span></div>
+    </div>
+  </div>
+  <div class="uc" style="margin-top:6mm">
+    <div class="phone"><img src="img/08-message.jpg"></div>
+    <div>
+      <div class="num">06</div><h3>“Send a message to Akshay that he left his charger at home”</h3>
+      <div class="said">“Tap the box at the bottom and type your message. I can type: ‘he left his charger at home’.”</div>
+      <div class="row"><div class="k">Happens</div><div>The NPU doubts the first guess; Gemma 4 rewrites it as a WhatsApp message to Akshay; the map finds him and fills the words. Sending is their tap. Also <b>voice notes</b> (“press and hold the mic, speak, let go”) and <b>“take a photo of this paper and send it to my son”</b> (WhatsApp’s in-chat camera).</div></div>
+      <div class="row"><div class="k">Solves</div><div>Everyday messages without hunting through menus.</div></div>
+      <div class="row"><div class="k">Unique</div><div>Natural sentences, not commands; contact names work from Telugu and Hindi too.</div></div>
+      <div class="engines"><span class="eng npu">NPU · verify</span><span class="eng gpu">GPU · rewrite</span><span class="eng cpu">CPU · WhatsApp map</span></div>
+    </div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Walkthrough</span></div>
+</section>
+
+<!-- 8 · USE CASES 7,8 -->
+<section class="page">
+  <div class="uc">
+    <div class="phone"><img src="img/06-youtube.jpg"></div>
+    <div>
+      <div class="num">07</div><h3>“Play Hanuman Chalisa on YouTube” — and control it mid-video</h3>
+      <div class="said">“Tap the magnifying glass at the top to search.”</div>
+      <div class="row"><div class="k">Happens</div><div>Search → type → the first real video (not an ad or a Short) → playing. While it plays, “pause”, “louder” or “close it” just work and the task keeps its context. Also liked videos, watch later, downloads, “play all” playlists and JioHotstar titles. Ads, “rate us” and notification popups are handled first: “A popup is in the way — tap Dismiss.”</div></div>
+      <div class="row"><div class="k">Solves</div><div>Devotional songs, news and serials — the everyday reasons elders pick up a phone.</div></div>
+      <div class="row"><div class="k">Unique</div><div>Follow-ups belong to the same task instead of starting over.</div></div>
+      <div class="engines"><span class="eng npu">NPU · verify</span><span class="eng cpu">CPU · YouTube map</span></div>
+    </div>
+  </div>
+  <div class="uc">
+    <div class="phone"><img src="img/07-math.jpg"></div>
+    <div>
+      <div class="num">08</div><h3>Quick answers — and “Continue” where you left off</h3>
+      <div class="said">“25 × 4 = 100”   [ Continue: send a WhatsApp message… ]   [ Something else ]</div>
+      <div class="row"><div class="k">Happens</div><div>Sums are instant; questions are answered by Gemma 4. If a task was cut short — a new request, leaving the app — the next card offers <b>Continue</b>, or they simply say “continue”. Torch, volume and alarms mid-task just happen and the task carries on. Models load at task start and stay warm for 15 minutes.</div></div>
+      <div class="row"><div class="k">Solves</div><div>Real life interrupts; a helper that forgets is no helper.</div></div>
+      <div class="row"><div class="k">Unique</div><div>The companion remembers where you were.</div></div>
+      <div class="engines"><span class="eng cpu">CPU · instant</span><span class="eng gpu">GPU · answer</span></div>
+    </div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Walkthrough</span></div>
+</section>
+
+<!-- 9 · USE CASE 9 + MORE -->
+<section class="page">
+  <div class="uc">
+    <div class="phone"><img src="img/14-font.jpg"></div>
+    <div>
+      <div class="num">09</div><h3>Phone settings — “make the letters bigger”, battery percentage, brightness, ringtone, Wi-Fi</h3>
+      <div class="said">“Tap the result that says ‘Font size and weight’.” … “Is it good like this?”</div>
+      <div class="row"><div class="k">Happens</div><div>Uses the phone’s own Settings search, so it works on every brand: types the exact term, glows the right result (never another app’s setting), then watches the slider or switch live and asks “Is it good like this?”. vivo switches helpers off when Settings opens — Saathi restores itself in a fraction of a second and continues.</div></div>
+      <div class="row"><div class="k">Solves</div><div>“The text is too small” — the most common complaint of all.</div></div>
+      <div class="row"><div class="k">Unique</div><div>It finishes the last mile — the slider — instead of just opening a page.</div></div>
+    </div>
+  </div>
+  <div class="grid3">
+    <div class="card"><h3>10 · Scam guard</h3><p>Always on: scam SMS (“KYC expired, click…”), APKs sent in chats, remote-control apps, and “Is someone on the phone telling you to open this?” when a money app opens during a call.</p></div>
+    <div class="card"><h3>11 · Teach once — “watch me”</h3><p>A family member says “watch me”, does a task once, and Saathi saves it as a lesson the elder can replay with glows, step by step.</p></div>
+    <div class="card"><h3>12 · Reminders & routines</h3><p>“Remind me in 10 minutes to stretch”, “every day at 8, medicine” — spoken in their language, even during another task.</p></div>
+    <div class="card"><h3>13 · Paper forms & letters</h3><p>Point the camera at a form: OCR finds the boxes and what goes in each, skips office-use sections and never fills Aadhaar/PAN/bank boxes. “Read this letter” explains it simply.</p></div>
+    <div class="card"><h3>14 · Learn any app</h3><p>“How do I use Spotify?” — guided first steps on the real app; unmapped apps are planned by the GPU with drift checks (“where am I?”).</p></div>
+    <div class="card"><h3>15 · Saathi Pro</h3><p>“How do I reach my server over SSH?” — the cloud picks JuiceSSH and plans each Play Store step (~2.5 s). User’s own key, redacted data, money apps refused.</p></div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Walkthrough</span></div>
+</section>
+
+<!-- 10 · AI INSIDE -->
+<section class="page">
+  <div class="eyebrow">06 · AI inside</div>
+  <h2>Every engine on the iQOO 15 has a job</h2>
+  <div class="rule"></div>
+  <p>A small live monitor (switchable in Settings) shows which engine ran each step. These lines are real measurements from the phone:</p>
+  <div class="monitor" style="margin:4mm 0 7mm">
+    <div class="h">Saathi · on-device — AI monitor</div>
+    <div class="l"><span class="u npu">NPU</span><span>Gemma 3 1B</span><span>verify route</span><span class="t">91 ms</span></div>
+    <div class="l"><span class="u gpu">GPU</span><span>Gemma 4 E4B</span><span>rewrite request</span><span class="t">789 ms</span></div>
+    <div class="l"><span class="u cpu">CPU</span><span>App map</span><span>WhatsApp · step 3</span><span class="t">5 ms</span></div>
+    <div class="l"><span class="u gpu">GPU</span><span>Gemma 4 E4B</span><span>compose letter</span><span class="t">2 403 ms</span></div>
+    <div class="l"><span class="u cpu">CPU</span><span>ML Kit OCR</span><span>read ticket</span><span class="t">239 ms</span></div>
+    <div class="l"><span class="u gpu">GPU</span><span>Gemma 4 E4B</span><span>read ticket</span><span class="t">7 600 ms</span></div>
+  </div>
+  <table>
+    <tr><th style="width:12%">Engine</th><th style="width:24%">Model</th><th>What it does in Saathi</th><th style="width:20%">Time on the phone</th></tr>
+    <tr><td class="s">NPU</td><td>Gemma 3 1B · LiteRT-LM</td><td>Double-checks every quickly matched request; fast intent reading</td><td>~90 ms</td></tr>
+    <tr><td class="s">GPU</td><td>Gemma 4 E4B · LiteRT-LM</td><td>Rewrites unclear requests, plans steps in unmapped apps, writes letters and replies, answers questions, reads tickets and papers</td><td>0.8 s – 7 s</td></tr>
+    <tr><td class="s">NPU</td><td>FastVLM</td><td>Camera: “what is this?”</td><td>on demand</td></tr>
+    <tr><td class="s">CPU</td><td>ML Kit OCR (Latin + Devanagari)</td><td>Screens, documents, the private gallery index, paper forms</td><td>0.2 – 0.5 s</td></tr>
+    <tr><td class="s">CPU</td><td>App maps</td><td>Verified screen models for WhatsApp, YouTube, Settings, Photos, Play Store, Phone, Maps, Spotify, JioHotstar…</td><td>2 – 20 ms / step</td></tr>
+    <tr><td class="s">Cloud</td><td>OpenRouter (Saathi Pro only)</td><td>Picks the right app and plans steps for power-user tasks</td><td>~2.5 s / step</td></tr>
+  </table>
+  <p style="margin-top:4mm;font-size:9pt;color:var(--muted)">Models load when a task starts and stay warm for 15 minutes after the last use, then give the memory and battery back.</p>
+  <div class="folio"><span>Saathi</span><span>AI inside</span></div>
+</section>
+
+<!-- 11 · UNIQUE + SAFETY -->
+<section class="page">
+  <div class="eyebrow">07 · Why it is unique</div>
+  <h2>Not an assistant that acts for you — a companion that goes with you</h2>
+  <div class="rule"></div>
+  <table>
+    <tr><th style="width:22%"></th><th>Voice assistants</th><th>Screen readers</th><th>Remote help</th><th>Saathi</th></tr>
+    <tr><td class="s">Guides on your real app</td><td>A few commands</td><td>Reads everything aloud</td><td>Someone else taps</td><td><b>Glows the exact button, step by step</b></td></tr>
+    <tr><td class="s">Teaches, or does it</td><td>Does, sometimes</td><td>—</td><td>Does</td><td><b>Both: “teach me” or “do it for me”</b></td></tr>
+    <tr><td class="s">Keeps the goal across apps</td><td>Partly</td><td>No</td><td>Yes (a person)</td><td><b>Yes, and resumes after interruptions</b></td></tr>
+    <tr><td class="s">Offline & private</td><td>Mostly cloud</td><td>Yes</td><td>Needs internet</td><td><b>Fully on-device; no internet permission</b></td></tr>
+    <tr><td class="s">Hindi & Telugu</td><td>Partly</td><td>Yes</td><td>Depends</td><td><b>Speech, cards, names and answers</b></td></tr>
+    <tr><td class="s">Scam-safe</td><td>—</td><td>—</td><td>Trains people to allow control</td><td><b>Refuses money/OTP, warns in the moment</b></td></tr>
+  </table>
+
+  <div class="eyebrow" style="margin-top:10mm">08 · Safety & privacy — enforced in code on every action</div>
+  <div class="grid2" style="margin-top:3mm">
+    <div class="card"><ul class="clean">
+      <li>Never types or stores passwords, OTP, PIN, card, CVV, Aadhaar, PAN or bank numbers.</li>
+      <li>Never presses Send, Pay, Install or Call — the final tap is always the person’s.</li>
+      <li>Never guides inside banking or UPI apps: “please do this yourself, or with someone you trust.”</li></ul></div>
+    <div class="card"><ul class="clean">
+      <li>Basic Saathi has no internet permission; the document index keeps only “photo → kind”.</li>
+      <li>Saathi Pro is a separate app; the key is the user’s own; personal data is redacted before any request.</li>
+      <li>Family contacts can only be changed with the phone’s screen lock.</li></ul></div>
+  </div>
+  <div class="quote">“The banks are right to block unknown screen readers — that’s how elders get robbed. Saathi never works inside money apps; it protects the person on the way in.”</div>
+  <div class="folio"><span>Saathi</span><span>Unique · Safety</span></div>
+</section>
+
+<!-- 12 · ENGINEERING + NEXT -->
+<section class="page">
+  <div class="eyebrow">09 · Built and tested on the phone</div>
+  <h2>Engineering</h2>
+  <div class="rule"></div>
+  <div class="grid3">
+    <div class="card"><div class="stat">1,150+</div><div class="stat-l">JVM unit tests — routing, app maps checked against real captured screen trees, forms, safety, languages</div></div>
+    <div class="card"><div class="stat">13</div><div class="stat-l">scripted end-to-end scenarios run on the iQOO 15 in English, Hindi and Telugu</div></div>
+    <div class="card"><div class="stat">2 apps</div><div class="stat-l">Saathi (offline) and Saathi Pro (cloud-assisted), one switch</div></div>
+  </div>
+  <ul class="clean" style="margin-top:6mm">
+    <li><b>Stack</b> — Kotlin; Android AccessibilityService with overlay windows; LiteRT-LM running Gemma 3 1B (NPU) and Gemma 4 E4B (GPU); FastVLM; ML Kit text recognition; on-device Android speech; OpenRouter for Saathi Pro only.</li>
+    <li><b>App maps</b> — each screen of each app is described by what is on it (labels, ids, positions); every step is tested against captured screen trees, so a changed app breaks loudly in CI, not silently for a grandmother.</li>
+    <li><b>Resilience</b> — vivo switches accessibility helpers off when Settings opens; Saathi restores itself and resumes the task. Only one Saathi app is active at a time.</li>
+  </ul>
+
+  <div class="eyebrow" style="margin-top:10mm">10 · What’s next</div>
+  <h2>From one phone to every elder</h2>
+  <div class="rule"></div>
+  <div class="grid2">
+    <div class="card"><h3>Bank and secure apps</h3><p>Saathi steps aside so the bank app opens, briefs the person before and checks on them after. Long term, a preinstalled Saathi becomes a trusted accessibility tool — the same tier as TalkBack.</p></div>
+    <div class="card"><h3>More of India</h3><p>Tamil, Kannada, Marathi and Bengali; more app maps; a family dashboard to share lessons across a household.</p></div>
+  </div>
+  <div class="quote" style="margin-top:10mm">Saathi gives an elder back the one thing a phone quietly took away: doing it themselves.</div>
+  <div class="folio"><span>github.com/AkashMedishetty/Saathi</span><span>iQOO 15 screenshots · personal data blurred · sample documents</span></div>
+</section>
+
+</body>
+</html>
