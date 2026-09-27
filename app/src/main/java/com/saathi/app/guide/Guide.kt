@@ -300,16 +300,28 @@ class Guide(
         val body = Regex("(?i)^\\s*(?:write|type|note down|put|add)\\s+(?:down\\s+)?(?:that\\s+|this\\s+|:\\s*)?(.+)$").find(text)?.groupValues?.get(1)?.trim() ?: text.trim()
         // A description to compose ("a birthday wish for my son", "a note about tomorrow's doctor visit") vs the words themselves.
         val describe = Regex("(?i)^(a|an|some|something|my)\\b|\\b(wish|letter|message for|poem|note about|about|for my|reply)\\b").containsMatchIn(body)
-        val words = if (describe && (LlmManager.isReady || run { LlmManager.loadAsync(svc); false })) {
+        val words = if (describe) {
             overlay.showCard(say("Writing it…", "लिख रहा हूँ…", "రాస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
+            // Never fall back to dictation (field 09:27: the model was still loading after an update, so "write a leave
+            // letter" typed those very words). Wait for it; say so if it really isn't there.
+            if (!LlmManager.isReady) { LlmManager.loadAsync(svc); var w = 0; while (!LlmManager.isReady && w < 25_000) { delay(250); w += 250 } }
+            if (!LlmManager.isReady) {
+                finish(say("I'm still getting ready to write. Ask me again in a moment.", "मैं लिखने की तैयारी कर रहा हूँ। थोड़ी देर में फिर कहिए।",
+                    "రాయడానికి సిద్ధమవుతున్నాను. కొద్దిసేపట్లో మళ్ళీ అడగండి.").pick(lang))
+                return true
+            }
             com.saathi.app.llm.AiMeter.purpose = "compose"
+            val long = Regex("(?i)letter|application|leave|complaint|request|email|mail|पत्र|चिट्ठी|అర్జీ|లేఖ|ఉత్తరం").containsMatchIn(body)
             LlmManager.generate("Write what an elderly person asked for, in ${if (lang == Lang.EN) "simple English" else lang.label}. " +
-                "At most 3 short sentences. Only the text itself, no quotes, no explanation.", body)
-                ?.lines()?.filter { it.isNotBlank() }?.joinToString(" ")?.trim('"', ' ')?.take(400)
+                (if (long) "It is a short letter: a greeting line, 3 to 5 short sentences, and a closing line with a blank name. "
+                 else "At most 3 short sentences. ") +
+                "Only the text itself, no quotes, no explanation, no markdown.", body)
+                ?.lines()?.map { it.trim().trim('*', '#', ' ') }?.filter { it.isNotBlank() }?.joinToString(if (long) "\n" else " ")?.trim('"', ' ')?.take(900)
         } else body
         if (words.isNullOrBlank()) return false
-        // A sentence or more goes in the body (the biggest box), not a one-line title.
-        if (words.length > 40 && biggest != null) box = biggest
+        // A sentence or more goes in the body (the biggest box), not a one-line title (field 09:27: "Title" got the letter).
+        if ((describe || words.length > 40) && biggest != null) box = inputs.filterNot { Regex("(?i)^title").containsMatchIn(it.title) }
+            .maxByOrNull { it.bounds.height() * it.bounds.width() } ?: biggest
         com.saathi.app.DebugLog.i("write", "${screen.pkg} box=\"${box.title.take(30)}\" composed=$describe")
         // One step, not a task: no planner afterwards (field 06:58: it replaced the text with "type 'love ver'").
         stop()
