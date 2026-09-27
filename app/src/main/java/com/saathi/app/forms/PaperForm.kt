@@ -24,6 +24,11 @@ object PaperForm {
     private enum class Section { SELF, NOMINEE, OTHER, OFFICE }
 
     private val FILL = Regex("(?:[_.…·\\-—–□☐▢◻■|\\[\\]⎕/]\\s?){3,}")
+    // Common OCR readings of empty character boxes. Letter-like runs need whole-token boundaries:
+    // "I I I I" and "LLLL" are grids; "Lillian", "Bill" and a single "I" are not grid runs.
+    private val GRID = Regex("(?<![\\p{L}\\p{M}\\p{N}])(?:I(?:\\s+I){2,}|L{4,}|(?:口\\s*){3,}|" +
+        "(?:\\|\\s*){3,}|(?:\\[\\s*\\]\\s*){2,}|(?:[□☐▢◻■⎕]\\s*){3,})(?![\\p{L}\\p{M}\\p{N}])")
+    private fun gridOnly(t: String) = t.isBlank() || GRID.matches(t.trim())
     private val FILL_CHARS = Regex("[_.…·\\-—–□☐▢◻■|\\[\\]⎕/\\\\()]")
     private val COLON = Regex("[:：;]-?")
     private val PAREN = Regex("\\([^)]*\\)")
@@ -49,8 +54,8 @@ object PaperForm {
      * [w] × [h] is the photo size; boxes are in photo pixels. [today] fills "Age" and "Date" boxes.
      */
     fun analyse(lines: List<OcrLine>, w: Int, h: Int, p: FormProfile, today: LocalDate = LocalDate.now()): List<PaperField> {
-        val src = lines.filter { it.text.isNotBlank() && it.box.w > 0 && it.box.h > 0 }
-        if (src.isEmpty()) return emptyList()
+        val src = lines.filter { it.box.w > 0 && it.box.h > 0 }
+        if (src.none { it.text.isNotBlank() }) return emptyList()
         val profile = p.sanitized()
         val rows = rowsOf(src)
         val contentR = min(w, src.maxOf { it.box.r })
@@ -113,13 +118,46 @@ object PaperForm {
         if (isFilled(rem)) return null
         val hasFill = FILL.containsMatchIn(rem)
 
+        // Prefer observed grid bounds to an estimated blank extending to the page edge. This handles
+        // a grid in the same OCR line, a separate OCR line on the same row, or the next row below.
+        if (seg.cls != null) {
+            val inline = GRID.find(rem)?.takeIf { gridOnly(rem) }?.let { match ->
+                val first = seg.remStart + match.range.first
+                val last = seg.remStart + match.range.last
+                val (a, b) = trim(text, first, last + 1)
+                Box(charLeft(line, a), lb.t, charRight(line, b - 1), lb.b)
+            }
+            val neighbor = rightOnRow.firstOrNull { it.box.l >= labelBox.r }
+            if (inline == null && nextSeg == null && neighbor != null && !isPlaceholder(neighbor.text) &&
+                segments(neighbor.text).none { it.isField } && header(neighbor.text) == null) return null
+            val beside = neighbor?.takeIf { nextSeg == null && gridOnly(it.text) }?.box
+            val columnEnd = nextSeg?.let { charLeft(line, it.labelStart) }
+                ?: rightOnRow.firstOrNull { segments(it.text).any { seg -> seg.isField } }?.box?.l ?: w
+            val below = if (nextSeg == null && inline == null && beside == null) nextRow.orEmpty()
+                .filter { gridOnly(it.text) && it.box.t >= lb.b && it.box.t - lb.b <= lineH * 2 &&
+                    it.box.l >= labelBox.l - gap && it.box.l < columnEnd && it.box.r <= columnEnd }
+                .minByOrNull { it.box.l - labelBox.l }?.box else null
+            val grid = (inline ?: beside ?: below)?.clip(w, h)
+            if (grid != null && grid.w > 0 && grid.h > 0)
+                return build(raw, seg, labelText, labelBox, grid, rem, section, hasMiddle, p, today)
+        }
+
         // Where the blank to the right ends: the next label on this line, the next thing on this row, or the edge.
         val rightLimit = when {
             nextSeg != null -> charLeft(line, nextSeg.labelStart)
             else -> {
                 val nb = rightOnRow.firstOrNull { it.box.l >= labelBox.r }
                 when {
-                    nb == null -> contentR
+                    nb == null -> {
+                        // OCR often sees only the label, not the empty boxes. Infer a right-hand area
+                        // only for a known field; never reinterpret nearby handwriting as blank space.
+                        val writingBelow = nextRow.orEmpty().any { b ->
+                            b.box.t - lb.b in 0..lineH * 2 && b.box.r > lb.l && b.box.l < contentR &&
+                                !isPlaceholder(b.text) && segments(b.text).none { it.isField } && header(b.text) == null
+                        }
+                        if (seg.cls != null && rem.isBlank() && writingBelow) return null
+                        if (seg.cls != null && rem.isBlank()) max(contentR, w - max(gap, contentL)) else contentR
+                    }
                     isPlaceholder(nb.text) -> max(nb.box.r, contentR.takeIf { rightOnRow.size == 1 } ?: nb.box.r)
                     segments(nb.text).any { it.isField } || header(nb.text) != null -> nb.box.l
                     else -> return null // handwriting next to the label: already filled
@@ -199,7 +237,14 @@ object PaperForm {
     internal fun segments(s: String): List<Seg> {
         val out = mutableListOf<Seg>()
         var cur = 0
-        val fills = FILL.findAll(s).map { it.range }.toMutableList()
+        val fills = (FILL.findAll(s).map { it.range } + GRID.findAll(s).map { it.range })
+            .sortedBy { it.first }.fold(mutableListOf<IntRange>()) { ranges, range ->
+                if (ranges.isNotEmpty() && range.first <= ranges.last().last) {
+                    val last = ranges.removeAt(ranges.lastIndex)
+                    ranges += last.first..max(last.last, range.last)
+                } else ranges += range
+                ranges
+            }
         val chunks = mutableListOf<Triple<Int, Int, Int>>() // text start, text end, remainder end (after the fill)
         for (f in fills) { chunks += Triple(cur, f.first, f.last + 1); cur = f.last + 1 }
         if (cur < s.length) chunks += Triple(cur, s.length, s.length)
@@ -270,7 +315,7 @@ object PaperForm {
 
     /** True when the text after a label is real writing, not blanks, a format hint or printed options. */
     internal fun isFilled(rem: String): Boolean {
-        val left = rem.replace(PAREN, " ").replace(DATE_WORDS, " ").replace(FILL_CHARS, " ")
+        val left = rem.replace(GRID, " ").replace(PAREN, " ").replace(DATE_WORDS, " ").replace(FILL_CHARS, " ")
         return left.count { it.isLetterOrDigit() } >= 2
     }
 
