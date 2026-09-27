@@ -58,8 +58,9 @@ object SpotifyMap {
                 steps = listOf(
                     TO_SEARCH,
                     MapStep("sp_search_tab", listOf(SEARCH_BOX), say("Tap the white search box at the top.", "ऊपर सफ़ेद खोज बॉक्स दबाइए।", "పైన తెల్లని సెర్చ్ బాక్స్ నొక్కండి.")),
-                    MapStep("sp_search", listOf(FIELD), say("Type “{query}”. Or tap Do it and I'll type it.", "“{query}” लिखिए। या 'आप कर दो' दबाइए।",
-                        "“{query}” టైప్ చేయండి. లేదా 'మీరే చేయండి' నొక్కండి."), fill = "query"),
+                    // No song named (a lesson): "type a song you like", never an empty “”.
+                    MapStep("sp_search", listOf(FIELD), say("Type the name of a song or singer you like[: “{query}”].", "पसंद के गाने या गायक का नाम लिखिए[: “{query}”]।",
+                        "నచ్చిన పాట లేదా గాయకుడి పేరు టైప్ చేయండి[: “{query}”]."), fill = "query"),
                     MapStep("sp_results", listOf(RESULT), say("Tap “{query}” in the results to play it.", "चलाने के लिए नतीजों में “{query}” दबाइए।",
                         "ప్లే చేయడానికి ఫలితాల్లో “{query}” నొక్కండి."),
                         why = say("A song shows the singer's name under it. An artist shows a round photo.", "गाने के नीचे गायक का नाम होता है। कलाकार की गोल फोटो होती है।",

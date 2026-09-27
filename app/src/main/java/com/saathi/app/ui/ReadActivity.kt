@@ -414,7 +414,7 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
         // the paper (policy.AnswerCheck); otherwise we read the words themselves instead of guessing.
         val cleaned = (vlm ?: llm)?.let { clean(it) }
         val grounded = if (llm != null && cleaned != null && textHeavy)
-            cleaned.takeIf { com.saathi.app.policy.AnswerCheck.verify("What does this paper say?", it, words, lang).ok }
+            cleaned.takeIf { factsOnPaper(it, words) }
                 .also { if (it == null) com.saathi.app.DebugLog.i("read", "explanation not supported by the paper → reading the words") }
         else cleaned
         val explained = grounded?.let { firstSentences(it, if (mode == MODE_OBJECT) 4 else 3) }
@@ -516,6 +516,20 @@ class ReadActivity : AppCompatActivity(), com.saathi.app.guide.TvSession.Screen 
 
     /** Small models ramble: keep the first [n] sentences. */
     /** Share of tokens that look like real words (letters, a vowel, sane length), in any script we read. */
+    /**
+     * A summary is never a copy of the paper, so grounding checks the FACTS: every number / amount / date in the
+     * explanation must be on the paper (that's where an invented detail hurts), and it mustn't be garbled or medical /
+     * money advice beyond what's written. Field (05:23): the copy-exact check rejected every explanation.
+     */
+    private fun factsOnPaper(expl: String, paper: String): Boolean {
+        val digitsOnPaper = paper.replace(Regex("[^0-9]"), " ").split(' ').filter { it.isNotBlank() }.toSet()
+        val paperDigitsJoined = paper.replace(Regex("[^0-9]"), "")
+        val nums = Regex("\\d[\\d,./:-]*").findAll(expl).map { it.value.replace(Regex("[^0-9]"), "") }.filter { it.isNotEmpty() }.toList()
+        val bad = nums.filter { n -> n !in digitsOnPaper && !paperDigitsJoined.contains(n) }
+        if (bad.isNotEmpty()) com.saathi.app.DebugLog.i("read", "explanation has numbers not on the paper: $bad")
+        return bad.isEmpty() && !com.saathi.app.llm.Templates.garbled(expl)
+    }
+
     private fun wordLikeRatio(t: String): Double {
         val toks = t.split(Regex("[\\s·,;:|/]+")).filter { it.length >= 2 }
         if (toks.isEmpty()) return 1.0

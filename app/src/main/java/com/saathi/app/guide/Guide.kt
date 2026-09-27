@@ -207,6 +207,11 @@ class Guide(
         }
         // A doubt in the middle of a task ("what is this button?", "why is it asking for my number?") is answered with
         // the task in mind, and the task waits; it is not a new goal (field: every mid-task question wiped the task).
+        // A follow-up inside the task ("I want to go to JBS", "title as purple hat", "type jbs in the where to field")
+        // continues it; it is not a new request (field 05:50 / 06:25: each one restarted the task or was rewritten).
+        if (active && !paused && isFollowUp(text)) { followUp(text); return }
+        // On-screen context with no task: in Notes / a chat / a form, "write …" / "type …" goes into the box on screen.
+        if (!active && WRITE_HERE.containsMatchIn(text)) { scope.launch { if (!writeHere(text)) start(text) }; return }
         if (active && isAsideQuestion(text)) {
             com.saathi.app.DebugLog.i("aside", "mid-task question: \"$text\" (task: \"$goal\")")
             // About this step ("what does the magnifying glass mean?", "why this?"): the map's own checked
@@ -272,6 +277,83 @@ class Guide(
         return if (a.length in 2..40 && b.length in 2..40) a to b else null
     }
 
+    private val WRITE_HERE = Regex("(?i)^\\s*(write|type|note down)\\b|लिखो|लिख दो|टाइप करो|రాయి|రాసి|టైప్ చేయి")
+
+    /**
+     * "Write a birthday wish for my son" / "type buy milk" on a screen with a text box: literal words are typed as they
+     * are; a description is composed by Gemma 4 (short, their language), shown, and typed only when they tap Do it.
+     * false = no box here (or it's Saathi's own screen) → the normal path.
+     */
+    private suspend fun writeHere(text: String): Boolean {
+        lang = Prefs.lang(svc)
+        var waited = 0
+        while (waited < 2500 && SaathiService.ownUiOpen) { delay(150); waited += 150 }
+        val root = appRoot() ?: return false
+        if (root.packageName?.toString() in listOf(svc.packageName, launcherPkg())) return false
+        val screen = ScreenReader.read(root) ?: return false
+        val inputs = screen.elements.filter { it.role == "input" && !it.password }
+        if (inputs.isEmpty()) return false
+        val focused = runCatching { root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
+        val box = inputs.firstOrNull { it.node == focused } ?: inputs.maxByOrNull { it.bounds.height() * it.bounds.width() } ?: return false
+        val body = Regex("(?i)^\\s*(?:write|type|note down|put|add)\\s+(?:down\\s+)?(?:that\\s+|this\\s+|:\\s*)?(.+)$").find(text)?.groupValues?.get(1)?.trim() ?: text.trim()
+        // A description to compose ("a birthday wish for my son", "a note about tomorrow's doctor visit") vs the words themselves.
+        val describe = Regex("(?i)^(a|an|some|something|my)\\b|\\b(wish|letter|message for|poem|note about|about|for my|reply)\\b").containsMatchIn(body)
+        val words = if (describe && (LlmManager.isReady || run { LlmManager.loadAsync(svc); false })) {
+            overlay.showCard(say("Writing it…", "लिख रहा हूँ…", "రాస్తున్నాను…").pick(lang), Overlay.Mode.THINKING)
+            com.saathi.app.llm.AiMeter.purpose = "compose"
+            LlmManager.generate("Write what an elderly person asked for, in ${if (lang == Lang.EN) "simple English" else lang.label}. " +
+                "At most 3 short sentences. Only the text itself, no quotes, no explanation.", body)
+                ?.lines()?.filter { it.isNotBlank() }?.joinToString(" ")?.trim('"', ' ')?.take(400)
+        } else body
+        if (words.isNullOrBlank()) return false
+        com.saathi.app.DebugLog.i("write", "${screen.pkg} box=\"${box.title.take(30)}\" composed=$describe")
+        stop()
+        goal = "write: ${words.take(40)}"; taskPkgs += screen.pkg
+        show(Target(box, say("I'll write: “$words”. Tap Do it and I'll type it here.", "मैं लिखूँगा: “$words”। 'आप कर दो' दबाइए, मैं यहाँ लिख दूँगा।",
+            "నేను రాస్తాను: “$words”. 'మీరే చేయండి' నొక్కండి, ఇక్కడ టైప్ చేస్తాను.").pick(lang), "write_here", fill = words))
+        return true
+    }
+
+    /** Not a new task: names no other app and isn't a clear command of its own. */
+    private fun isFollowUp(text: String): Boolean {
+        if (IntentRouter.phrasedAsQuestion(text) || LOST_WORDS.containsMatchIn(text) || IntentRouter.isSos(text)) return false
+        if (Regex("(?i)^\\s*(open|launch|start|stop|cancel|new|call|video call|remind|set an alarm|read|help me fill|go home|close)\\b").containsMatchIn(text)) return false
+        val app = AppLauncher.findInGoal(svc, text)
+        return app == null || app.pkg in taskPkgs || app.pkg == flow?.appPkg || app.pkg == mapRoute?.pkg
+    }
+
+    /** What they said goes into the task: text for the box on screen, a slot for the route, context for the planner. */
+    private fun followUp(text: String) {
+        lang = Prefs.lang(svc)
+        val payload = (Regex("(?i)(?:type|write|enter|put|fill|title(?: is| as)?|name(?: is| as)?|search(?: for)?|call it|say)\\s+(.+?)(?:\\s+(?:in|into|on) (?:the )?[\\p{L} ]{1,20}?(?:field|box|bar|title))?\\s*$").find(text)
+            ?: Regex("(?i)(?:go|going|take me|drop me|ride|cab|auto|destination is|to)\\s+(?:to\\s+)?(.+?)\\s*$").find(text))?.groupValues?.get(1)?.trim()
+            ?.takeIf { it.length in 2..60 }
+        com.saathi.app.DebugLog.i("followup", "\"$text\" → ${payload ?: "context"} (task: \"$goal\")")
+        answers += text.trim()
+        // The route's own slot, when it has one (Uber's destination, a search, a message).
+        mapRoute?.let { r -> payload?.let { p -> r.slots.firstOrNull { it in setOf("place", "destination", "query", "text") }?.let { k ->
+            mapSlots = mapSlots + (k to p) + (if (k == "place") mapOf("destination" to p) else emptyMap()) } } }
+        scope.launch { followUpOnScreen(text, payload) }
+    }
+
+    private suspend fun followUpOnScreen(text: String, payload: String?) {
+        // A box on screen to put it in: the focused one, else the one its words name ("where to", "title"), else the only one.
+        val screen = readScreen()
+        val inputs = screen?.elements?.filter { it.role == "input" && !it.password }.orEmpty()
+        val focused = runCatching { appRoot()?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
+        val box = inputs.firstOrNull { e -> focused != null && e.node == focused }
+            ?: inputs.firstOrNull { e -> e.label.lowercase().split(Regex("\\W+")).filter { it.length >= 3 }.any { text.lowercase().contains(it) } }
+            ?: inputs.singleOrNull()
+        if (payload != null && box != null) {
+            show(Target(box, say("Type “$payload” here. Or tap Do it and I'll type it.", "यहाँ “$payload” लिखिए। या 'आप कर दो' दबाइए।",
+                "ఇక్కడ “$payload” టైప్ చేయండి. లేదా 'మీరే చేయండి' నొక్కండి.").pick(lang), "follow_${box.label.take(20)}", fill = payload))
+            return
+        }
+        overlay.showCard(say("Okay: “${text.take(40)}”.", "ठीक है: “${text.take(40)}”।", "సరే: “${text.take(40)}”.").pick(lang), Overlay.Mode.THINKING)
+        planCache.clear(); lastSig = 0; replan = true; lastSpokenKey = null
+        schedule(250, force = true)
+    }
+
     /** Is the doubt about the step on screen? "this / why / what does it mean", or it names a word of the instruction. */
     private fun aboutStep(q: String, t: Target): Boolean {
         if (Regex("(?i)\\b(this|that|it|why|mean|means)\\b|यह|ये|क्यों|मतलब|ఇది|ఎందుకు|అర్థం").containsMatchIn(q)) return true
@@ -319,7 +401,7 @@ class Guide(
             }
             return
         }
-        if (Coach.wants(goalText, null)) { startCoach(goalText); return }
+        if (Coach.wants(goalText, null) && goalText.lowercase().trim() != coachHandedOff) { startCoach(goalText); return }
         if (IntentRouter.isScamCheck(goalText)) { scamCheck(); return }
         if (IntentRouter.isFamilyHelp(goalText)) { askFamily(); return }
         if (IntentRouter.isReadMessages(goalText)) { readMessages(); return }
@@ -399,7 +481,10 @@ class Guide(
         val out = runCatching { LlmManager.generate(sys, g) }.getOrNull()?.lines()
             ?.map { it.trim().trim('"', '.', '\'', '*', '`', ' ', '-') }
             ?.lastOrNull { it.isNotBlank() && !it.endsWith(":") && !Regex("(?i)^(okay|sure|here|command)\\b").containsMatchIn(it) }?.lowercase()
-        val c = out?.takeIf { it.length in 4..120 && !it.contains("question") && !it.equals(g.trim(), true) }
+        // It must keep at least one of their words (Latin script): "title as purple had" was rewritten to "set wallpaper…".
+        val theirs = g.lowercase().split(Regex("[^a-z]+")).filter { it.length >= 4 }.toSet()
+        val keeps = theirs.isEmpty() || out?.lowercase()?.split(Regex("[^a-z]+"))?.any { w -> w.length >= 4 && theirs.any { t -> t.take(4) == w.take(4) } } == true
+        val c = out?.takeIf { it.length in 4..120 && !it.contains("question") && !it.equals(g.trim(), true) && keeps }
         val ok = c != null && (mapRouteFor(c) != null || DocFinder.ask(c) != null || IntentRouter.settingsTask(c) != null ||
             LOST_WORDS.containsMatchIn(c) || Skills.match(c)?.id in IntentRouter.DIRECT)
         com.saathi.app.DebugLog.i("route", "model: \"$g\" → \"${out ?: "-"}\" ${if (ok) "(known route)" else "(not used)"}")
@@ -495,7 +580,7 @@ class Guide(
             (u.intent == "question" && !IntentRouter.phrasedAsQuestion(goalText))) }?.let {
             begin(goalText, it.build(svc, SlotExtractor.from(goalText, Prefs.family(svc))), autoMode); return true
         }
-        if (Coach.wants(goalText, u.intent) || (u.intent == "watch" && u.device == "tv")) { startCoach(goalText); return true }
+        if ((Coach.wants(goalText, u.intent) || (u.intent == "watch" && u.device == "tv")) && goalText.lowercase().trim() != coachHandedOff) { startCoach(goalText); return true }
         // The model named an app ("ఇంస్టాగ్రామ్ ఎలా వాడాలి" → APP=Instagram): guide inside it, never a text answer.
         if (u.intent in setOf("question", "other", "open_app")) u.app?.let { AppLauncher.findInGoal(svc, "open ${it}") }?.let { app ->
             com.saathi.app.DebugLog.i("route", "model named ${app.label}: guide in the app")
@@ -1004,7 +1089,19 @@ class Guide(
         if (settling() > 0 || readScreen()?.signature != screen.signature) {
             lastSig = 0; schedule(200, force = true); return // the screen moved while we thought: look again
         }
-        if (d.done) { f?.let { complete(it) } ?: finish(d.say) }
+        if (d.done && d.fromLlm && f?.isDone?.invoke(screen) != true) {
+            // The model says "done" but nothing on screen proves it (field 06:31: "successfully cropped" with nothing
+            // cropped): ask them.
+            com.saathi.app.DebugLog.i("plan", "model says done, unproven: asking")
+            val q = say("Is it done the way you wanted?", "क्या काम हो गया, जैसा आप चाहते थे?", "మీరు అనుకున్నట్టు అయిపోయిందా?").pick(lang)
+            current = Target(null, q, "ask_done_$fp"); lastSpokenKey = current?.key
+            overlay.highlight(null, false)
+            overlay.showChoice(q, Triple(say("Yes, done", "हाँ, हो गया", "అవును").pick(lang), com.saathi.app.R.drawable.ic_check, { f?.let { complete(it) } ?: finish(d.say) }),
+                Triple(say("Not yet", "अभी नहीं", "ఇంకా లేదు").pick(lang), com.saathi.app.R.drawable.ic_replay, {
+                    answers += "not done yet"; planCache.clear(); lastSig = 0; replan = true; schedule(0, force = true) }))
+            speaker.say(q, lang)
+        }
+        else if (d.done) { f?.let { complete(it) } ?: finish(d.say) }
         else if (d.action == "back") {
             show(Target(null, d.say, "plan_back_$fp", fill = "__BACK__"))
         } else if (d.action == "ask") {
@@ -1015,9 +1112,13 @@ class Guide(
             // "Play the playlist, or search for something else?": two big buttons, not voice only (field: no way to
             // answer but the mic). Tapping one answers exactly like saying it.
             val opts = choicesIn(d.say)
+            // A question about buttons that are on the screen ("Update or Not now?"): their choice glows THAT button, so
+            // the tap visibly does something (field: tapping "Not now" on our card did nothing).
+            val onScreen = { o: String -> screen.elements.firstOrNull { e -> e.role != "text" && e.title.equals(o.trim(), true) } }
+            val pickIt = { o: String -> onScreen(o)?.let { el -> show(Target(el, Planner.tapSay(el.title, lang), "plan_${el.label}")) } ?: handleUtterance(o) }
             if (opts != null) overlay.showChoice(d.say,
-                Triple(opts.first, com.saathi.app.R.drawable.ic_check, { handleUtterance(opts.first) }),
-                Triple(opts.second, com.saathi.app.R.drawable.ic_chevron_right, { handleUtterance(opts.second) }))
+                Triple(opts.first, com.saathi.app.R.drawable.ic_check, { pickIt(opts.first) }),
+                Triple(opts.second, com.saathi.app.R.drawable.ic_chevron_right, { pickIt(opts.second) }))
             else overlay.showCard(d.say, Overlay.Mode.ASK)
             speaker.say(d.say, lang)
         } else {
@@ -1426,6 +1527,7 @@ class Guide(
 
     fun stop() {
         setAside = false; overlay.guardLaunch = false
+        coachGoal = null; coachWaiting = false; coachKey = ""   // Stop stops the coach too (its pending turn sees the key change)
         LlmManager.endChat()
         goal?.let { g -> if (lastStepIdx >= 0 || history.isNotEmpty()) Memory.journal("Started but stopped: $g (got to: ${history.lastOrNull() ?: "start"})") }
         if (goal != null) com.saathi.app.DebugLog.i("stop", "goal=\"$goal\" step=$lastStepIdx")
@@ -2324,9 +2426,11 @@ class Guide(
     /** The goal's own words ("ringtone", "liked", "akash"): what a screen closer to the goal would show. */
     private fun goalWords(goal: String): List<String> {
         val stop = setOf("change", "the", "how", "want", "please", "show", "open", "find", "make", "with", "from", "that", "this",
-            "some", "have", "what", "where", "phone", "mobile", "there", "help", "need", "like", "about", "your", "into", "want")
+            "some", "have", "what", "where", "phone", "mobile", "there", "help", "need", "like", "about", "your", "into", "want",
+            "teach", "learn", "using", "does", "work", "tell", "explain", "please")
+        val app = runCatching { AppLauncher.findInGoal(svc, goal)?.label?.lowercase() }.getOrNull()
         return SlotExtractor.searchPhrase(goal).lowercase().split(Regex("[^\\p{L}\\p{M}\\p{N}]+"))
-            .filter { it.length >= 4 && it !in stop }.distinct()
+            .filter { it.length >= 4 && it !in stop && (app == null || !app.contains(it)) }.distinct()
     }
 
     /**
@@ -2337,6 +2441,7 @@ class Guide(
      */
     private fun driftCheck(screen: Screen, f: Flow?, g: String): Unit? {
         if (f != null && f.steps.isNotEmpty()) return null   // scripted flows check their own screens
+        if (mapRoute != null) return null                     // app maps check their own screens too
         val home = f?.appPkg
         if (home != null && screen.pkg != home && plansThisTask > 0 && !helperApp(screen.pkg) && screen.pkg != launcherPkg()) {
             com.saathi.app.DebugLog.i("drift", "left ${home} for ${screen.pkg}")
@@ -2417,7 +2522,20 @@ class Guide(
     private var coachSteps = 0
     @Volatile private var coachWaiting = false
 
+    /** A task the coach handed to the guide is never handed back (field 05:01: GUIDE ↔ coach every 3 s). */
+    private var coachHandedOff: String? = null
+    private val coachStarts = mutableMapOf<String, MutableList<Long>>()
+
     fun startCoach(g: String) {
+        // The same errand at most twice a minute: a third time is a loop, not a person asking again.
+        val now = SystemClock.uptimeMillis()
+        val times = coachStarts.getOrPut(g.lowercase().trim()) { mutableListOf() }.apply { removeAll { now - it > 60_000 }; add(now) }
+        if (times.size > 2) {
+            com.saathi.app.DebugLog.i("coach", "loop stopped: \"$g\" started ${times.size} times in a minute")
+            coachGoal = null; coachWaiting = false
+            whereAmI(lead = say("I got stuck on this one. ", "मैं इसमें अटक गया। ", "నేను ఇక్కడ ఆగిపోయాను. ").pick(lang))
+            return
+        }
         stop()
         lang = Prefs.lang(svc)
         coachGoal = g; coachKey = "coach_${SystemClock.uptimeMillis()}"; coachSteps = 0; coachWaiting = false
@@ -2439,8 +2557,10 @@ class Guide(
             var waited = 0
             while (!LlmManager.isReady && LlmManager.state.value !is LlmManager.State.Failed && waited < 12000) { delay(200); waited += 200 }
             LlmManager.lastChatKey = coachKey
+            val myKey = coachKey
             val raw = LlmManager.chat(coachKey, Coach.SYSTEM, msg)
             overlay.setAura(false)
+            if (coachGoal == null || coachKey != myKey) return@launch   // stopped (or replaced) while the model was thinking
             var call = raw?.let { Coach.parse(it) }
             // Watching something on the TV: check where it streams before touching the TV (ground truth, not assumption).
             if (coachSteps == 1 && call?.tool != "LOOKUP" && Coach.isWatchOnTv(g)) call = Coach.Call("LOOKUP", "where to watch ${Coach.title(g)} online India")
@@ -2515,7 +2635,7 @@ class Guide(
             "GUIDE" -> {
                 val g = c.arg.ifBlank { coachGoal ?: "" }
                 com.saathi.app.DebugLog.i("coach", "handoff to guide: $g")
-                coachGoal = null; coachWaiting = false
+                coachGoal = null; coachWaiting = false; coachHandedOff = g.lowercase().trim()
                 val u = Understand.parse(g, svc)
                 if (u == null || !handleIntent(g, u, false)) begin(g, IntentRouter.route(svc, g), false)
             }
