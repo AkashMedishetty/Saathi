@@ -554,6 +554,13 @@ class Guide(
 
     // ───────── Saathi Pro (Pro build + switched on + a key): the cloud brain for power-user tasks ─────────
 
+    /** What a finger can hit: nothing whose middle is under the navigation bar (field 08:05: the cloud brain chose Play
+     *  Store's Search tab drawn under the nav buttons; tapping it pressed Home). Ids are kept, so lookups still work. */
+    private fun planScreen(s: Screen): Screen {
+        val usable = (android.content.res.Resources.getSystem().displayMetrics.heightPixels * 0.955f).toInt()
+        return s.copy(elements = s.elements.filter { it.bounds.centerY() < usable })
+    }
+
     private fun proCfg(model: String = Prefs.proModels(svc).firstOrNull() ?: "", timeoutMs: Int = 15000) =
         com.saathi.app.llm.ProConfig(Prefs.proUrl(svc), Prefs.proKey(svc), model, timeoutMs)
 
@@ -1140,7 +1147,7 @@ class Guide(
         plansThisTask++
         var d = try {
             com.saathi.app.llm.AiMeter.purpose = "plan step"
-            proDecide(f?.llmGoal ?: g, screen) ?: Planner.decideInTask(taskKey, (f?.llmGoal ?: g) + answers.joinToString("") { " (they chose: $it)" }, screen, lastActionNote, lang, AppLauncher.labelOf(svc, screen.pkg), allowLlm = !lowPower,
+            proDecide(f?.llmGoal ?: g, planScreen(screen)) ?: Planner.decideInTask(taskKey, (f?.llmGoal ?: g) + answers.joinToString("") { " (they chose: $it)" }, planScreen(screen), lastActionNote, lang, AppLauncher.labelOf(svc, screen.pkg), allowLlm = !lowPower,
                 progress = history.toList())
         } finally { thinking = false; overlay.setAura(false) }
         lastActionNote = null
@@ -2491,7 +2498,7 @@ class Guide(
     }
 
     /** "change my ringtone" → "ringtone": the words worth typing into a search box. */
-    private val NAV_WORDS = Regex("(?i)^(search|search .*|menu|more|more options|next|continue|ok|done|allow|open|home|back|navigate up|settings|library|you|profile|account|tabs?)$|search")
+    private val NAV_WORDS = Regex("(?i)^(search|search .*|menu|more|more options|next|continue|ok|okay|done|allow|open|home|back|navigate up|settings|library|you|profile|account|tabs?|skip|not now|no thanks|later|maybe later|got it|close|dismiss|accept|agree|start|get started)$|search")
 
     /** The goal's own words ("ringtone", "liked", "akash"): what a screen closer to the goal would show. */
     private fun goalWords(goal: String): List<String> {
