@@ -50,11 +50,11 @@ object Prefs {
     fun waNotSetUp(c: Context) = sp(c).getBoolean("wa_not_set_up", false)
     // ── Saathi Pro (Pro build only): an OpenAI-compatible cloud brain, opt-in. Stored in the app's private storage. ──
     fun proOn(c: Context) = com.saathi.app.BuildConfig.PRO && sp(c).getBoolean("pro_on", false) && proKey(c).isNotBlank() && proModels(c).isNotEmpty()
-    /** The Model box may list several, tried in order (the biggest first, a fast one as fallback). Free ones only. */
-    fun proModels(c: Context) = proModel(c).split(',').map { it.trim() }.filter { it.isNotEmpty() && it.endsWith(":free") }
+    /** The Model box may list several, tried in order (the best first, a different provider as fallback). */
+    fun proModels(c: Context) = proModel(c).split(',').map { it.trim() }.filter { it.isNotEmpty() && Regex("^[\\w.-]+/[\\w.:-]+$").matches(it) }
     fun setProOn(c: Context, v: Boolean) = sp(c).edit().putBoolean("pro_on", v).apply()
     fun proUrl(c: Context) = sp(c).getString("pro_url", "https://openrouter.ai/api/v1") ?: ""
-    fun proModel(c: Context) = sp(c).getString("pro_model", "nvidia/nemotron-3-ultra-550b-a55b:free, nvidia/nemotron-3-super-120b-a12b:free, qwen/qwen3.8-27b:free") ?: ""
+    fun proModel(c: Context) = sp(c).getString("pro_model", "google/gemini-3.8-flash, qwen/qwen3.8-flash, nvidia/nemotron-3-ultra-550b-a55b:free") ?: ""
     fun proKey(c: Context) = sp(c).getString("pro_key", "") ?: ""
     fun setPro(c: Context, url: String, model: String, key: String) =
         sp(c).edit().putString("pro_url", url.trim()).putString("pro_model", model.trim()).putString("pro_key", key.trim()).apply()
