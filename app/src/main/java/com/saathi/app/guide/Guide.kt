@@ -446,6 +446,9 @@ class Guide(
                 //    Gemma 4 (GPU) only. Tried the NPU 1B for this (04:05): yes/no said yes to everything, the topic
                 //    variant sent "an ugly ringtone" to the Phone call route. It keeps doing intent classification only.
                 canonical(goalText)?.let { c -> start(c, autoMode, learnMode = learn); return@launch }
+                //    Saathi Pro: a task nothing on the phone knows ("set up an SSH terminal") → the cloud brain names the
+                //    app; Saathi installs it with them (Play Store route) or opens it, then plans each step there.
+                if (proStart(goalText)) return@launch
                 // 1) Understand the vague request. 2) Jump there with an intent. 3) Only then guide / answer.
                 com.saathi.app.llm.AiMeter.purpose = "understand"
                 val u = Understand.parse(goalText, svc)
@@ -541,6 +544,45 @@ class Guide(
             if (yes) return r
         }
         return null
+    }
+
+    // ───────── Saathi Pro (Pro build + switched on + a key): the cloud brain for power-user tasks ─────────
+
+    private fun proCfg() = com.saathi.app.llm.ProConfig(Prefs.proUrl(svc), Prefs.proKey(svc), Prefs.proModel(svc))
+    /** The goal Pro is installing an app for: continued in that app once it's installed. */
+    private var proPending: String? = null
+
+    /** One planner step from the cloud brain, in the on-device planner's format; null = not Pro / money app / no answer. */
+    private suspend fun proDecide(g: String, screen: Screen): Planner.Decision? {
+        if (!Prefs.proOn(svc) || com.saathi.app.service.CallGuard.isSensitive(screen.pkg)) return null
+        val cfg = proCfg()
+        val t0 = SystemClock.elapsedRealtime()
+        com.saathi.app.llm.AiMeter.purpose = ""
+        val raw = runCatching { com.saathi.app.llm.ProBrain.plan(cfg, g, history.toList(), answers.toList(), AppLauncher.labelOf(svc, screen.pkg),
+            screen.forPrompt(60), lang.name) }.getOrNull()
+        com.saathi.app.llm.AiMeter.record("CLOUD", cfg.model.substringAfter('/').substringBefore(':').take(13), "plan step", SystemClock.elapsedRealtime() - t0)
+        val d = raw?.let { Planner.parse(it, screen, lang) }?.copy(fromLlm = true)
+        com.saathi.app.DebugLog.i("pro", "plan ${if (d != null) "ok" else "none"} in ${screen.pkg}")
+        return d
+    }
+
+    /** A task no route, skill or phrase knows: the cloud brain names the Play Store app for it; install or open it. */
+    private suspend fun proStart(g: String): Boolean {
+        if (!Prefs.proOn(svc) || IntentRouter.phrasedAsQuestion(g)) return false
+        overlay.showCard(say("Finding the right app…", "सही ऐप ढूँढ रहा हूँ…", "సరైన యాప్ వెతుకుతున్నాను…").pick(lang), Overlay.Mode.THINKING)
+        val t0 = SystemClock.elapsedRealtime()
+        val name = runCatching { com.saathi.app.llm.ProBrain.explain(proCfg(),
+            "Which ONE Android app from the Google Play Store should a person use to: \"$g\"? Reply with only the app's name exactly as " +
+                "it appears on the Play Store (for example: JuiceSSH, Termux, CapCut, Google Docs). No other words.", "") }.getOrNull()
+            ?.lines()?.firstOrNull { it.isNotBlank() }?.trim()?.trim('"', '.', '*', ' ')?.take(40)
+        com.saathi.app.llm.AiMeter.record("CLOUD", Prefs.proModel(svc).substringAfter('/').substringBefore(':').take(13), "pick app", SystemClock.elapsedRealtime() - t0)
+        com.saathi.app.DebugLog.i("pro", "app for \"$g\": ${name ?: "none"}")
+        if (name.isNullOrBlank()) return false
+        val app = AppLauncher.findInGoal(svc, name) ?: AppLauncher.installed(svc).firstOrNull { it.label.equals(name, true) }
+        if (app != null) { begin(g, plannerTask(g, app.pkg), false); return true }
+        proPending = g
+        start("install $name", false)
+        return true
     }
 
     /** A route in plain words for the model: "WhatsApp — see photo: Here it is, big…". */
@@ -1083,7 +1125,7 @@ class Guide(
         plansThisTask++
         var d = try {
             com.saathi.app.llm.AiMeter.purpose = "plan step"
-            Planner.decideInTask(taskKey, (f?.llmGoal ?: g) + answers.joinToString("") { " (they chose: $it)" }, screen, lastActionNote, lang, AppLauncher.labelOf(svc, screen.pkg), allowLlm = !lowPower,
+            proDecide(f?.llmGoal ?: g, screen) ?: Planner.decideInTask(taskKey, (f?.llmGoal ?: g) + answers.joinToString("") { " (they chose: $it)" }, screen, lastActionNote, lang, AppLauncher.labelOf(svc, screen.pkg), allowLlm = !lowPower,
                 progress = history.toList())
         } finally { thinking = false; overlay.setAura(false) }
         lastActionNote = null
@@ -2093,7 +2135,12 @@ class Guide(
                 if (r.pkg == "com.android.vending" && newApp != null && r.id.contains("install", true)) {
                     // A new app is in: the next natural step is learning it.
                     Memory.completed(f?.id ?: r.id)
-                    finish(com.saathi.app.maps.AppMaps.fillIn(r.doneSay, mapSlots).pick(lang),
+                    val pending = proPending; proPending = null
+                    val newPkg = AppLauncher.findInGoal(svc, newApp)?.pkg
+                    if (pending != null && newPkg != null) finish(com.saathi.app.maps.AppMaps.fillIn(r.doneSay, mapSlots).pick(lang),
+                        Triple(say("Set it up now", "अब सेट करें", "ఇప్పుడు సెట్ చేద్దాం").pick(lang), com.saathi.app.R.drawable.ic_play_circle,
+                            { begin(pending, plannerTask(pending, newPkg), false) }))
+                    else finish(com.saathi.app.maps.AppMaps.fillIn(r.doneSay, mapSlots).pick(lang),
                         Triple(say("Show me how to use it", "इसे चलाना सिखाओ", "దీన్ని వాడటం నేర్పు").pick(lang), com.saathi.app.R.drawable.ic_school,
                             { learnTask("how do I use $newApp") }))
                 } else if (r.id.startsWith("settings_") && enterSettle(r, screen)) {
