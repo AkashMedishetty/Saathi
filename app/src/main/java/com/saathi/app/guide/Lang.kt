@@ -54,7 +54,7 @@ object Prefs {
     fun proModels(c: Context) = proModel(c).split(',').map { it.trim() }.filter { it.isNotEmpty() && it.endsWith(":free") }
     fun setProOn(c: Context, v: Boolean) = sp(c).edit().putBoolean("pro_on", v).apply()
     fun proUrl(c: Context) = sp(c).getString("pro_url", "https://openrouter.ai/api/v1") ?: ""
-    fun proModel(c: Context) = sp(c).getString("pro_model", "qwen/qwen3.8-27b:free") ?: ""
+    fun proModel(c: Context) = sp(c).getString("pro_model", "nvidia/nemotron-3-ultra-550b-a55b:free, nvidia/nemotron-3-super-120b-a12b:free, qwen/qwen3.8-27b:free") ?: ""
     fun proKey(c: Context) = sp(c).getString("pro_key", "") ?: ""
     fun setPro(c: Context, url: String, model: String, key: String) =
         sp(c).edit().putString("pro_url", url.trim()).putString("pro_model", model.trim()).putString("pro_key", key.trim()).apply()
