@@ -58,6 +58,7 @@ class SaathiService : AccessibilityService() {
         com.saathi.app.DebugLog.i("service", "connected")
         com.saathi.app.llm.Brain.connect(this) // the models live in the ":brain" process
         A11yGuard.start(this)
+        A11yGuard.onlyMe(this)
         aiMonitor = AiMonitor(this, getSystemService(WINDOW_SERVICE) as android.view.WindowManager).also {
             it.setOn(com.saathi.app.guide.Prefs.aiMonitor(this)) }
         // Know which pictures are documents before anyone asks (on the phone, ids + kinds only; see DocFinder).
