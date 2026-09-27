@@ -90,7 +90,7 @@
   <div style="margin-top:8mm"><span class="orb"></span><h1 style="display:inline-block;vertical-align:middle">Saathi</h1></div>
   <p class="lead" style="margin-top:7mm;max-width:150mm">An on-device AI companion that guides India’s elderly through <b>their own phone</b> — in English, हिंदी and తెలుగు — by glowing exactly where to tap, saying one simple step, and doing it with them, safely.</p>
   <div class="chips">
-    <span class="chip">Runs offline on the iQOO 15</span><span class="chip">NPU + GPU + CPU, every engine used</span><span class="chip">3 languages, spoken</span><span class="chip">Never touches money, OTPs or IDs</span>
+    <span class="chip">Runs offline on the iQOO 15</span><span class="chip">NPU + GPU + CPU, every engine used</span><span class="chip">3 languages, spoken</span><span class="chip">Never touches money, OTPs or IDs</span><span class="chip">+ Saathi Pro for power users</span>
   </div>
   <div class="cover-phones">
     <div><div class="phone"><img src="img/01-home.jpg"></div></div>
@@ -381,6 +381,30 @@
     <div class="card"><h3>Routines & reminders</h3><p>“Every morning at 7 play Hanuman Chalisa”, medicine reminders — spoken, confirmed with Yes, re-armed after reboot. Battery-aware: under 15% it skips the big model.</p></div>
   </div>
   <div class="folio"><span>Saathi</span><span>Everyday</span></div>
+</section>
+
+<!-- PRO -->
+<section class="page">
+  <div class="eyebrow">Saathi Pro</div>
+  <h2>Two audiences, one companion — the same guide, two ways of thinking</h2>
+  <div class="rule"></div>
+  <p class="lead">The elderly aren’t the only people lost in apps. A student setting up coding tools, a shop owner editing a reel, a professional reaching a server from the phone — all need the same thing: someone to show them where to tap. <b>Saathi Pro</b> is a second, separate app that keeps the same glow-and-guide experience and adds a cloud brain for open-ended, expert tasks.</p>
+  <table style="margin-top:5mm">
+    <tr><th style="width:22%"></th><th>Saathi (basic)</th><th>Saathi Pro</th></tr>
+    <tr><td class="s">Who</td><td>Elders, first-time and regional-language users</td><td>Students, professionals, creators, small businesses — anyone learning a new app or workflow</td></tr>
+    <tr><td class="s">Brains</td><td>Fully on-device: NPU Gemma 3 1B, GPU Gemma 4 E4B, ML Kit OCR, app maps</td><td>Everything in basic, plus a fast cloud model via OpenRouter (Gemini Flash-class, with fallbacks)</td></tr>
+    <tr><td class="s">Internet</td><td>None — the app has no internet permission</td><td>Only this app has it; the person enters their own key</td></tr>
+    <tr><td class="s">Best at</td><td>Everyday tasks: calls, messages, documents, settings, forms, reminders, safety</td><td>Open-ended goals: “access my VPS over SSH from this phone”, “edit this video”, “set up a spreadsheet”, “which app do I need for…”</td></tr>
+    <tr><td class="s">How it works</td><td>Known skills and app maps; Gemma 4 plans the rest</td><td>The cloud picks the right Play Store app (e.g. <b>JuiceSSH</b> in ~4 s), guides the install, then plans each step on screen (~2.5 s per step) with the same glow, card and voice</td></tr>
+    <tr><td class="s">Privacy & safety</td><td>Nothing leaves the phone</td><td>Numbers, emails and keys are redacted before any request; money apps are refused; Send, Pay, Install and Call stay the person’s tap</td></tr>
+    <tr><td class="s">Switching</td><td colspan="2">Both can be installed side by side; one button — “Use this Saathi” — makes one active and the other steps aside. Only one is ever active.</td></tr>
+  </table>
+  <div class="grid3" style="margin-top:7mm">
+    <div class="card"><h3>Widens the audience</h3><p>The same product serves a grandmother on day one and her grandson learning Linux on his phone — one design, one safety model.</p></div>
+    <div class="card"><h3>Bring your own model</h3><p>URL, model list and key are set in the app (Settings → Saathi Pro); nothing is built in. Fallback models keep it working when one is slow.</p></div>
+    <div class="card"><h3>Same guardrails</h3><p>Pro plans are validated by the same on-device policy and drift checks before any glow — the cloud suggests, the phone decides.</p></div>
+  </div>
+  <div class="folio"><span>Saathi</span><span>Saathi Pro</span></div>
 </section>
 
 <!-- ARCHITECTURE -->
