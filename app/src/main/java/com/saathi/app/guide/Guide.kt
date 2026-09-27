@@ -548,20 +548,28 @@ class Guide(
 
     // ───────── Saathi Pro (Pro build + switched on + a key): the cloud brain for power-user tasks ─────────
 
-    private fun proCfg() = com.saathi.app.llm.ProConfig(Prefs.proUrl(svc), Prefs.proKey(svc), Prefs.proModel(svc))
+    private fun proCfg(model: String = Prefs.proModels(svc).firstOrNull() ?: "", timeoutMs: Int = 15000) =
+        com.saathi.app.llm.ProConfig(Prefs.proUrl(svc), Prefs.proKey(svc), model, timeoutMs)
+
+    /** Each listed model in turn (biggest first); the first usable answer wins. Big ones get 12 s, the last one 20 s. */
+    private suspend fun <T> proTry(what: String, call: suspend (com.saathi.app.llm.ProConfig) -> T?): T? {
+        val models = Prefs.proModels(svc)
+        for ((i, m) in models.withIndex()) {
+            val t0 = SystemClock.elapsedRealtime()
+            val r = runCatching { call(proCfg(m, if (i == models.lastIndex) 20000 else 12000)) }.getOrNull()
+            com.saathi.app.llm.AiMeter.record("CLOUD", m.substringAfter('/').substringBefore(':').take(13), if (r != null) what else "$what ✗", SystemClock.elapsedRealtime() - t0)
+            if (r != null) return r
+        }
+        return null
+    }
     /** The goal Pro is installing an app for: continued in that app once it's installed. */
     private var proPending: String? = null
 
     /** One planner step from the cloud brain, in the on-device planner's format; null = not Pro / money app / no answer. */
     private suspend fun proDecide(g: String, screen: Screen): Planner.Decision? {
         if (!Prefs.proOn(svc) || com.saathi.app.service.CallGuard.isSensitive(screen.pkg)) return null
-        val cfg = proCfg()
-        val t0 = SystemClock.elapsedRealtime()
-        com.saathi.app.llm.AiMeter.purpose = ""
-        val raw = runCatching { com.saathi.app.llm.ProBrain.plan(cfg, g, history.toList(), answers.toList(), AppLauncher.labelOf(svc, screen.pkg),
-            screen.forPrompt(60), lang.name) }.getOrNull()
-        com.saathi.app.llm.AiMeter.record("CLOUD", cfg.model.substringAfter('/').substringBefore(':').take(13), "plan step", SystemClock.elapsedRealtime() - t0)
-        val d = raw?.let { Planner.parse(it, screen, lang) }?.copy(fromLlm = true)
+        val d = proTry("plan step") { cfg -> com.saathi.app.llm.ProBrain.plan(cfg, g, history.toList(), answers.toList(),
+            AppLauncher.labelOf(svc, screen.pkg), screen.forPrompt(60), lang.name)?.let { Planner.parse(it, screen, lang) } }?.copy(fromLlm = true)
         com.saathi.app.DebugLog.i("pro", "plan ${if (d != null) "ok" else "none"} in ${screen.pkg}")
         return d
     }
@@ -570,12 +578,10 @@ class Guide(
     private suspend fun proStart(g: String): Boolean {
         if (!Prefs.proOn(svc) || IntentRouter.phrasedAsQuestion(g)) return false
         overlay.showCard(say("Finding the right app…", "सही ऐप ढूँढ रहा हूँ…", "సరైన యాప్ వెతుకుతున్నాను…").pick(lang), Overlay.Mode.THINKING)
-        val t0 = SystemClock.elapsedRealtime()
-        val name = runCatching { com.saathi.app.llm.ProBrain.explain(proCfg(),
+        val name = proTry("pick app") { cfg -> com.saathi.app.llm.ProBrain.explain(cfg,
             "Which ONE Android app from the Google Play Store should a person use to: \"$g\"? Reply with only the app's name exactly as " +
-                "it appears on the Play Store (for example: JuiceSSH, Termux, CapCut, Google Docs). No other words.", "") }.getOrNull()
-            ?.lines()?.firstOrNull { it.isNotBlank() }?.trim()?.trim('"', '.', '*', ' ')?.take(40)
-        com.saathi.app.llm.AiMeter.record("CLOUD", Prefs.proModel(svc).substringAfter('/').substringBefore(':').take(13), "pick app", SystemClock.elapsedRealtime() - t0)
+                "it appears on the Play Store (for example: JuiceSSH, Termux, CapCut, Google Docs). No other words.", "")
+            ?.lines()?.firstOrNull { it.isNotBlank() }?.trim()?.trim('"', '.', '*', ' ')?.take(40)?.ifBlank { null } }
         com.saathi.app.DebugLog.i("pro", "app for \"$g\": ${name ?: "none"}")
         if (name.isNullOrBlank()) return false
         val app = AppLauncher.findInGoal(svc, name) ?: AppLauncher.installed(svc).firstOrNull { it.label.equals(name, true) }

@@ -6,7 +6,7 @@
 set -u
 [ -n "${OPENROUTER_API_KEY:-}" ] || { echo "Set OPENROUTER_API_KEY in this shell first (it is not stored anywhere)."; exit 2; }
 MODELS=("$@")
-[ ${#MODELS[@]} -eq 0 ] && MODELS=(qwen/qwen3.8-27b:free google/gemma-4-31b-it:free nvidia/nemotron-3-super-120b-a12b:free google/gemma-4-26b-a4b-it:free)
+[ ${#MODELS[@]} -eq 0 ] && MODELS=(nvidia/nemotron-3-ultra-550b-a55b:free thinkingmachines/inkling:free nvidia/nemotron-3-super-120b-a12b:free qwen/qwen3.8-27b:free google/gemma-4-31b-it:free)
 for m in "${MODELS[@]}"; do
   case "$m" in *:free) ;; *) echo "SKIP $m (not a free model)"; continue ;; esac
   python3 - "$m" <<'PY'

@@ -36,7 +36,7 @@ class ProActivity : Activity() {
         page.addView(on)
         page.addView(label("Address (OpenAI-compatible)"))
         val url = field(Prefs.proUrl(this), "https://openrouter.ai/api/v1"); page.addView(url)
-        page.addView(label("Model (free: qwen/qwen3.8-27b:free, or google/gemma-4-31b-it:free)"))
+        page.addView(label("Models, tried in order, comma-separated (free only). e.g. nvidia/nemotron-3-ultra-550b-a55b:free, qwen/qwen3.8-27b:free"))
         val model = field(Prefs.proModel(this), "qwen/qwen3.8-27b:free"); page.addView(model)
         page.addView(label("Your API key (stays on this phone)"))
         val key = field(Prefs.proKey(this), "sk-or-…", secret = true); page.addView(key)
@@ -45,7 +45,8 @@ class ProActivity : Activity() {
             text = "Save"; textSize = 17f
             setOnClickListener {
                 // Free models only (a paid model could run up a bill): the name must end in ":free".
-                if (!model.text.toString().trim().endsWith(":free")) { status.text = "Please choose a free model (its name ends in :free)."; return@setOnClickListener }
+                val names = model.text.toString().split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                if (names.isEmpty() || names.any { !it.endsWith(":free") }) { status.text = "Free models only: every name must end in :free."; return@setOnClickListener }
                 Prefs.setPro(this@ProActivity, url.text.toString(), model.text.toString(), key.text.toString())
                 Prefs.setProOn(this@ProActivity, on.isChecked)
                 status.text = if (Prefs.proOn(this@ProActivity)) "Saved. Saathi Pro is on." else "Saved. Saathi Pro is off (switch on and add a key)."
