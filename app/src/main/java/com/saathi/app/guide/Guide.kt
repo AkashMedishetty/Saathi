@@ -432,6 +432,12 @@ class Guide(
         }
         IntentRouter.settingsTask(goalText)?.let { begin(goalText, it, autoMode); return }
         IntentRouter.phoneHowTo(svc, goalText)?.let { begin(goalText, it, autoMode); return }
+        // Saathi Pro: "how can I access my VPS through SSH from this phone" is a do-it-with-me task for a power user, not a
+        // question to answer (field 07:53: it went to web results). Pro picks the app and guides; else answer as before.
+        if (Prefs.proOn(svc) && PRO_HOWTO.containsMatchIn(goalText)) {
+            scope.launch { if (!proStart(goalText, howTo = true)) respond(goalText) }
+            return
+        }
         if (IntentRouter.isQuestion(svc, goalText)) { respond(goalText); return }
         rememberRequest(goalText)?.let { finish(it); return }
         IntentRouter.openOnly(svc, goalText)?.let { begin(goalText, it, autoMode); return }
@@ -575,8 +581,11 @@ class Guide(
     }
 
     /** A task no route, skill or phrase knows: the cloud brain names the Play Store app for it; install or open it. */
-    private suspend fun proStart(g: String): Boolean {
-        if (!Prefs.proOn(svc) || IntentRouter.phrasedAsQuestion(g)) return false
+    private val PRO_HOWTO = Regex("(?i)\\bhow (can|do|should|would) i\\b|\\bhow to\\b|\\bhelp me (set ?up|install|configure|connect|edit|make|create)|" +
+        "\\b(set ?up|configure|connect to|ssh|terminal|vps|server|edit (a |my )?video|code|coding|workspace)\\b")
+
+    private suspend fun proStart(g: String, howTo: Boolean = false): Boolean {
+        if (!Prefs.proOn(svc) || (!howTo && IntentRouter.phrasedAsQuestion(g))) return false
         overlay.showCard(say("Finding the right app…", "सही ऐप ढूँढ रहा हूँ…", "సరైన యాప్ వెతుకుతున్నాను…").pick(lang), Overlay.Mode.THINKING)
         val name = proTry("pick app") { cfg -> com.saathi.app.llm.ProBrain.explain(cfg,
             "Which ONE Android app from the Google Play Store should a person use to: \"$g\"? Reply with only the app's name exactly as " +
