@@ -1,0 +1,5 @@
+name: Quick: Prepare Aadhaar sharing without sending
+say EN send my aadhaar card to my son
+expect log "\[docs\] AADHAAR → true send=true" within 15
+expect show key=(pick|send) within 10
+expect enabled

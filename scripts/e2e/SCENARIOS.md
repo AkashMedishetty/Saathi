@@ -68,6 +68,13 @@ Demo-fix step 9 (dragging and text clipping) remains a manual visual check. It c
 
 ## Quick set (separate directory)
 
-Eight runnable demos in nine plans (one Hotstar plan skips): YouTube search EN; video-choice card; Hotstar missing → spoken yes → Install, or installed → Anupama → login wall; scam SMS; scam APK;
-Settings bigger letters HI; learn Spotify; one-minute reminder. No calibrated coordinates needed. The quick
-YouTube check stops at the results glow; it does not assert video playback. See README for the 210/235-second budgets.
+14 plans, 13 runnable highlights when one Hotstar alternative skips. YouTube accepts input/suggestion/submit
+after Search. Hotstar can dismiss one nag popup before the home step. Video choice continues through spoken
+WhatsApp to the top-bar call glow. Hindi Settings continues through the font result to the slider settle event.
+The original SMS/APK, Spotify and reminder cases remain. New cases 09–13 cover Aadhaar finding/sharing,
+“I'm lost”, literal Notes dictation, and at most one Tatkal coach start over 20 seconds.
+
+Needs a saved/indexable Aadhaar photo, Photos, registered WhatsApp and configured son contact, Notes reopening
+an editable note, and the app/account states for the existing demos. Sharing stops at pick/Send; no document
+is sent. The coach case permits zero starts: it detects repeat loops, not successful ticket booking.
+See README for the 330/355-second budgets and conditional/count syntax.

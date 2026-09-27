@@ -1,0 +1,6 @@
+name: Quick: Orient during YouTube search
+say EN search for old telugu songs on youtube
+expect show key=map_yt_search_[0123] within 10
+say EN i'm lost
+expect log "\[where\] " within 8
+expect enabled

@@ -38,10 +38,10 @@ bounded_command() (
   exit "$status"
 )
 
-# Return a bounded transport allowance; the outer quick run has a five-second margin under four minutes.
+# Return a bounded transport allowance; the outer quick run has a five-second margin under six minutes.
 quick_command_limit() {
   local remaining
-  remaining=$((235 - $1))
+  remaining=$((355 - $1))
   [ "$remaining" -gt 0 ] || return 124
   if [ "$remaining" -lt 8 ]; then printf '%s\n' "$remaining"; else printf '8\n'; fi
 }

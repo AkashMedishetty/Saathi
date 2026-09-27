@@ -1,5 +1,7 @@
-name: Quick: Video-call choice
+name: Quick: Spoken WhatsApp reaches video-call button
 say EN video call my son
-expect log "\[choice\] choose_video|\[show\] key=choose_video" within 10
-screenshot video-choice
+expect log "\[choice\] choose_video" within 10
+say EN WhatsApp
+expect show key=map_wa_video_call_3 within 12
+expect bounds top < 500
 expect enabled
