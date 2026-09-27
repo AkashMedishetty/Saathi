@@ -45,7 +45,7 @@ object Understand {
         "battery" to "setting", "storage" to "setting", "storage_view" to "setting", "dark_mode" to "setting", "internet" to "setting",
         "torch" to "setting|other", "camera" to "photo|other", "call" to "call", "wa_video" to "video_call", "wa_message" to "message",
         "wa_photo" to "photo|message", "youtube" to "music|watch", "ott" to "watch", "maps" to "directions", "alarm" to "alarm|reminder",
-        "medicine" to "alarm|reminder", "irctc_tatkal" to "book", "tv" to "tv|watch")
+        "medicine" to "alarm|reminder", "tv" to "tv|watch")
 
     /**
      * Hybrid brain. The NPU (Gemma 3 1B, ≈0.25–0.6 s) answers first; its answer is used when it agrees with the keyword

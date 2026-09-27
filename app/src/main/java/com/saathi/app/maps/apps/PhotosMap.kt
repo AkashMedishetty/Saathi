@@ -69,7 +69,7 @@ object PhotosMap {
             ),
             Route(
                 id = "photos_crop", pkg = PKG,
-                goals = goals("crop", "cut (the |a |my )?(photo|picture|pic)", "(photo|picture).*(smaller|cut)", "फोटो (काटना|काटो|छोटी)",
+                goals = goals("crop", "edit (a |my |the )?(photo|picture|pic)", "cut (the |a |my )?(photo|picture|pic)", "(photo|picture).*(smaller|cut)", "फोटो (काटना|काटो|छोटी)",
                     "फ़ोटो (काटना|काटो)", "ఫోటో (కట్|కత్తిరించు)"),
                 slots = emptyList(),
                 steps = listOf(

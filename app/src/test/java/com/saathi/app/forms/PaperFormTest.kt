@@ -274,4 +274,33 @@ class PaperFormTest {
         assertFalse(PaperForm.isFilled(" दिन/माह/वर्ष"))
         assertFalse(PaperForm.isFilled(" □□□□ □□□□ □□□□"))
     }
+
+    /** Field (07:20): a section "to be filled by the district officer" (OCR with Cyrillic І) is never guided. */
+    @Test fun certifierSectionIsNotTheirs() {
+        val f = analyse(listOf(
+            line(80, 100, "Name of Applicant: ______________"),
+            line(80, 160, "Date of Birth: ______________"),
+            line(80, 260, "CERTІFІER: TO BE FІLLED BY THE DISTRICT CHILD PROTECTION OFFICER (DCPO)"),
+            line(80, 330, "Name: ______________"),
+            line(80, 390, "Designation: ______________"),
+            line(80, 450, "Signature with seal: ______________"),
+        ))
+        assertEquals(listOf("Name of Applicant", "Date of Birth"), f.map { it.label.substringBefore(":").trim() })
+    }
+
+    /** An office-use side panel next to their own fields: only their column is guided. */
+    @Test fun officeSidePanelIsSkipped() {
+        val f = analyse(listOf(
+            line(80, 100, "Name: ______________"), line(760, 100, "FOR OFFICE USE ONLY"),
+            line(80, 160, "Mobile No.: __________"), line(760, 160, "Receipt No.: ______"),
+            line(80, 220, "Address: _____________"), line(760, 220, "Verified by: ______"),
+        ))
+        assertFalse(f.any { it.label.contains("Receipt") || it.label.contains("Verified") })
+        assertTrue(f.any { it.label.startsWith("Name") })
+    }
+
+    @Test fun lookalikeLettersAreNormalised() {
+        assertEquals("CERTIFIER: TO BE FILLED BY", PaperForm.latin("CERTІFІER: TO BE FІLLED BY"))
+        assertEquals("नाम: राम", PaperForm.latin("नाम: राम"))
+    }
 }

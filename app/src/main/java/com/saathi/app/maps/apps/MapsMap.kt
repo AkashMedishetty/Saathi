@@ -58,7 +58,7 @@ object MapsMap {
                 id = "maps_directions", pkg = PKG,
                 goals = goals("(directions|way|route|navigate|take me) to .+", "how (do i|to) (go|get|reach) to .+", ".+ (का|की) रास्ता", ".+ (कैसे जाऊँ|कैसे जाएँ)",
                     ".+ కి దారి", ".+ ఎలా వెళ్ళాలి"),
-                avoid = listOf(rx("cab|taxi|uber|ola|rapido|auto|ride|कैब|टैक्सी|ऑटो|క్యాబ్|టాక్సీ|ఆటో")),
+                avoid = listOf(rx("cab|taxi|uber|ola|rapido|auto|ride|कैब|टैक्सी|ऑटो|క్యాబ్|టాక్సీ|ఆటో|home ?screen|होम स्क्रीन|హోమ్ స్క్రీన్")),
                 slots = listOf("place"),
                 steps = TO_PLACE + MapStep("mp_directions", listOf(START), say("Tap Start. Maps will speak each turn.", "'Start' दबाइए। मैप हर मोड़ बताएगा।",
                     "'Start' నొక్కండి. ప్రతి మలుపును మ్యాప్స్ చెబుతుంది.")),

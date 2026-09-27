@@ -70,6 +70,6 @@ object Coach {
 
     /** Coach-worthy goals: the TV, bookings, anything that needs checking and choices. */
     fun wants(goal: String, intent: String?): Boolean =
-        Regex("(?i)\\b(on|in) (the |my )?tv\\b|टीवी|టీవీ|book|ticket|tatkal|train|flight|bus|टिकट|ट्रेन|టికెట్|రైలు|plan my|help me (plan|choose)").containsMatchIn(goal) ||
+        Regex("(?i)\\b(on|in) (the |my )?tv\\b|टीवी|టీవీ|book|flight|bus|plan my|help me (plan|choose)").containsMatchIn(goal) ||
             intent == "book"
 }

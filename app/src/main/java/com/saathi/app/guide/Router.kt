@@ -59,7 +59,10 @@ object AppLauncher {
         // An app named after "in / on / using / open" is the one they mean ("weather … in chrome" → Chrome, not Weather).
         // Check the words after EVERY such word (the last one usually names the app).
         val words = g.trim().split(Regex("\\s+"))
-        val apps = installed(ctx).filter { it.pkg != ctx.packageName && it.label.length >= 3 }
+        // "Google Pay" is not "Google" (field: "open Google Pay", not installed, opened the Google app).
+        val multi = Regex("google (pay|photos|maps|docs|drive|meet|lens|keep|play|calendar|chrome|news|one)|youtube (music|kids)|amazon (prime|pay|music)|prime video|jio ?cinema|jio ?hotstar|phone ?pe").find(g)?.value
+        val wrongShort = { a: App -> multi != null && a.label.lowercase() != multi && multi.startsWith(a.label.lowercase()) }
+        val apps = installed(ctx).filter { it.pkg != ctx.packageName && it.label.length >= 3 && !wrongShort(it) }
         for (i in words.indices.reversed()) {
             if (words[i] !in setOf("in", "on", "using", "with", "open", "launch", "start", "से", "में", "पर", "లో")) continue
             for (n in 3 downTo 1) {
@@ -71,6 +74,7 @@ object AppLauncher {
         return installed(ctx)
             .filter { it.pkg != ctx.packageName && it.label.length >= 3 }
             .filter { g.contains(" ${it.label.lowercase()}") || g.contains(it.label.lowercase().replace(" ", "")) }
+            .filterNot(wrongShort)
             .maxByOrNull { it.label.length }
     }
 }

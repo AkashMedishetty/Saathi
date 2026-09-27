@@ -29,7 +29,16 @@ object PaperForm {
     private val PAREN = Regex("\\([^)]*\\)")
     private val DATE_WORDS = Regex("(?i)(?<![a-z])(dd|mm|yyyy|yy|mmm|d|m|y)(?![a-z])|दिन|माह|महीना|वर्ष|साल")
     private val HEADER_WORD = Regex("(?i)details|particulars|information|\\binfo\\b|section|use only|विवरण|जानकारी|उपयोग|हेतु")
-    private val SEC_OFFICE = Regex("(?i)(office|bank|official|branch) use|for (office|bank|official)|कार्यालय|केवल बैंक|बैंक के उपयोग")
+    private val SEC_OFFICE = Regex("(?i)(office|bank|official|branch|departmental|internal) use|for (office|bank|official|departmental)|" +
+        // Filled by anyone who isn't them ("TO BE FILLED BY THE DISTRICT CHILD PROTECTION OFFICER (DCPO)", field 07:20).
+        "to be (filled|completed|signed) (in )?by (?!(the )?(applicant|candidate|you|parent|guardian|student|patient|pensioner|customer|account holder|member))|" +
+        "certifier|certified by|certification by|attested by|attestation|for use by|verification by|recommend(ed|ation) (by|of)|" +
+        "do not write (in|below)|space for (office|bank)|" +
+        "कार्यालय|केवल बैंक|बैंक के उपयोग|कार्यालय उपयोग|అధికారిక|కార్యాలయ")
+    /** Labels only staff fill, wherever they sit (field 07:15: the helper guided "for office use" boxes). */
+    private val STAFF = Regex("(?i)\\b(officer|official|verified by|verifying|sanction|approved by|received by|checked by|entered by|" +
+        "authori[sz]ed signatory|signature of (the )?(officer|manager|clerk|authori)|stamp|seal|branch (code|manager|name)|clerk|" +
+        "dealing (assistant|hand)|ref(erence)? no|file no|receipt no|account opened|customer id|cif|certifier|dcpo|attested)\\b|अधिकारी|मुहर|అధికారి|ముద్ర")
     private val SEC_NOMINEE = Regex("(?i)nominee|nomination|नामांकन|नामांकित|नामिती|नॉमिनी")
     private val SEC_OTHER = Regex("(?i)joint|second (holder|applicant)|2nd (holder|applicant)|guardian|witness|introducer|" +
         "reference|emergency contact|attendant|गवाह|अभिभावक|संयुक्त")
@@ -49,7 +58,8 @@ object PaperForm {
      * [w] × [h] is the photo size; boxes are in photo pixels. [today] fills "Age" and "Date" boxes.
      */
     fun analyse(lines: List<OcrLine>, w: Int, h: Int, p: FormProfile, today: LocalDate = LocalDate.now()): List<PaperField> {
-        val src = lines.filter { it.text.isNotBlank() && it.box.w > 0 && it.box.h > 0 }
+        // OCR returns look-alike letters ("CERTІFІER", "FІLLED" with a Cyrillic І): normalise them to Latin first.
+        val src = lines.filter { it.text.isNotBlank() && it.box.w > 0 && it.box.h > 0 }.map { it.copy(text = latin(it.text)) }
         if (src.isEmpty()) return emptyList()
         val profile = p.sanitized()
         val rows = rowsOf(src)
@@ -61,6 +71,18 @@ object PaperForm {
         val postal = segsByLine.values.flatten().any { Labels.isAddress(it.cls) }
         val hasMiddle = segsByLine.values.flatten().any { it.cls?.key == FieldKey.MIDDLE_NAME }
 
+        // Office zones by POSITION: an office-use heading owns the area below it in its column (a side panel or a boxed
+        // block) until the next heading that isn't office-use. Reading order alone missed side panels.
+        val officeZones = src.filter { SEC_OFFICE.containsMatchIn(it.text) }.map { hd ->
+            val left = if (hd.box.l > w * 0.35) hd.box.l - lineH * 2 else 0
+            val right = if (hd.box.r < w * 0.6 && hd.box.l < w * 0.35) (w * 0.62).toInt() else w
+            val end = src.filter { it.box.t > hd.box.b && it.box.l >= left - lineH && it.box.l < right &&
+                (header(it.text).let { s -> s != null && s != Section.OFFICE } || SEC_SELF.containsMatchIn(it.text)) }.minOfOrNull { it.box.t } ?: h
+            Box(left, hd.box.t, right, end)
+        }
+        val inOffice = { b: Box -> val cx = (b.l + b.r) / 2; val cy = (b.t + b.b) / 2
+            officeZones.any { z -> cx in z.l..z.r && cy in z.t..z.b } }
+
         val out = mutableListOf<PaperField>()
         var section = Section.SELF
         for ((ri, row) in rows.withIndex()) {
@@ -68,10 +90,12 @@ object PaperForm {
                 val hd = header(line.text)
                 if (hd != null) { section = hd; continue }
                 if (section == Section.OFFICE && !SEC_SELF.containsMatchIn(line.text)) continue
+                if (inOffice(line.box)) continue
                 val segs = segsByLine.getValue(line).filter { it.isField }
                 for ((si, seg) in segs.withIndex()) {
                     // "Signature of Applicant" after the nominee block: the boxes are about the person again.
                     if (section != Section.SELF && SEC_SELF.containsMatchIn(line.text.substring(seg.labelStart, seg.labelEnd))) section = Section.SELF
+                    if (STAFF.containsMatchIn(line.text.substring(seg.labelStart, seg.labelEnd))) continue
                     val next = segs.getOrNull(si + 1)
                     field(seg, next, line, row.drop(li + 1), rows.getOrNull(ri + 1), rows.drop(ri + 1),
                         section, postal, hasMiddle, profile, today, w, h, contentL, contentR, lineH)?.let { out += it }
@@ -277,11 +301,23 @@ object PaperForm {
     /** A line that is only ruled blanks / character boxes / a date layout. */
     internal fun isPlaceholder(t: String) = !isFilled(t)
 
+    private val LOOKALIKE = mapOf('І' to 'I', 'і' to 'i', 'Ї' to 'I', 'ї' to 'i', 'О' to 'O', 'о' to 'o', 'А' to 'A', 'а' to 'a',
+        'Е' to 'E', 'е' to 'e', 'С' to 'C', 'с' to 'c', 'Р' to 'P', 'р' to 'p', 'Т' to 'T', 'К' to 'K', 'Х' to 'X', 'х' to 'x',
+        'Н' to 'H', 'В' to 'B', 'М' to 'M', 'у' to 'y', 'Ү' to 'Y', 'Ѕ' to 'S', 'ѕ' to 's', 'Ј' to 'J', 'ј' to 'j',
+        'Ι' to 'I', 'Ο' to 'O', 'Α' to 'A', 'Ε' to 'E', 'Τ' to 'T', 'Κ' to 'K', 'Χ' to 'X', 'Ν' to 'N', 'Β' to 'B', 'Μ' to 'M', 'Ρ' to 'P', 'ο' to 'o')
+    /** Cyrillic / Greek look-alikes → Latin (only when the line is mostly Latin, so real Hindi/Telugu is untouched). */
+    internal fun latin(t: String): String {
+        if (t.none { it in LOOKALIKE }) return t
+        val latin = t.count { it in 'A'..'Z' || it in 'a'..'z' }
+        return if (latin >= t.count { it.isLetter() } / 3) t.map { LOOKALIKE[it] ?: it }.joinToString("") else t
+    }
+
     private fun header(t: String): Section? {
+        // Office-use headings are often long or dotted ("FOR OFFICE USE ONLY ....... do not write below"): check them first.
+        if (SEC_OFFICE.containsMatchIn(t) && t.trim().split(Regex("\\s+")).size <= 14) return Section.OFFICE
         if (FILL.containsMatchIn(t)) return null
         val n = t.trim()
         if (n.split(Regex("\\s+")).size > 8) return null
-        if (SEC_OFFICE.containsMatchIn(n)) return Section.OFFICE
         val bare = !n.trimEnd().endsWith(":") && Labels.classify(n) == null
         val headerish = HEADER_WORD.containsMatchIn(n) || bare
         return when {

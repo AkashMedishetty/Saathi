@@ -253,7 +253,7 @@ class Guide(
                 say("A little louder.", "आवाज़ थोड़ी बढ़ा दी।", "కొంచెం సౌండ్ పెంచాను.") to { vol(android.media.AudioManager.ADJUST_RAISE); vol(android.media.AudioManager.ADJUST_RAISE) }
             Regex("^(softer|quieter|volume down|decrease (the )?volume|turn it down|आवाज़ कम करो|आवाज कम करो|సౌండ్ తగ్గించు|శబ్దం తగ్గించు)\\W*$").matches(g) ->
                 say("A little softer.", "आवाज़ थोड़ी कम कर दी।", "కొంచెం సౌండ్ తగ్గించాను.") to { vol(android.media.AudioManager.ADJUST_LOWER); vol(android.media.AudioManager.ADJUST_LOWER) }
-            Regex("^(close (this|the|it)( app)?|close (youtube|the video|the song)|exit( this)?( app)?|i'?m done|go (to )?home|home screen|बंद करो|ऐप बंद करो|होम पर जाओ|మూసేయి|యాప్ మూసేయి|హోమ్‌?కి వెళ్ళు)\\W*$").matches(g) ->
+            Regex("^(close (this|the|it)( app)?|close (youtube|the video|the song)|exit( this)?( app)?|i'?m done|go (to )?home|(take me )?(to )?(the )?home ?screen|बंद करो|ऐप बंद करो|होम पर जाओ|మూసేయి|యాప్ మూసేయి|హోమ్‌?కి వెళ్ళు)\\W*$").matches(g) ->
                 say("Done. You're on the home screen.", "हो गया। आप होम स्क्रीन पर हैं।", "అయింది. మీరు హోమ్ స్క్రీన్‌లో ఉన్నారు.") to {
                     stop(); svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME) }
             else -> return false
@@ -387,6 +387,10 @@ class Guide(
         Routines.parse(goalText)?.let { (h, m, g) -> addRoutine(h, m, g); return }
         java.util.Calendar.getInstance().let { Reminders.parse(goalText, it.get(java.util.Calendar.HOUR_OF_DAY), it.get(java.util.Calendar.MINUTE)) }
             ?.let { (due, _, what) -> addReminder(due / 60, due % 60, what); return }
+        // Train tickets / Tatkal: removed (too hard to do safely); say so plainly instead of wandering into IRCTC.
+        if (Regex("(?i)tatkal|irctc|train ticket|railway ticket|तत्काल|ट्रेन टिकट|रेल टिकट|తత్కాల్|రైలు టికెట్").containsMatchIn(goalText)) {
+            finish(say("I can't help with train tickets yet. Please ask family to book it with you.", "ट्रेन टिकट में मैं अभी मदद नहीं कर सकता। परिवार के साथ बुक कीजिए।",
+                "రైలు టికెట్లలో ఇంకా సహాయం చేయలేను. కుటుంబంతో కలిసి బుక్ చేయండి.").pick(lang)); return }
         // "Where is my Aadhaar card?" / "send my Aadhaar to my son": their own pictures, read on the phone.
         DocFinder.ask(goalText)?.let { a -> docRequest(goalText, a); return }
         if (IntentRouter.isRecall(goalText)) { recall(goalText); return }
