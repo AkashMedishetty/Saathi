@@ -768,7 +768,9 @@ class Guide(
         if (!TICKET.containsMatchIn(g) || !Regex("(?i)sent|send|whatsapp|open|when|time|date|where|read|tell|भेज|పంప").containsMatchIn(g)) return false
         // Already looking at it (the picture open, no text box): read it now.
         val here = ScreenReader.read(appRoot())
-        if (here != null && here.pkg.startsWith("com.whatsapp") && here.elements.none { it.role == "input" }) { readScreenFor(g); return true }
+        // Already looking at it (a document viewer, or the picture open in WhatsApp): read it now.
+        if (here != null && here.elements.none { it.role == "input" } &&
+            (here.pkg.startsWith("com.whatsapp") || Regex("(?i)smartoffice|docs|pdf|drive|wps|reader|office|files").containsMatchIn(here.pkg))) { readScreenFor(g); return true }
         // The sender first ("Akash sent me…"), never "where" from "from where to where" (field 10:13).
         val who = (Regex("(?i)^\\s*(?:my\\s+)?([\\p{L}]+)\\s+(?:has\\s+)?(?:sent|shared|forwarded|send)\\b").find(g)
             ?: Regex("(?i)\\bfrom\\s+(?:my\\s+)?([\\p{L}]+)").find(g))?.groupValues?.get(1)
@@ -784,26 +786,29 @@ class Guide(
         lang = Prefs.lang(svc)
         overlay.highlight(null, false); overlay.hideCard()
         scope.launch {
-            delay(700)   // the card fades out of the picture first
+            delay(1500)   // the page renders and the card fades out of the picture first
+            overlay.highlight(null, false); overlay.hideCard()
             val bmp = screenshot()
             overlay.showCard(say("Reading it…", "पढ़ रहा हूँ…", "చదువుతున్నాను…").pick(lang), Overlay.Mode.THINKING)
             if (bmp == null) { finish(say("I couldn't see the screen. Please try again.", "स्क्रीन नहीं देख पाया। फिर से कोशिश कीजिए।", "స్క్రీన్ చూడలేకపోయాను. మళ్ళీ ప్రయత్నించండి.").pick(lang)); return@launch }
             val text = com.saathi.app.llm.AiMeter.time("CPU", "ML Kit OCR") { ocr(bmp) }.orEmpty()
-            com.saathi.app.DebugLog.i("ticket", "ocr ${text.length} chars")
+            com.saathi.app.DebugLog.i("ticket", "ocr ${text.length} chars: ${text.replace("\n", " | ").take(700)}")
             if (text.length < 20) { finish(say("I can't read any writing here. Open the ticket full screen and ask again.", "यहाँ कुछ लिखा नहीं दिख रहा। टिकट पूरा खोलकर फिर पूछिए।", "ఇక్కడ రాత కనిపించట్లేదు. టికెట్‌ని పూర్తిగా తెరిచి మళ్ళీ అడగండి.").pick(lang)); return@launch }
             if (!LlmManager.isReady) { LlmManager.loadAsync(svc); var w = 0; while (!LlmManager.isReady && w < 20_000) { delay(250); w += 250 } }
             com.saathi.app.llm.AiMeter.purpose = "read ticket"
             val a = if (LlmManager.isReady) LlmManager.generate(
-                "You read a ticket aloud for an elderly person. Use ONLY the ticket text. Say, in ${if (lang == Lang.EN) "simple English" else lang.label}: " +
-                    "the date, the departure time, from where to where (city names), the flight or train number, and the seat or PNR if shown. " +
-                    "Short sentences, no markdown, no guessing. If something is missing, leave it out.", "Ticket text:\n${text.take(3000)}\n\nQuestion: $q")
+                "You read a ticket aloud for an elderly person. Use ONLY the ticket text. Answer in ${if (lang == Lang.EN) "simple English" else lang.label}. " +
+                    "A round trip has two journeys: describe each one separately, in order. For each journey say: the date, the city it leaves from " +
+                    "and the departure time printed next to that city, the city it arrives in and the arrival time next to that city, and the flight " +
+                    "or train number. Then the PNR and seat if shown. Never mix times between journeys. Short sentences, no markdown, no guessing.", "Ticket text:\n${text.take(3000)}\n\nQuestion: $q")
                 ?.lines()?.map { it.trim().trim('*', '#', '-', ' ') }?.filter { it.isNotBlank() }?.joinToString(" ")?.take(500) else null
             com.saathi.app.DebugLog.i("ticket", "answer: ${a?.take(200)}")
             finish(a ?: say("Here is what it says: ", "इसमें लिखा है: ", "ఇందులో ఉన్నది: ").pick(lang) + text.take(240))
         }
     }
 
-    private suspend fun screenshot(): android.graphics.Bitmap? = kotlinx.coroutines.suspendCancellableCoroutine { c ->
+    private suspend fun screenshot(): android.graphics.Bitmap? = withTimeoutOrNull(5000) { shot() }
+    private suspend fun shot(): android.graphics.Bitmap? = kotlinx.coroutines.suspendCancellableCoroutine { c ->
         if (android.os.Build.VERSION.SDK_INT < 30) { c.resume(null) {}; return@suspendCancellableCoroutine }
         runCatching {
             svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, svc.mainExecutor, object : android.accessibilityservice.AccessibilityService.TakeScreenshotCallback {
@@ -818,10 +823,23 @@ class Guide(
         }.onFailure { c.resume(null) {} }
     }
 
+    /** OCR lines rebuilt as rows, left to right: a city and its time stay together (field 10:26: block order paired
+     *  "Chennai" with the other journey's 17:40). */
+    private fun rowsOf(r: com.google.mlkit.vision.text.Text): String {
+        val lines = r.textBlocks.flatMap { it.lines }.filter { it.boundingBox != null }.sortedBy { it.boundingBox!!.centerY() }
+        val rows = mutableListOf<MutableList<com.google.mlkit.vision.text.Text.Line>>()
+        for (l in lines) {
+            val b = l.boundingBox!!
+            val row = rows.lastOrNull()?.takeIf { rw -> kotlin.math.abs(rw.first().boundingBox!!.centerY() - b.centerY()) < b.height() * 0.6 }
+            if (row != null) row += l else rows += mutableListOf(l)
+        }
+        return rows.joinToString("\n") { rw -> rw.sortedBy { it.boundingBox!!.left }.joinToString("   ") { it.text } }
+    }
+
     private suspend fun ocr(bmp: android.graphics.Bitmap): String? = kotlinx.coroutines.suspendCancellableCoroutine { c ->
         com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
             .process(com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0))
-            .addOnSuccessListener { c.resume(it.text) {} }.addOnFailureListener { c.resume(null) {} }
+            .addOnSuccessListener { r -> c.resume(rowsOf(r)) {} }.addOnFailureListener { c.resume(null) {} }
     }
 
     /** Torch, volume, brightness…: done at once, the task's card comes back. False when [text] isn't one. */
@@ -1242,17 +1260,28 @@ class Guide(
         // The ticket is open (a PDF viewer / the picture: no message box any more): read it out.
         // "Open with" (no default PDF app): say pick one and wait for the viewer (field 10:17: it read the chooser).
         if (pendingRead != null && mapRoute?.id == "wa_open_doc" && (screen.pkg == "android" || screen.pkg.contains("resolver"))) {
-            show(Target(null, say("Choose an app to open the ticket, then tap Just once.", "टिकट खोलने के लिए कोई ऐप चुनिए, फिर 'Just once' दबाइए।",
-                "టికెట్ తెరవడానికి ఒక యాప్ ఎంచుకుని, 'Just once' నొక్కండి.").pick(lang), "ticket_chooser", noAct = true))
+            // Glow the app itself (a card over the sheet hid the choices, field 10:22), then "Just once".
+            val appEl = screen.find(listOf(Regex("(?i)^(iQOO DocMaster|Office Reader|Drive PDF Viewer|PDF Viewer|Google Docs|WPS Office|Adobe Acrobat|Files)")))
+            val once = screen.find(listOf(Regex("(?i)^Just once$")))
+            if (lastSpokenKey != "ticket_app" && appEl != null)
+                show(Target(appEl, say("Tap ${appEl.title} to open the ticket.", "टिकट खोलने के लिए ${appEl.title} दबाइए।", "టికెట్ తెరవడానికి ${appEl.title} నొక్కండి.").pick(lang), "ticket_app"))
+            else if (once != null)
+                show(Target(once, say("Now tap Just once.", "अब 'Just once' दबाइए।", "ఇప్పుడు 'Just once' నొక్కండి.").pick(lang), "ticket_once"))
             return
+        }
+        // DocMaster: "Save and open" / "Open only": just open it.
+        if (pendingRead != null && mapRoute?.id == "wa_open_doc" && Regex("(?i)\\bsave\\b").containsMatchIn(screen.allText)) {
+            screen.find(listOf(Regex("(?i)^(Open only|Only open|Open directly|Open without saving|Just open|Open)$")))?.let { el ->
+                show(Target(el, say("Tap “${el.title}”.", "“${el.title}” दबाइए।", "“${el.title}” నొక్కండి.").pick(lang), "ticket_open_only"))
+                return
+            }
         }
         if (pendingRead != null && mapRoute?.id == "wa_open_doc" && mapStep >= 3 && screen.pkg != launcherPkg() &&
             screen.elements.none { it.role == "input" }) {
             val q = pendingRead!!; pendingRead = null
             com.saathi.app.DebugLog.i("ticket", "opened in ${screen.pkg}: reading")
-            mapRoute = null; goal = null; flow = null
-            delay(1200)   // let the page render
-            readScreenFor(q)
+            mapRoute = null; goal = null; flow = null; current = null
+            readScreenFor(q)   // its own coroutine: a delay here was cancelled by the next screen change (field 10:23)
             return
         }
 
