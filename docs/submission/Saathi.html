@@ -88,7 +88,7 @@
 <section class="page cover">
   <div class="eyebrow">iQOO AI Hackathon · Project submission</div>
   <div style="margin-top:8mm"><span class="orb"></span><h1 style="display:inline-block;vertical-align:middle">Saathi</h1></div>
-  <p class="lead" style="margin-top:7mm;max-width:150mm">An on-device AI companion that guides India’s elderly through <b>their own phone</b> — in English, हिंदी and తెలుగు — by glowing exactly where to tap, saying one simple step, and doing it with them, safely.</p>
+  <p class="lead" style="margin-top:7mm;max-width:150mm">An AI companion that guides anyone through <b>their own phone</b> by glowing exactly where to tap, saying one simple step, and doing it with them, safely. <b>Saathi</b> — fully on-device, for elders and regional-language users (English, हिंदी, తెలుగు). <b>Saathi Pro</b> — adds a cloud brain for students, professionals and creators learning new apps and expert workflows.</p>
   <div class="chips">
     <span class="chip">Runs offline on the iQOO 15</span><span class="chip">NPU + GPU + CPU, every engine used</span><span class="chip">3 languages, spoken</span><span class="chip">Never touches money, OTPs or IDs</span><span class="chip">+ Saathi Pro for power users</span>
   </div>
@@ -103,14 +103,14 @@
 <!-- 2 · IDEA + PROBLEM -->
 <section class="page">
   <div class="eyebrow">01 · Project idea</div>
-  <h2>A companion that sits on top of every app</h2>
+  <h2>A companion that sits on top of every app — for every kind of user</h2>
   <div class="rule"></div>
-  <p class="lead">The person says what they want, the way they would ask a grandchild — <i>“video call my son”</i>, <i>“find my Aadhaar and send it to him”</i>, <i>“Akash sent me a flight ticket, when is it?”</i> — and Saathi walks them through it on the real app: a warm glow around the exact button, one short sentence in their language, spoken aloud, and a <b>Do it for me</b> button when they just want it done.</p>
+  <p class="lead">The person says what they want, the way they would ask a grandchild — <i>“video call my son”</i>, <i>“find my Aadhaar and send it to him”</i>, <i>“Akash sent me a flight ticket, when is it?”</i> — and Saathi walks them through it on the real app: a warm glow around the exact button, one short sentence in their language, spoken aloud, and a <b>Do it for me</b> button when they just want it done. The same guide scales from a grandmother’s first video call (<b>Saathi</b>, offline) to a developer reaching a server over SSH from the phone (<b>Saathi Pro</b>).</p>
 
   <div class="eyebrow" style="margin-top:9mm">02 · Problem statement</div>
-  <h2>Digital India left its elders one tap behind</h2>
+  <h2>Digital India left millions one tap behind — elders first, but not only</h2>
   <div class="rule"></div>
-  <p>Pensions, Aadhaar, train and flight tickets, bills, doctors, family — it all lives in smartphone apps now. Yet millions of parents and grandparents were never taught how these apps work, many read their own language far better than English, and every phone brand and every update moves things around.</p>
+  <p>Pensions, Aadhaar, train and flight tickets, bills, doctors, family — it all lives in smartphone apps now. Yet millions of parents and grandparents were never taught how these apps work, many read their own language far better than English, and every phone brand and every update moves things around. The same wall stops a much larger group every day: students setting up coding tools, shop owners editing reels, professionals reaching a server or a spreadsheet from their phone — anyone facing an app for the first time.</p>
   <div class="grid2" style="margin-top:5mm">
     <div class="card"><h3>Every task needs someone else</h3><p>A video call, sending a photo, bigger text, finding a document — each waits for a son, daughter or neighbour to be free. Asking again and again costs independence and dignity.</p></div>
     <div class="card"><h3>English-first, ever-changing apps</h3><p>Menus and icons change with every update and brand. A step learned last month is somewhere else today. Almost all help is English and generic.</p></div>
@@ -132,9 +132,9 @@
 <!-- 3 · SOLUTION -->
 <section class="page">
   <div class="eyebrow">03 · Detailed solution</div>
-  <h2>Understand the goal. Show the next step. Keep them safe.</h2>
+  <h2>Understand the goal. Show the next step. Keep them safe. For everyone.</h2>
   <div class="rule"></div>
-  <p>Saathi is an Android <b>accessibility-service overlay</b> with a stack of <b>on-device models</b>. It reads the structure of whatever app is on screen (the same accessibility tree screen readers use), understands what the person wants, decides the next step and shows it on the real app — then watches the screen change and moves on.</p>
+  <p>Saathi is an Android <b>accessibility-service overlay</b> with a stack of <b>on-device models</b>. It reads the structure of whatever app is on screen (the same accessibility tree screen readers use), understands what the person wants, decides the next step and shows it on the real app — then watches the screen change and moves on. It ships as <b>two apps from one codebase</b>: <b>Saathi</b> (fully on-device, no internet permission — elders and everyday tasks) and <b>Saathi Pro</b> (the same guide plus a cloud model for open-ended, expert goals).</p>
   <div class="pipe">
     <div class="step"><div class="n">1</div><b>Hear</b><span>Voice in English, Hindi or Telugu (on-device speech), or typing. One big light, SOS always there.</span></div>
     <div class="step"><div class="n">2</div><b>Understand</b><span>Instant phrase routes, verified by <b>Gemma 3 1B on the NPU</b> (~90 ms). Unclear? <b>Gemma 4 on the GPU</b> rewrites it (~0.8 s).</span></div>
@@ -159,7 +159,7 @@
         <li><b>Never loses the thread</b> — questions mid-task are answered while the task waits; interrupted tasks come back with “Continue”.</li>
         <li><b>Scam guard</b> — warnings on scam SMS, APKs, remote-control apps, money apps opened during a call.</li>
         <li><b>Live AI monitor</b> — shows which engine ran each step and how long it took.</li>
-        <li><b>Saathi Pro</b> — a separate optional app with cloud help for power users; basic Saathi stays fully offline.</li>
+        <li><b>Saathi Pro — a wider audience</b> — students, professionals and creators: the cloud picks the right app for any goal (SSH, video editing, spreadsheets), guides the install and plans every step with the same glow.</li>
       </ul>
     </div>
   </div>
@@ -510,9 +510,9 @@
   <div class="rule"></div>
   <div class="grid2">
     <div class="card"><h3>Bank and secure apps</h3><p>Saathi steps aside so the bank app opens, briefs the person before and checks on them after. Long term, a preinstalled Saathi becomes a trusted accessibility tool — the same tier as TalkBack.</p></div>
-    <div class="card"><h3>More of India</h3><p>Tamil, Kannada, Marathi and Bengali; more app maps; a family dashboard to share lessons across a household.</p></div>
+    <div class="card"><h3>More of India, more users</h3><p>Tamil, Kannada, Marathi and Bengali; more app maps; Pro workflows for students, creators and small businesses; a family dashboard to share lessons across a household.</p></div>
   </div>
-  <div class="quote" style="margin-top:10mm">Saathi gives an elder back the one thing a phone quietly took away: doing it themselves.</div>
+  <div class="quote" style="margin-top:10mm">Saathi gives everyone — from a grandmother on day one to her grandson learning Linux — the one thing a new app quietly takes away: doing it themselves.</div>
   <div class="folio"><span>github.com/AkashMedishetty/Saathi</span><span>iQOO 15 screenshots · personal data blurred · sample documents</span></div>
 </section>
 
