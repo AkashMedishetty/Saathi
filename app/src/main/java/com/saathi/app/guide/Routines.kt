@@ -55,7 +55,13 @@ object Routines {
         val am = c.getSystemService(AlarmManager::class.java) ?: return
         val cal = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, r.hour); set(Calendar.MINUTE, r.minute); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            if (timeInMillis <= System.currentTimeMillis() + 5_000) add(Calendar.DAY_OF_YEAR, 1)
+            val now = System.currentTimeMillis()
+            // "In 1 minute" asked at 07:23:59 rounds to 07:24:00, a moment away: that's now, not tomorrow (field 07:24:
+            // it was silently moved to the next day). Only a time really past moves to tomorrow.
+            // One-time reminders only: a daily routine is rescheduled just after it fires and must go to tomorrow.
+            val once = r.kind == "note" || r.kind == "once"
+            if (once && timeInMillis <= now + 5_000 && timeInMillis > now - 90_000) timeInMillis = now + 45_000
+            else if (timeInMillis <= now + 5_000) add(Calendar.DAY_OF_YEAR, 1)
         }
         // Reminders must be on time (vivo delays inexact alarms by minutes); offers can be a little late.
         val exact = r.kind != "do" && (android.os.Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms())

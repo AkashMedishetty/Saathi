@@ -23,7 +23,18 @@ android {
     // Extract native libs to nativeLibraryDir so LiteRT can find the NPU dispatch + QNN libs.
     packaging { jniLibs { useLegacyPackaging = true } }
     testOptions { unitTests.isReturnDefaultValues = true }
-    buildFeatures { aidl = true } // IBrain: the models run in their own ":brain" process
+    buildFeatures { aidl = true; buildConfig = true } // IBrain: the models run in their own ":brain" process
+    buildTypes {
+        getByName("debug") { buildConfigField("boolean", "PRO", "false") }
+        getByName("release") { buildConfigField("boolean", "PRO", "false") }
+        // Saathi Pro: the same app plus an opt-in cloud brain (OpenRouter) for power-user tasks. Only this build has the
+        // INTERNET permission (src/pro/AndroidManifest.xml); the normal Saathi stays fully offline.
+        create("pro") {
+            initWith(getByName("debug"))
+            matchingFallbacks += listOf("debug")
+            buildConfigField("boolean", "PRO", "true")
+        }
+    }
 }
 
 kotlin { jvmToolchain(17) }

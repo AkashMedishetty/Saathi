@@ -85,6 +85,7 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity android:name=".ui.SchoolActivity" android:exported="false" />
+        <activity android:name=".ui.ProActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ui.SosActivity" android:exported="false" android:showWhenLocked="true" />
 
         <receiver android:name=".guide.RoutineReceiver" android:exported="false">

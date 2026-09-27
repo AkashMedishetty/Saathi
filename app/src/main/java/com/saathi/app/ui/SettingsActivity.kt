@@ -196,6 +196,12 @@ class SettingsActivity : AppCompatActivity() {
         page.add(tb, 10)
 
         // ── Performance (proof it's light on the phone) ──
+        if (com.saathi.app.BuildConfig.PRO) {
+            section(page, s("Saathi Pro", "साथी प्रो", "సాథీ ప్రో"))
+            page.add(row(R.drawable.ic_auto_awesome, s("Cloud brain for hard tasks", "कठिन कामों के लिए क्लाउड दिमाग़", "కష్టమైన పనులకు క్లౌడ్ మెదడు"),
+                s(if (com.saathi.app.guide.Prefs.proOn(this)) "On · " + com.saathi.app.guide.Prefs.proModel(this) else "Off · tap to set up", "सेट करने के लिए छुइए", "సెట్ చేయడానికి తాకండి")) {
+                startActivity(android.content.Intent(this, ProActivity::class.java)) }, 10)
+        }
         section(page, s("Phone health", "फ़ोन की सेहत", "ఫోన్ ఆరోగ్యం"))
         // Show which engine decides each step (NPU / GPU / OCR / app map) and CPU / RAM / GPU, live.
         page.add(toggle(s("AI monitor (NPU · GPU · CPU, live)", "AI मॉनिटर (NPU · GPU · CPU)", "AI మానిటర్ (NPU · GPU · CPU)"),
