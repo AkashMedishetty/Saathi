@@ -13,7 +13,7 @@ Usage: scripts/e2e/run.sh [--quick] [pattern] [--dry-run LOGFILE] [--output DIR]
        [--scenarios DIR] [--phone-choice X,Y]
 Pattern is a shell glob matched against scenario filenames/stems, not a regex.
 --dry-run never invokes adb or sources device environment scripts.
---quick selects eight demos (two mutually exclusive Hotstar cases); execution stops at 210s, transport/evidence by 235s.
+--quick selects the demo highlights (two mutually exclusive Hotstar cases); execution stops at 330s, transport/evidence by 355s.
 --list validates and prints selected names without device access.
 Replay logs need timestamped E2E: enabled=0|1, focus=..., end annotations for those checks.
 --phone-choice is an operator-calibrated centre of the SECOND choice button, from a current screenshot.
@@ -66,7 +66,7 @@ for file in "$SCENARIOS"/*.scn; do
     case "$op" in
       requires-installed|requires-missing) allowed_app "$arg" || { echo "Precondition package not allowed: $arg" >&2; exit 2; };;
       apps) for app in $arg; do allowed_app "$app" || { echo "Force-stop not allowed: $app" >&2; exit 2; }; done;;
-      show|log|focus|not-log)
+      show|log|focus|not-log|if-show|at-most-one)
         printf '' | grep -E -e "$arg" >/dev/null 2>&1
         rc=$?; [ "$rc" -ne 2 ] || { echo "Invalid regex at $base:$ln" >&2; exit 2; };;
     esac
@@ -95,7 +95,7 @@ device() {
   if bounded_command "$limit" "$OUTPUT/command.out" "$OUTPUT/command.err" adb "$@"; then status=0; else status=$?; fi
   return "$status"
 }
-quick_expired() { [ "$QUICK" -eq 1 ] && [ -z "$DRY" ] && [ $((SECONDS - SUITE_START)) -ge 210 ]; }
+quick_expired() { [ "$QUICK" -eq 1 ] && [ -z "$DRY" ] && [ $((SECONDS - SUITE_START)) -ge 330 ]; }
 quote_goal() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 broadcast() { device shell am broadcast -a com.saathi.GOAL -p com.saathi.app "$@" >/dev/null; }
 now() { if [ -n "$DRY" ]; then printf '%s\n' "$NOW"; else echo $(( ($(date +%s) - START) * 1000 )); fi; }
@@ -217,6 +217,21 @@ check_log() {
     sleep 1
   done
 }
+check_at_most_one() {
+  local pattern=$1 deadline horizon count
+  deadline=$(( $(now) + $2 * 1000 ))
+  while :; do
+    quick_expired && { REASON='Quick suite execution budget exhausted'; return 1; }
+    refresh || { REASON='Could not read logcat'; return 1; }
+    horizon=$(now); [ -z "$DRY" ] || horizon=$deadline
+    [ "$horizon" -le "$deadline" ] || horizon=$deadline
+    count=$(awk -F '\t' -v c="$CURSOR" -v h="$horizon" 'NR>c && $1<=h {print $3}' "$CASE/logs.tsv" | grep -Ec -e "$pattern")
+    [ "$count" -le 1 ] || { REASON="Expected at most one log, found $count: $pattern"; return 1; }
+    if [ -n "$DRY" ]; then advance "$deadline" || return 1; return 0; fi
+    [ "$(now)" -lt "$deadline" ] || return 0
+    sleep 1
+  done
+}
 check_focus() {
   expr=$1; deadline=$(( $(now) + $2 * 1000 ))
   if [ -n "$DRY" ]; then
@@ -272,6 +287,11 @@ tap_glow() {
 run_step() {
   op=$1; arg=$2; sec=$3
   case "$op" in
+    if-show)
+      if ! printf '%s\n' "$LAST_SHOW" | grep -Eq "\[show\] key=($arg)( |$)"; then SKIP_BLOCK=1; fi;;
+    endif) SKIP_BLOCK=0;;
+    at-most-one) check_at_most_one "$arg" "$sec";;
+    start-notes) mark_action || return 1; [ -n "$DRY" ] || device shell am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.vivo.notes >/dev/null;;
     name|apps|requires-installed|requires-missing) return 0;;
     bounds-top)
       [ -n "$LAST_SHOW" ] || { REASON='No show target for bounds check'; return 1; }
@@ -324,7 +344,7 @@ for base in "${SELECTED[@]}"; do
     FAIL=$((FAIL+1)); continue
   fi
   CASE="$OUTPUT/$base"; mkdir -p "$CASE"; : > "$CASE/meta.log"; : > "$CASE/actions.txt"
-  REASON= NOTE= CURSOR=0 NOW=0 LAST_SHOW= LAST_CHOICE=; skipped=0; START=$(date +%s); failed=0; step=reset
+  SKIP_BLOCK=0; REASON= NOTE= CURSOR=0 NOW=0 LAST_SHOW= LAST_CHOICE=; skipped=0; START=$(date +%s); failed=0; step=reset
   if [ -n "$DRY" ]; then
     cp "$OUTPUT/replay.tsv" "$CASE/events.tsv"
     awk -F '\t' '$2=="log"' "$CASE/events.tsv" > "$CASE/logs.tsv"
@@ -353,6 +373,10 @@ for base in "${SELECTED[@]}"; do
   fi
   if [ "$failed" -eq 0 ]; then
     while IFS="$(printf '\t')" read -r ln op arg sec; do
+      if [ "$SKIP_BLOCK" -eq 1 ] && [ "$op" != endif ]; then
+        printf '%s\tSKIP branch %s: %s\n' "$(now)" "$ln" "$op" >> "$CASE/steps.log"
+        continue
+      fi
       step="$ln: $op $arg"
       quick_expired && { REASON='Quick suite execution budget exhausted'; failed=1; break; }
       printf '%s\t%s\n' "$(now)" "$step" >> "$CASE/steps.log"

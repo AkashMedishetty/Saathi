@@ -1,0 +1,9 @@
+--------- beginning of main
+1790463396.000 I E2E: package=in.startv.hotstar installed
+1790463396.000 I E2E: enabled=1
+1790463396.000 I E2E: enabled=1
+         1790463396.660 23560 23560 I SaathiLog: [goal] "watch anupama on hotstar" lang=EN auto=false locked=false
+         1790463396.671 23560 23560 I SaathiLog: [map] route hs_watch (JioHotstar)
+         1790463400.484 23560 23560 I SaathiLog: [show] key=nag_Maybe Later el="Maybe Later" role=button bounds=[504,2763][936,2943] warn=false final=false noAct=false auto=false text="A popup is in the way. Tap “Maybe Later” to close it." pkg=in.startv.hotstar
+1790463409.000 I E2E: enabled=1
+1790463409.000 I E2E: end

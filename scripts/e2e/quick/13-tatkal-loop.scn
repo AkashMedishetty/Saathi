@@ -1,0 +1,4 @@
+name: Quick: Tatkal coach does not restart
+say EN book a tatkal ticket from hyderabad to new delhi on irctc
+expect at-most 1 log "\[coach\] start" for 20
+expect enabled

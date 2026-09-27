@@ -14,6 +14,13 @@ function quoted(s) { return s ~ /^".*"$/ }
    split(s,parts," "); emit(parts[1],parts[2],""); next
  }
  if (s ~ /^expect bounds top < [0-9]+$/) { n=s; sub(/^expect bounds top < /,"",n); emit("bounds-top",n,""); next }
+ if (s ~ /^if show key=.+$/) { if (branch) error("nested if is unsupported"); branch=1; emit("if-show",substr(s,13),""); next }
+ if (s == "endif") { if (!branch) error("endif without if"); branch=0; emit("endif","-",""); next }
+ if (s ~ /^expect at-most 1 log ".*" for [0-9]+$/) {
+   sub(/^expect at-most 1 log /,"",s); n=s; sub(/^.* for /,"",n); sub(/ for [0-9]+$/,"",s)
+   if (!seconds(n)) error("deadline exceeds 300 seconds"); else emit("at-most-one",substr(s,2,length(s)-2),n); next
+ }
+ if (s == "start-activity com.vivo.notes") { emit("start-notes","com.vivo.notes",""); next }
  if (s ~ /^say (EN|HI|TE) .+/) { emit("say",substr(s,5),""); next }
  if (s ~ /^cmd (stop|doit|dump|scam_sms|scam_apk|brain_load|brain_unload|overlay_on|overlay_off)$/) { emit("cmd",substr(s,5),""); next }
  if (s ~ /^cmd eval .+/) { emit("eval",substr(s,10),""); next }
@@ -37,4 +44,4 @@ function quoted(s) { return s ~ /^".*"$/ }
  }
  error("unknown or malformed command: " s)
 }
-END { if (!named) error("name: is required"); if (bad) exit 2 }
+END { if (branch) error("unclosed if"); if (!named) error("name: is required"); if (bad) exit 2 }

@@ -1,0 +1,5 @@
+name: Quick: Find Aadhaar photo
+say EN where is my aadhaar card
+expect log "\[docs\] AADHAAR → true send=false" within 15
+expect focus "com.google.android.apps.photos" within 8
+expect enabled

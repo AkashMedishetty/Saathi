@@ -3,7 +3,11 @@ requires-installed in.startv.hotstar
 apps: in.startv.hotstar
 # Operator: Hotstar signed out, on home. Stop at the wall; never enter login fields.
 say EN watch anupama on hotstar
+expect show key=(nag_.*|map_hs_watch_0) within 12
+if show key=nag_.*
+tap-glow
 expect show key=map_hs_watch_0 within 12
+endif
 tap-glow
 expect show key=map_hs_watch_1 within 8
 doit

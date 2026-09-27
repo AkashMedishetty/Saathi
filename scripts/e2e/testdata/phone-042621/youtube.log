@@ -1,0 +1,12 @@
+--------- beginning of main
+1790463381.000 I E2E: enabled=1
+1790463381.000 I E2E: enabled=1
+         1790463381.633 23560 23560 I SaathiLog: [goal] "search for old telugu songs on youtube" lang=EN auto=false locked=false
+         1790463381.653 23560 23560 I SaathiLog: [map] route yt_search (YouTube)
+         1790463382.383 23560 23560 I SaathiLog: [show] key=map_scroll_0 el="null" role=null bounds=null warn=false final=false noAct=false auto=false text="Slowly scroll down to find it." pkg=com.google.android.youtube
+         1790463382.650 23560 23560 I SaathiLog: [ai] CPU · App map · YouTube #1 · 18 ms
+         1790463382.658 23560 23560 I SaathiLog: [show] key=map_yt_search_0 el="Search" role=button bounds=[1260,143][1440,323] warn=false final=false noAct=false auto=false text="Tap the magnifying glass at the top to search." pkg=com.google.android.youtube
+         1790463384.219 23560 23560 I SaathiLog: [ai] CPU · App map · YouTube #4 · 18 ms
+         1790463384.221 23560 23560 I SaathiLog: [show] key=map_yt_search_3 el="linearLayout" role=button bounds=[0,504][1440,685] warn=false final=false noAct=false auto=false text="Tap “old telugu songs” in the list." pkg=com.google.android.youtube
+1790463391.000 I E2E: enabled=1
+1790463391.000 I E2E: end

@@ -4,13 +4,19 @@ Only Claude/Akash run live mode. No installation, service toggling or device set
 
 ```sh
 scripts/e2e/run.sh                    # all 53 scenarios
-scripts/e2e/run.sh --quick            # eight demo checks, bounded below four minutes
+scripts/e2e/run.sh --quick            # demo highlights, bounded below six minutes
 scripts/e2e/run.sh '4[1-7]-*'          # spoken replies and demo routing regressions
 scripts/e2e/run.sh --quick --list     # list/validate offline
 scripts/e2e/selftest.sh --dry-run     # entirely local; adb is never invoked
 ```
 
-Quick covers YouTube search EN (through the matching results glow), the video-choice card, Hotstar absent → spoken yes → Install glow, or installed → Anupama search → login wall, SMS/APK warnings, bigger letters HI, Spotify learning entry and a one-minute reminder. It does not tap Install/Call/Send. Execution stops at 210 seconds; in-flight command/evidence work has a 235-second outer budget. Remaining scenarios are FAIL/not-run on exhaustion, never a fabricated PASS. The two Hotstar plans are mutually exclusive (one SKIP), giving eight runnable demos; phone performance has not been measured here. A hung host filesystem/OS is outside the shell timer guarantee.
+Quick has 14 plans (13 runnable when one Hotstar precondition skips). It covers prefilled YouTube search,
+spoken WhatsApp video-call choice, Hotstar absent/installed alternatives, SMS/APK warnings, the Hindi font
+slider, Spotify learning, a one-minute reminder, finding and preparing Aadhaar sharing, “I'm lost”, Notes
+writing, and the Tatkal coach loop limit. Send/Call/Install are never tapped.
+Execution stops at 330 seconds; transport/evidence commands stop at the 355-second outer budget. Exhausted
+cases fail rather than count as passes. This bounds the run; it is not a measured successful phone runtime.
+Host OS/filesystem stalls are outside the shell timer guarantee.
 
 ## Lifecycle and evidence
 
@@ -56,6 +62,9 @@ One command per line. Full-line `#` comments; `apps:` also supports an inline co
 - `open-url https://httpbin.org/forms/post`: the sole allowed URL, opened in Chrome for the form test.
 - `expect show key=<ERE> within <seconds>`.
 - `expect log "<ERE>" within <seconds>`, `expect focus "<ERE>" within <seconds>`.
+- `if show key=<ERE>` / `endif`: a single-level conditional on the last matched show; nested/unclosed branches are rejected. Taps still revalidate fresh bounds.
+- `expect at-most 1 log "<ERE>" for <seconds>`: observes the entire window, allowing zero or one occurrence; two fail. Truncated replay fails.
+- `start-activity com.vivo.notes`: launches Notes through MAIN/LAUNCHER with its package, without guessing an activity class.
 - `expect not log "<ERE>" for <seconds>`, `expect enabled`.
 
 Deadlines are integers from 0 to 300. EREs use `grep -E` syntax; backslashes are preserved. Null or stale glow bounds fail. Consequential Send/Pay/Call/Install/etc. targets are refused. `doit` refuses `noAct=true`; person-style Settings search/result taps allow that flag only on the named Settings navigation targets. Other manual-only targets remain refused.

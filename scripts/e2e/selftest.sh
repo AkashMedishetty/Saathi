@@ -197,13 +197,13 @@ COUNT=$((COUNT+1)); echo 'PASS command-timeout'
 [ ! -e "$TMP/device-called" ]
 # Quick selection is nine cases (eight demos, Hotstar alternatives) and can be listed offline; no real or stub adb is invoked.
 "$DIR/run.sh" --quick --list --output "$TMP/quick-list" > "$TMP/quick-names"
-[ "$(wc -l < "$TMP/quick-names" | tr -d ' ')" -eq 9 ]
+[ "$(wc -l < "$TMP/quick-names" | tr -d ' ')" -eq 14 ]
 grep -q '^06-letters-bigger-hi$' "$TMP/quick-names"
 grep -q '^08-reminder-minute$' "$TMP/quick-names"
-COUNT=$((COUNT+1)); echo 'PASS quick-selects-eight-demos-with-hotstar-alternatives'
+COUNT=$((COUNT+1)); echo 'PASS quick-selects-demo-highlights-with-hotstar-alternatives'
 [ "$(quick_command_limit 0)" = 8 ]
-[ "$(quick_command_limit 233)" = 2 ]
-if quick_command_limit 235; then echo 'Quick budget did not expire' >&2; exit 1; fi
+[ "$(quick_command_limit 353)" = 2 ]
+if quick_command_limit 355; then echo 'Quick budget did not expire' >&2; exit 1; fi
 COUNT=$((COUNT+1)); echo 'PASS quick-command-budget-boundaries'
 # Ordinary spoken replies need no hidden command syntax.
 cat > "$TMP/scenarios/test.scn" <<'SCN'
@@ -456,4 +456,139 @@ cat > "$TMP/input.log" <<'LOG'
 LOG
 run_case health-sample-during-75ms-restart 0 'healed'
 [ ! -e "$TMP/device-called" ]
+# Today's quick highlights and branch/count semantics, entirely offline.
+cp "$DIR/quick/01-youtube-search-en.scn" "$TMP/scenarios/test.scn"
+cp "$DIR/testdata/phone-042621/youtube.log" "$TMP/input.log"
+run_case real-youtube-prefilled-skips-to-three 0 '1 passed'
+for key in map_yt_search_2 map_yt_search_3 submit_yt_search; do
+  cat > "$TMP/input.log" <<LOG
+0.000 I E2E: enabled=1
+0.100 I SaathiLog: [show] key=map_yt_search_0 el="Search" bounds=[100,100][200,200] noAct=false
+0.200 I SaathiLog: [show] key=$key el="Search" bounds=[100,300][900,400] noAct=false
+20.000 I E2E: enabled=1
+20.100 I E2E: end
+LOG
+  run_case "youtube-$key" 0 '1 passed'
+done
+cp "$DIR/quick/03b-hotstar-watch.scn" "$TMP/scenarios/test.scn"
+cat > "$TMP/input.log" <<'LOG'
+0.000 I E2E: package=in.startv.hotstar installed
+0.000 I E2E: enabled=1
+0.100 I SaathiLog: [show] key=nag_Maybe Later el="Maybe Later" bounds=[504,2763][936,2943] noAct=false
+0.200 I SaathiLog: [show] key=map_hs_watch_0 el="Search" bounds=[90,2786][510,2966] noAct=false
+0.300 I SaathiLog: [show] key=map_hs_watch_1 el="" bounds=[241,369][1214,549] noAct=false
+0.400 I SaathiLog: [show] key=map_hs_watch_2 el="Latest Episode" bounds=[45,1419][889,1599] noAct=false
+0.500 I SaathiLog: [wall] in.startv.hotstar setup=true
+20.000 I E2E: enabled=1
+20.100 I E2E: end
+LOG
+run_case hotstar-popup-then-route 0 '1 passed'
+sed '/key=nag_/d' "$TMP/input.log" > "$TMP/no-nag"; mv "$TMP/no-nag" "$TMP/input.log"
+run_case hotstar-no-popup-branch 0 '1 passed'
+cat > "$TMP/scenarios/test.scn" <<'SCN'
+name: real Hotstar popup identifies safe dismissal
+say EN watch anupama on hotstar
+expect show key=nag_.* within 12
+tap-glow
+expect enabled
+SCN
+cp "$DIR/testdata/phone-042621/hotstar.log" "$TMP/input.log"
+run_case real-hotstar-popup-bounds 0 '1 passed'
+cp "$DIR/quick/06-letters-bigger-hi.scn" "$TMP/scenarios/test.scn"
+cat > "$TMP/font.log" <<'LOG'
+0.000 I E2E: enabled=1
+0.000 I E2E: focus=com.android.settings/.Settings
+0.100 I SaathiLog: [show] key=map_settings_font_0 el="Search" bounds=[100,100][200,200] noAct=true pkg=com.android.settings
+0.200 I SaathiLog: [show] key=map_settings_font_1 el="Search" bounds=[100,100][900,200] noAct=false pkg=com.android.settings
+0.300 I SaathiLog: [show] key=map_settings_font_2 el="Font size" bounds=[100,300][900,400] noAct=false pkg=com.android.settings
+0.400 I SaathiLog: [settle] settings_font: slider "Font" = 1
+20.000 I E2E: enabled=1
+20.100 I E2E: end
+LOG
+cp "$TMP/font.log" "$TMP/input.log"
+run_case font-from-search-icon 0 '1 passed'
+sed '/key=map_settings_font_0/d' "$TMP/font.log" > "$TMP/input.log"
+run_case font-from-search-input 0 '1 passed'
+sed '/key=map_settings_font_[01]/d' "$TMP/font.log" > "$TMP/input.log"
+run_case font-from-result 0 '1 passed'
+cp "$DIR/quick/13-tatkal-loop.scn" "$TMP/scenarios/test.scn"
+cat > "$TMP/input.log" <<'LOG'
+0.000 I E2E: enabled=1
+0.100 I SaathiLog: [coach] start "tatkal"
+21.000 I E2E: enabled=1
+21.100 I E2E: end
+LOG
+run_case one-coach-start 0 '1 passed'
+sed '/coach/d' "$TMP/input.log" > "$TMP/zero"; mv "$TMP/zero" "$TMP/input.log"
+run_case zero-coach-starts-allowed 0 '1 passed'
+sed '/21.000/i\
+0.100 I SaathiLog: [coach] start "tatkal"\
+20.000 I SaathiLog: [coach] start "tatkal"
+' "$TMP/input.log" > "$TMP/two"; mv "$TMP/two" "$TMP/input.log"
+run_case second-start-at-deadline-fails 1 'Expected at most one log, found 2'
+sed 's/^20.000/20.001/' "$TMP/input.log" > "$TMP/after"; mv "$TMP/after" "$TMP/input.log"
+run_case second-start-after-window-ignored 0 '1 passed'
+sed '/21.000/,$d' "$TMP/input.log" > "$TMP/short"
+sed '/20.001/d' "$TMP/short" > "$TMP/input.log"
+cat >> "$TMP/input.log" <<'LOG'
+2.000 I E2E: enabled=1
+2.100 I E2E: end
+LOG
+run_case coach-window-must-be-fully-observed 1 'Replay ends before'
+cat > "$TMP/scenarios/test.scn" <<'SCN'
+name: broken branch
+if show key=foo
+expect enabled
+SCN
+run_case reject-unclosed-if 2 'unclosed if'
+cat > "$TMP/scenarios/test.scn" <<'SCN'
+name: wrong launcher
+start-activity com.other.app
+SCN
+run_case only-notes-launcher-allowed 2 'unknown or malformed'
+cp "$DIR/quick/09-find-aadhaar.scn" "$TMP/scenarios/test.scn"
+cat > "$TMP/input.log" <<'LOG'
+0.000 I E2E: enabled=1
+0.100 I SaathiLog: [docs] AADHAAR → true send=false
+0.200 I E2E: focus=com.google.android.apps.photos/.View
+25.000 I E2E: enabled=1
+25.100 I E2E: end
+LOG
+run_case docs-photo 0 '1 passed'
+cp "$DIR/quick/10-share-aadhaar.scn" "$TMP/scenarios/test.scn"
+cat > "$TMP/input.log" <<'LOG'
+0.000 I E2E: enabled=1
+0.100 I SaathiLog: [docs] AADHAAR → true send=true
+0.200 I SaathiLog: [show] key=send el="Send" bounds=[100,100][200,200]
+25.000 I E2E: enabled=1
+25.100 I E2E: end
+LOG
+run_case docs-share 0 '1 passed'
+cp "$DIR/quick/11-im-lost.scn" "$TMP/scenarios/test.scn"
+cat > "$TMP/input.log" <<'LOG'
+0.000 I E2E: enabled=1
+0.100 I SaathiLog: [show] key=map_yt_search_0 el="Search" bounds=[100,100][200,200]
+0.200 I SaathiLog: [where] com.google.android.youtube page=yt_home goal=true
+25.000 I E2E: enabled=1
+25.100 I E2E: end
+LOG
+run_case where-context 0 '1 passed'
+cp "$DIR/quick/12-notes-write.scn" "$TMP/scenarios/test.scn"
+cat > "$TMP/input.log" <<'LOG'
+0.000 I E2E: enabled=1
+0.100 I E2E: focus=com.vivo.notes/.Main
+0.200 I SaathiLog: [write] com.vivo.notes box="Note" composed=false
+25.000 I E2E: enabled=1
+25.100 I E2E: end
+LOG
+run_case notes-write 0 '1 passed'
+cp "$DIR/quick/02-video-choice.scn" "$TMP/scenarios/test.scn"
+cat > "$TMP/input.log" <<'LOG'
+0.000 I E2E: enabled=1
+0.100 I SaathiLog: [choice] choose_video: WhatsApp | Phone
+0.200 I SaathiLog: [show] key=map_wa_video_call_3 el="Video call" bounds=[100,160][200,300]
+25.000 I E2E: enabled=1
+25.100 I E2E: end
+LOG
+run_case spoken-choice 0 '1 passed'
 printf '%s total local checks passed, including real saved phone logs and local command plumbing.\n' "$COUNT"
