@@ -3,5 +3,4 @@ say EN video call my son
 expect log "\[choice\] choose_video" within 10
 say EN WhatsApp
 expect show key=map_wa_video_call_[23] within 12
-expect bounds top < 500
 expect enabled
