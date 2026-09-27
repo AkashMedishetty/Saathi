@@ -145,6 +145,7 @@ class Guide(
     private var settle: Settle? = null
     /** Unscripted (planner) path: how close each planned screen was to the goal (goal words on it), and search-first. */
     private val planScores = mutableListOf<Int>()
+    private var mapUnknownSince = 0L
     private var searchTried = false
     /** What they answered to Saathi's questions in this task ("play the playlist"): the planner sees it every time. */
     private val answers = mutableListOf<String>()
@@ -772,7 +773,7 @@ class Guide(
         flow = f
         history.clear(); current = null; lastSpokenKey = null; lastSig = 0; warnedSig = 0; lastStepIdx = -1; scrolls = 0
         taskPkgs.clear(); paused = false; pendingLearn = null; adoptPkg = true
-        auto = autoMode; autoSteps = 0; autoLastKey = null; autoSameKey = 0; setAside = false; answers.clear(); planScores.clear(); searchTried = false
+        auto = autoMode; autoSteps = 0; autoLastKey = null; autoSameKey = 0; setAside = false; answers.clear(); planScores.clear(); searchTried = false; mapUnknownSince = 0L
         planCache.clear(); unsureCount.clear(); plansThisTask = 0; wallFp = 0; lastActKey = null; sameActCount = 0
         LlmManager.endChat(); taskKey = "task_${SystemClock.uptimeMillis()}"; lastActionNote = null
         lastProgress = SystemClock.uptimeMillis(); stuckOffered = false
@@ -1001,7 +1002,14 @@ class Guide(
             screen.elements.any { Regex("^(Chats|Calls|Message|Type a message)$").matches(it.label) }) Prefs.setWaNotSetUp(svc, false)
         // 4b. App-map route: known screens → the exact next step (Kiro's maps). Unknown screens fall through.
         settle?.let { st -> if (settleTick(st, screen)) return }
-        mapRoute?.let { r -> if (mapTick(r, screen)) return }
+        mapRoute?.let { r -> if (mapTick(r, screen)) { mapUnknownSince = 0L; return } }
+        // A route's own app on a screen the map doesn't know yet (splash, loading): give it 2.5 s to become a known page
+        // before any model is asked (field 08:07: YouTube's splash went to the cloud brain for 9 s).
+        mapRoute?.takeIf { r -> screen.pkg == r.pkg || r.steps.any { it.pkg == screen.pkg } }?.let {
+            val now = SystemClock.uptimeMillis()
+            if (mapUnknownSince == 0L) mapUnknownSince = now
+            if (now - mapUnknownSince < 2500) { lastSig = 0; schedule(600, force = true); return }
+        }
         // 5. Keyboard, notification shade, permission dialog: just wait.
         if (isTransient(screen.pkg)) return
 

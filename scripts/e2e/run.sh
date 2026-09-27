@@ -291,7 +291,7 @@ run_step() {
       if ! printf '%s\n' "$LAST_SHOW" | grep -Eq "\[show\] key=($arg)( |$)"; then SKIP_BLOCK=1; fi;;
     endif) SKIP_BLOCK=0;;
     at-most-one) check_at_most_one "$arg" "$sec";;
-    start-notes) mark_action || return 1; [ -n "$DRY" ] || device shell am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.vivo.notes >/dev/null;;
+    start-notes) mark_action || return 1; [ -n "$DRY" ] || device shell monkey -p com.vivo.notes -c android.intent.category.LAUNCHER 1 >/dev/null;;
     name|apps|requires-installed|requires-missing) return 0;;
     bounds-top)
       [ -n "$LAST_SHOW" ] || { REASON='No show target for bounds check'; return 1; }
