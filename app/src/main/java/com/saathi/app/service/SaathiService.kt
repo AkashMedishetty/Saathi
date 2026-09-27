@@ -128,6 +128,14 @@ class SaathiService : AccessibilityService() {
             overlay?.clearForLaunch()
             handler.removeCallbacks(restoreOverlay); handler.postDelayed(restoreOverlay, 1200)
         }
+        // …and what they type into each box (last text per field; passwords / OTPs are never kept, see Recipes.onText).
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED && com.saathi.app.guide.Recipes.recording != null && event.packageName != packageName) {
+            val src = event.source
+            val label = src?.hintText?.toString()?.takeIf { it.isNotBlank() } ?: src?.viewIdResourceName?.substringAfter('/')?.replace('_', ' ')
+                ?: event.contentDescription?.toString()
+            val txt = event.text?.joinToString(" ")?.trim().orEmpty()
+            if (txt.isNotEmpty()) runCatching { com.saathi.app.guide.Recipes.onText(label, txt, event.packageName?.toString() ?: "", isPassword = event.isPassword) }
+        }
         // "Teach Saathi once": while recording, remember the label of everything they tap (never pixels).
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && com.saathi.app.guide.Recipes.recording != null) {
             val label = event.text?.joinToString(" ")?.takeIf { it.isNotBlank() } ?: event.contentDescription?.toString()
